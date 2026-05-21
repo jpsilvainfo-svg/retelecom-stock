@@ -1,6 +1,7 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
 import * as XLSX from "xlsx";
+import { sbGet, sbSet } from "./supabase.js";
 
 const C={bg:"#141414",surf:"#1c1c1c",card:"#222222",bdr:"#2e2e2e",bdr2:"#383838",gold:"#f0a500",goldD:"#f0a50022",goldL:"#f5b830",red:"#e53935",redD:"#e5393522",grn:"#43a047",grnD:"#43a04722",ylw:"#fb8c00",ylwD:"#fb8c0022",blue:"#1e88e5",txt:"#ffffff",txt2:"#cccccc",muted:"#888888",muted2:"#555555"};
 const PIE=["#f0a500","#666666","#999999","#444444","#bbbbbb"];
@@ -10,6 +11,32 @@ const now=()=>new Date().toLocaleString("pt-BR");
 const today=()=>new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})+" - "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
 const fmt=(n)=>new Intl.NumberFormat("pt-BR").format(n??0);
 const useIsMobile=()=>{const[m,setM]=useState(()=>window.innerWidth<768);useEffect(()=>{const h=()=>setM(window.innerWidth<768);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);return m;};
+
+// Hook que sincroniza estado com Supabase (nuvem) + localStorage (fallback offline)
+const useLS=(key,initial)=>{
+  const[val,setVal]=useState(()=>{
+    try{const s=localStorage.getItem(key);return s?JSON.parse(s):initial;}
+    catch{return initial;}
+  });
+  // Carrega do Supabase ao montar
+  useEffect(()=>{
+    sbGet(key).then(remote=>{
+      if(remote!==null){
+        setVal(remote);
+        try{localStorage.setItem(key,JSON.stringify(remote));}catch{}
+      }
+    }).catch(()=>{});
+  },[key]);
+  const set=(v)=>{
+    setVal(prev=>{
+      const next=typeof v==="function"?v(prev):v;
+      try{localStorage.setItem(key,JSON.stringify(next));}catch{}
+      sbSet(key,next).catch(()=>{});
+      return next;
+    });
+  };
+  return[val,set];
+};
 
 const USERS0=[
   {id:"u1",name:"Administrador",email:"admin@retelecom.com",phone:"(21)99999-0001",cpf:"000.000.000-01",login:"admin",pass:"admin123",role:"admin"},
@@ -1109,6 +1136,13 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
         </div>
       </div>
     </Modal>}
+    <div style={{marginTop:8,padding:"12px 16px",background:C.redD,border:`1px solid ${C.red}33`,borderRadius:8,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+      <div>
+        <div style={{fontSize:12,fontWeight:700,color:C.red}}>⚠️ Zona de Perigo</div>
+        <div style={{fontSize:11,color:C.muted,marginTop:2}}>Apaga todos os dados e volta ao estado inicial do sistema.</div>
+      </div>
+      <Btn size="sm" color="red" outline onClick={()=>{if(window.confirm("ATENÇÃO: Apaga TODOS os dados (usuários, estoque, OS, devoluções, etc). Confirmar?")){Object.keys(localStorage).filter(k=>k.startsWith("re_")).forEach(k=>localStorage.removeItem(k));window.location.reload();}}}>🗑️ Resetar Todos os Dados</Btn>
+    </div>
   </div>;
 }
 
@@ -1519,27 +1553,27 @@ function SolicitacaoPage({solicitacoes,setSolicitacoes,stock,setStock,tstock,set
 export default function App(){
   const[user,setUser]=useState(null);
   const[page,setPage]=useState("dash");
-  const[users,setUsers]=useState(USERS0);
-  const[stock,setStock]=useState(STOCK0);
-  const[tstock,setTstock]=useState(TSTOCK0);
-  const[os,setOs]=useState(OS0);
-  const[returns,setReturns]=useState(RET0);
-  const[nf,setNf]=useState(NF0);
-  const[logs,setLogs]=useState(LOGS0);
-  const[drawerOpen,setDrawerOpen]=useState(false);
-  const[solicitacoes,setSolicitacoes]=useState([]);
-  const[cats,setCats]=useState([
+  const[users,setUsers]=useLS("re_users",USERS0);
+  const[stock,setStock]=useLS("re_stock",STOCK0);
+  const[tstock,setTstock]=useLS("re_tstock",TSTOCK0);
+  const[os,setOs]=useLS("re_os",OS0);
+  const[returns,setReturns]=useLS("re_returns",RET0);
+  const[nf,setNf]=useLS("re_nf",NF0);
+  const[logs,setLogs]=useLS("re_logs",LOGS0);
+  const[solicitacoes,setSolicitacoes]=useLS("re_sol",[]);
+  const[cats,setCats]=useLS("re_cats",[
     {id:"c1",name:"Equipamentos",icon:"📡"},{id:"c2",name:"Cabos e Fios",icon:"🔌"},
     {id:"c3",name:"Conectores",icon:"🔗"},{id:"c4",name:"Caixas e Acessórios",icon:"🗃️"},
     {id:"c5",name:"Acessórios",icon:"🔩"},{id:"c6",name:"Ferramentas",icon:"🛠️"},
   ]);
-  const[produtos,setProdutos]=useState([
+  const[produtos,setProdutos]=useLS("re_produtos",[
     {id:"p1",code:"ONU-001",name:"ONU Huawei HG8145V5",cat:"Equipamentos",unit:"un",desc:"ONT para rede GPON"},
     {id:"p2",code:"ONT-001",name:"ONT ZTE F601",cat:"Equipamentos",unit:"un",desc:""},
     {id:"p3",code:"DROP-001",name:"Cabo Drop Flat 2FO",cat:"Cabos e Fios",unit:"m",desc:"Cabo óptico drop para cliente"},
     {id:"p4",code:"CON-001",name:"Conector SC/APC",cat:"Conectores",unit:"un",desc:""},
     {id:"p5",code:"SPL-001",name:"Splitter 1x8",cat:"Caixas e Acessórios",unit:"un",desc:""},
   ]);
+  const[drawerOpen,setDrawerOpen]=useState(false);
   const isMobile=useIsMobile();
   const addLog=(u,a,d)=>{
     const tipo=a.toLowerCase().includes("saída")||a.toLowerCase().includes("saida")?"saida":a.toLowerCase().includes("entrada")?"entrada":a.toLowerCase().includes("aprovada")?"aprovada":a.toLowerCase().includes("devolução")||a.toLowerCase().includes("solicitada")?"dev":"outro";
