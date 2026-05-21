@@ -148,7 +148,7 @@ function LoginPage({users,onLogin}){
     <div style={{position:"fixed",inset:0,backgroundImage:`radial-gradient(ellipse at 50% 0%,${C.gold}18 0%,transparent 60%)`,pointerEvents:"none"}}/>
     <div className="fi" style={{width:"100%",maxWidth:400,position:"relative",zIndex:1}}>
       <div style={{textAlign:"center",marginBottom:32}}>
-        <img src="/logo-retelecom.png" alt="R&E Telecom" style={{height:isMobile?70:90,objectFit:"contain",filter:"drop-shadow(0 4px 16px rgba(240,165,0,0.4))",marginBottom:12}}/>
+        <img src="/logo-retelecom.png" alt="R&E Telecom" style={{width:"100%",maxWidth:isMobile?260:320,objectFit:"contain",marginBottom:12}}/>
         <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:".12em",textTransform:"uppercase"}}>Sistema de Gestão de Estoque · FTTH</div>
       </div>
       <Card style={{padding:isMobile?20:28,display:"flex",flexDirection:"column",gap:16,borderRadius:16}}>
@@ -174,6 +174,7 @@ function Sidebar({user,page,setPage,onLogout}){
     !isTec&&{k:"dist",icon:"🚀",label:"Saída / Liberação"},
     {k:"dev",icon:"↩️",label:"Devoluções"},
     {k:"os",icon:"🔧",label:"Ordens de Serviço"},
+    {k:"sol",icon:"📋",label:"Solicitações"},
     {k:"rel",icon:"📊",label:"Relatórios"},
     isAdm&&{k:"email",icon:"📧",label:"Enviar Relatório"},
     isAdm&&{k:"cat",icon:"🏷️",label:"Categorias"},
@@ -183,7 +184,7 @@ function Sidebar({user,page,setPage,onLogout}){
   ].filter(Boolean);
   return <div style={{width:220,minWidth:220,background:C.surf,borderRight:`1px solid ${C.bdr}`,display:"flex",flexDirection:"column",height:"100vh",flexShrink:0}}>
     <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.bdr}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <img src="/logo-retelecom.png" alt="R&E Telecom" style={{height:48,objectFit:"contain"}}/>
+      <img src="/logo-retelecom.png" alt="R&E Telecom" style={{width:"100%",maxWidth:160,objectFit:"contain"}}/>
     </div>
     <div style={{padding:"8px 16px 6px",borderBottom:`1px solid ${C.bdr}`}}>
       <div style={{fontSize:10,color:C.muted2,lineHeight:1.4}}>Gestão de Estoque · Provedores FTTH</div>
@@ -227,6 +228,7 @@ function MobileDrawer({user,page,setPage,onLogout,onClose}){
     !isTec&&{k:"dist",icon:"🚀",label:"Saída / Liberação"},
     {k:"dev",icon:"↩️",label:"Devoluções"},
     {k:"os",icon:"🔧",label:"Ordens de Serviço"},
+    {k:"sol",icon:"📋",label:"Solicitações"},
     {k:"rel",icon:"📊",label:"Relatórios"},
     isAdm&&{k:"email",icon:"📧",label:"Enviar Relatório"},
     isAdm&&{k:"cat",icon:"🏷️",label:"Categorias"},
@@ -239,7 +241,7 @@ function MobileDrawer({user,page,setPage,onLogout,onClose}){
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"#000000aa",zIndex:200}}/>
     <div className="sl" style={{position:"fixed",top:0,left:0,bottom:0,width:280,background:C.surf,zIndex:201,display:"flex",flexDirection:"column",borderRight:`1px solid ${C.bdr}`}}>
       <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.bdr}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <img src="/logo-retelecom.png" alt="R&E Telecom" style={{height:42,objectFit:"contain"}}/>
+        <img src="/logo-retelecom.png" alt="R&E Telecom" style={{height:50,objectFit:"contain"}}/>
         <button onClick={onClose} style={{background:C.card,color:C.muted,width:32,height:32,borderRadius:8,fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
       </div>
       <div style={{padding:"10px 14px 8px",borderBottom:`1px solid ${C.bdr}`,display:"flex",alignItems:"center",gap:10}}>
@@ -268,8 +270,8 @@ function MobileDrawer({user,page,setPage,onLogout,onClose}){
 }
 
 /* ── TOPBAR ── */
-function TopBar({user,pendRet,setPage,isMobile,onMenuOpen}){
-  return <div style={{height:isMobile?52:56,background:C.surf,borderBottom:`1px solid ${C.bdr}`,display:"flex",alignItems:"center",padding:isMobile?"0 14px":"0 24px",gap:12,flexShrink:0}}>
+function TopBar({user,pendRet,pendSol,setPage,isMobile,onMenuOpen}){
+  return <div style={{height:isMobile?52:56,background:C.surf,borderBottom:`1px solid ${C.bdr}`,display:"flex",alignItems:"center",padding:isMobile?"0 14px":"0 24px",gap:10,flexShrink:0}}>
     {isMobile&&<button onClick={onMenuOpen} style={{background:"transparent",color:C.muted,fontSize:22,display:"flex",alignItems:"center",padding:4}}>☰</button>}
     <div style={{flex:1,minWidth:0}}>
       <div style={{fontSize:isMobile?13:14,fontWeight:600,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
@@ -277,9 +279,14 @@ function TopBar({user,pendRet,setPage,isMobile,onMenuOpen}){
       </div>
       {!isMobile&&<div style={{fontSize:11,color:C.muted}}>{today()}</div>}
     </div>
+    {pendSol>0&&<div onClick={()=>setPage("sol")} style={{display:"flex",alignItems:"center",gap:5,background:`${C.blue}22`,border:`1px solid ${C.blue}44`,borderRadius:6,padding:isMobile?"5px 8px":"5px 12px",cursor:"pointer",flexShrink:0}}>
+      <span style={{fontSize:13}}>📋</span>
+      <span style={{fontSize:12,color:C.blue,fontWeight:700}}>{pendSol}</span>
+      {!isMobile&&<span style={{fontSize:12,color:C.blue,fontWeight:600}}>solicitação{pendSol>1?"ões":""}</span>}
+    </div>}
     {pendRet>0&&<div onClick={()=>setPage("dev")} style={{display:"flex",alignItems:"center",gap:5,background:C.ylwD,border:`1px solid ${C.ylw}44`,borderRadius:6,padding:isMobile?"5px 8px":"5px 12px",cursor:"pointer",flexShrink:0}}>
       <span style={{fontSize:13}}>🔔</span>
-      {!isMobile&&<span style={{fontSize:12,color:C.ylw,fontWeight:600}}>{pendRet} pendente{pendRet>1?"s":""}</span>}
+      {!isMobile&&<span style={{fontSize:12,color:C.ylw,fontWeight:600}}>{pendRet} devolução{pendRet>1?"ões":""}</span>}
       {isMobile&&<span style={{fontSize:12,color:C.ylw,fontWeight:700}}>{pendRet}</span>}
     </div>}
     {!isMobile&&<div style={{width:34,height:34,borderRadius:"50%",background:C.card,border:`1px solid ${C.bdr2}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,cursor:"pointer"}}>🔔</div>}
@@ -1382,6 +1389,132 @@ function EmailPage({stock,os,returns,users,isMobile}){
   </div>;
 }
 
+/* ── SOLICITAÇÕES DE MATERIAL ── */
+function SolicitacaoPage({solicitacoes,setSolicitacoes,stock,setStock,tstock,setTstock,users,currentUser,addLog,isMobile}){
+  const isTec=currentUser.role==="tecnico";
+  const[modal,setModal]=useState(false);
+  const[form,setForm]=useState({items:[{sid:"",qty:"",obs:""}],urgencia:"normal",notes:""});
+  const[msg,setMsg]=useState("");
+  const updRow=(i,k,v)=>setForm(f=>({...f,items:f.items.map((r,j)=>j===i?{...r,[k]:v}:r)}));
+  const viewSol=isTec?solicitacoes.filter(s=>s.uid===currentUser.id):solicitacoes;
+  const pendentes=solicitacoes.filter(s=>s.status==="pending");
+
+  const enviar=()=>{
+    const valid=form.items.filter(r=>r.sid&&parseInt(r.qty)>0);
+    if(!valid.length){setMsg("err:Adicione ao menos 1 material.");return;}
+    const nova={id:uid(),uid:currentUser.id,date:now(),items:valid.map(r=>({sid:r.sid,qty:parseInt(r.qty),obs:r.obs})),status:"pending",urgencia:form.urgencia,notes:form.notes,rDate:null,rBy:null};
+    setSolicitacoes(p=>[nova,...p]);
+    addLog(currentUser.name,"Solicitação",`${currentUser.name} solicitou ${valid.length} item(s)`);
+    setModal(false);setForm({items:[{sid:"",qty:"",obs:""}],urgencia:"normal",notes:""});
+    setMsg("ok:Solicitação enviada! O estoque será notificado.");
+    setTimeout(()=>setMsg(""),5000);
+  };
+
+  const confirmar=(sol)=>{
+    let ok=true;
+    sol.items.forEach(it=>{const s=stock.find(x=>x.id===it.sid);if(!s||s.qty<it.qty){ok=false;alert(`Estoque insuficiente: ${s?.name||it.sid}`);}});
+    if(!ok)return;
+    setStock(p=>p.map(s=>{const it=sol.items.find(i=>i.sid===s.id);return it?{...s,qty:s.qty-it.qty}:s;}));
+    setTstock(p=>{let n=[...p];sol.items.forEach(it=>{const ex=n.find(t=>t.uid===sol.uid&&t.sid===it.sid);if(ex)n=n.map(t=>t.id===ex.id?{...t,qty:t.qty+it.qty}:t);else n.push({id:uid(),uid:sol.uid,sid:it.sid,qty:it.qty});});return n;});
+    setSolicitacoes(p=>p.map(s=>s.id===sol.id?{...s,status:"confirmed",rDate:now(),rBy:currentUser.name}:s));
+    const tech=users.find(u=>u.id===sol.uid);
+    addLog(currentUser.name,"Saída",`Solicitação confirmada · ${tech?.name} · ${sol.items.length} item(s)`);
+  };
+
+  const rejeitar=(sol)=>{
+    setSolicitacoes(p=>p.map(s=>s.id===sol.id?{...s,status:"rejected",rDate:now(),rBy:currentUser.name}:s));
+    addLog(currentUser.name,"Solicitação Rejeitada",`Técnico: ${users.find(u=>u.id===sol.uid)?.name}`);
+  };
+
+  const sc={pending:"ylw",confirmed:"grn",rejected:"red"};
+  const sl={pending:"⏳ Aguardando",confirmed:"✅ Confirmada",rejected:"❌ Rejeitada"};
+  const urg={normal:{label:"Normal",color:C.muted},urgente:{label:"🔴 Urgente",color:C.red},alta:{label:"🟡 Alta",color:C.ylw}};
+
+  return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+      <div>
+        <h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Solicitações de Material</h1>
+        <p style={{fontSize:12,color:C.muted,marginTop:2}}>{isTec?"Solicite materiais ao estoque":"Gerencie pedidos dos técnicos"}</p>
+      </div>
+      <div style={{display:"flex",gap:10,alignItems:"center"}}>
+        {!isTec&&pendentes.length>0&&<Bdg color="ylw">🔔 {pendentes.length} pendente{pendentes.length>1?"s":""}</Bdg>}
+        {isTec&&<Btn color="gold" size={isMobile?"sm":"md"} onClick={()=>setModal(true)}>📋 Nova Solicitação</Btn>}
+      </div>
+    </div>
+
+    {msg&&<div style={{background:msg.startsWith("ok:")?C.grnD:C.redD,border:`1px solid ${msg.startsWith("ok:")?C.grn:C.red}44`,borderRadius:8,padding:"12px 14px",color:msg.startsWith("ok:")?C.grn:C.red,fontSize:13}}>{msg.replace(/^(ok|err):/,"")}</div>}
+
+    {viewSol.length===0&&<Card style={{padding:40,textAlign:"center"}}>
+      <div style={{fontSize:32,marginBottom:10}}>📋</div>
+      <div style={{fontSize:14,color:C.muted}}>{isTec?"Você não tem solicitações. Clique em Nova Solicitação!":"Nenhuma solicitação recebida ainda."}</div>
+    </Card>}
+
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {viewSol.map(sol=>{
+        const tech=users.find(u=>u.id===sol.uid);
+        const isUrgente=sol.urgencia==="urgente";
+        return <Card key={sol.id} style={{padding:16,borderLeft:`3px solid ${sol.status==="pending"?isUrgente?C.red:C.ylw:sol.status==="confirmed"?C.grn:C.red}`}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:8}}>
+                <Bdg color={sc[sol.status]}>{sl[sol.status]}</Bdg>
+                {sol.urgencia!=="normal"&&<span style={{fontSize:11,fontWeight:700,color:urg[sol.urgencia]?.color}}>{urg[sol.urgencia]?.label}</span>}
+                <span style={{fontSize:13,fontWeight:700,color:C.txt}}>👷 {tech?.name||"?"}</span>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:C.muted}}>{sol.date}</span>
+              </div>
+              {sol.notes&&<div style={{fontSize:12,color:C.muted,marginBottom:8,fontStyle:"italic"}}>"{sol.notes}"</div>}
+              <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                {sol.items.map((it,i)=>{const s=stock.find(x=>x.id===it.sid);return(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:8,background:C.surf,borderRadius:6,padding:"6px 10px"}}>
+                    <span style={{fontSize:12,color:C.txt,flex:1}}>{s?.name||it.sid}</span>
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:C.gold,fontSize:14}}>×{it.qty} {s?.unit||""}</span>
+                    {it.obs&&<span style={{fontSize:10,color:C.muted}}>· {it.obs}</span>}
+                  </div>
+                );})}
+              </div>
+              {sol.rBy&&<div style={{fontSize:11,color:C.muted,marginTop:8}}>{sl[sol.status].replace(/[^a-zA-Záéíóúàèìòùâêîôûãõ ]/g,"")} por <strong style={{color:C.txt2}}>{sol.rBy}</strong> em {sol.rDate}</div>}
+            </div>
+            {!isTec&&sol.status==="pending"&&<div style={{display:"flex",flexDirection:isMobile?"row":"column",gap:8,flexShrink:0}}>
+              <Btn size="sm" color="grn" onClick={()=>confirmar(sol)} style={{whiteSpace:"nowrap"}}>✓ Confirmar Entrega</Btn>
+              <Btn size="sm" color="red" outline onClick={()=>rejeitar(sol)}>✕ Rejeitar</Btn>
+            </div>}
+          </div>
+        </Card>;
+      })}
+    </div>
+
+    {modal&&<Modal title="Nova Solicitação de Material" onClose={()=>setModal(false)} isMobile={isMobile}>
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
+          <Sel label="Urgência" value={form.urgencia} onChange={v=>setForm(f=>({...f,urgencia:v}))} options={[{value:"normal",label:"Normal"},{value:"alta",label:"🟡 Alta Prioridade"},{value:"urgente",label:"🔴 Urgente"}]}/>
+          <Inp label="Observação Geral" value={form.notes} onChange={v=>setForm(f=>({...f,notes:v}))} placeholder="Ex: Para instalação amanhã"/>
+        </div>
+        <div style={{fontSize:12,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:".06em"}}>Materiais Solicitados</div>
+        {form.items.map((it,i)=>(
+          <div key={i} style={{background:C.surf,borderRadius:8,padding:"12px",border:`1px solid ${C.bdr}`}}>
+            <div style={{display:"flex",gap:8,alignItems:"flex-end",marginBottom:8,flexWrap:isMobile?"wrap":"nowrap"}}>
+              <div style={{flex:2,minWidth:isMobile?"100%":"auto"}}><Sel value={it.sid} onChange={v=>updRow(i,"sid",v)} options={[{value:"",label:"Selecionar material..."},...stock.map(s=>({value:s.id,label:`[${s.code}] ${s.name} — Disponível: ${s.qty} ${s.unit}`}))]}/></div>
+              <div style={{width:isMobile?"100%":90,minWidth:isMobile?"100%":90}}><Inp value={it.qty} onChange={v=>updRow(i,"qty",v)} placeholder="Qtd" type="number" label={isMobile?"Quantidade":""}/></div>
+              {!isMobile&&<Btn size="sm" color="red" outline onClick={()=>setForm(f=>({...f,items:f.items.filter((_,j)=>j!==i)}))}>✕</Btn>}
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <div style={{flex:1}}><Inp value={it.obs} onChange={v=>updRow(i,"obs",v)} placeholder="Observação do item (opcional)"/></div>
+              {isMobile&&<Btn size="sm" color="red" outline onClick={()=>setForm(f=>({...f,items:f.items.filter((_,j)=>j!==i)}))}>✕</Btn>}
+            </div>
+          </div>
+        ))}
+        <div style={{display:"flex",gap:10,justifyContent:"space-between",flexWrap:"wrap"}}>
+          <Btn color="ghost" outline size="sm" onClick={()=>setForm(f=>({...f,items:[...f.items,{sid:"",qty:"",obs:""}]}))}>+ Adicionar Material</Btn>
+          <div style={{display:"flex",gap:8}}>
+            <Btn color="ghost" outline onClick={()=>setModal(false)}>Cancelar</Btn>
+            <Btn color="gold" onClick={enviar}>📤 Enviar Solicitação</Btn>
+          </div>
+        </div>
+      </div>
+    </Modal>}
+  </div>;
+}
+
 /* ── APP ── */
 export default function App(){
   const[user,setUser]=useState(null);
@@ -1394,6 +1527,7 @@ export default function App(){
   const[nf,setNf]=useState(NF0);
   const[logs,setLogs]=useState(LOGS0);
   const[drawerOpen,setDrawerOpen]=useState(false);
+  const[solicitacoes,setSolicitacoes]=useState([]);
   const[cats,setCats]=useState([
     {id:"c1",name:"Equipamentos",icon:"📡"},{id:"c2",name:"Cabos e Fios",icon:"🔌"},
     {id:"c3",name:"Conectores",icon:"🔗"},{id:"c4",name:"Caixas e Acessórios",icon:"🗃️"},
@@ -1414,14 +1548,16 @@ export default function App(){
   if(!user)return <LoginPage users={users} onLogin={u=>{setUser(u);setPage("dash");}}/>;
   const isAdm=user.role==="admin";
   const pendRet=returns.filter(r=>r.status==="pending").length;
+  const pendSol=solicitacoes.filter(s=>s.status==="pending").length;
   const p={stock,setStock,tstock,setTstock,os,setOs,returns,setReturns,nf,setNf,users,setUsers,currentUser:user,addLog,isAdmin:isAdm,isMobile};
   const pages={
-    dash:<Dashboard {...p} setPage={setPage} logs={logs}/>,
+    dash:<Dashboard {...p} setPage={setPage} logs={logs} pendSol={pendSol}/>,
     estoque:<EstoquePage {...p}/>,
     kit:<KitPage tstock={tstock} stock={stock} users={users} currentUser={user} isMobile={isMobile}/>,
     dist:<DistPage {...p}/>,
     os:<OSPage {...p}/>,
     dev:<DevPage {...p}/>,
+    sol:<SolicitacaoPage solicitacoes={solicitacoes} setSolicitacoes={setSolicitacoes} stock={stock} setStock={setStock} tstock={tstock} setTstock={setTstock} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
     nf:<NFPage nf={nf} setNf={setNf} stock={stock} setStock={setStock} addLog={addLog} currentUser={user} isMobile={isMobile}/>,
     rel:<RelPage stock={stock} os={os} returns={returns} users={users} isMobile={isMobile}/>,
     email:<EmailPage stock={stock} os={os} returns={returns} users={users} isMobile={isMobile}/>,
@@ -1435,7 +1571,7 @@ export default function App(){
     {!isMobile&&<Sidebar user={user} page={page} setPage={setPage} onLogout={()=>setUser(null)}/>}
     {isMobile&&drawerOpen&&<MobileDrawer user={user} page={page} setPage={setPage} onLogout={()=>setUser(null)} onClose={()=>setDrawerOpen(false)}/>}
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-      <TopBar user={user} pendRet={pendRet} setPage={setPage} isMobile={isMobile} onMenuOpen={()=>setDrawerOpen(true)}/>
+      <TopBar user={user} pendRet={pendRet} pendSol={pendSol} setPage={setPage} isMobile={isMobile} onMenuOpen={()=>setDrawerOpen(true)}/>
       <main style={{flex:1,overflowY:"auto",padding:isMobile?"14px 14px 80px":"24px"}}>
         {pages[page]||pages.dash}
       </main>
