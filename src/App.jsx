@@ -148,7 +148,7 @@ function LoginPage({users,onLogin}){
     <div style={{position:"fixed",inset:0,backgroundImage:`radial-gradient(ellipse at 50% 0%,${C.gold}18 0%,transparent 60%)`,pointerEvents:"none"}}/>
     <div className="fi" style={{width:"100%",maxWidth:400,position:"relative",zIndex:1}}>
       <div style={{textAlign:"center",marginBottom:32}}>
-        <img src="/logo-retelecom.jpg" alt="R&E Telecom" style={{height:isMobile?70:90,objectFit:"contain",filter:"drop-shadow(0 4px 16px rgba(240,165,0,0.3))",marginBottom:12}}/>
+        <img src="/logo-retelecom.png" alt="R&E Telecom" style={{height:isMobile?70:90,objectFit:"contain",filter:"drop-shadow(0 4px 16px rgba(240,165,0,0.4))",marginBottom:12}}/>
         <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:".12em",textTransform:"uppercase"}}>Sistema de Gestão de Estoque · FTTH</div>
       </div>
       <Card style={{padding:isMobile?20:28,display:"flex",flexDirection:"column",gap:16,borderRadius:16}}>
@@ -175,12 +175,15 @@ function Sidebar({user,page,setPage,onLogout}){
     {k:"dev",icon:"↩️",label:"Devoluções"},
     {k:"os",icon:"🔧",label:"Ordens de Serviço"},
     {k:"rel",icon:"📊",label:"Relatórios"},
+    isAdm&&{k:"email",icon:"📧",label:"Enviar Relatório"},
+    isAdm&&{k:"cat",icon:"🏷️",label:"Categorias"},
+    isAdm&&{k:"produtos",icon:"🔩",label:"Produtos"},
     isAdm&&{k:"usr",icon:"👥",label:"Usuários"},
     isAdm&&{k:"log",icon:"📋",label:"Logs do Sistema"},
   ].filter(Boolean);
   return <div style={{width:220,minWidth:220,background:C.surf,borderRight:`1px solid ${C.bdr}`,display:"flex",flexDirection:"column",height:"100vh",flexShrink:0}}>
     <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.bdr}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <img src="/logo-retelecom.jpg" alt="R&E Telecom" style={{height:48,objectFit:"contain"}}/>
+      <img src="/logo-retelecom.png" alt="R&E Telecom" style={{height:48,objectFit:"contain"}}/>
     </div>
     <div style={{padding:"8px 16px 6px",borderBottom:`1px solid ${C.bdr}`}}>
       <div style={{fontSize:10,color:C.muted2,lineHeight:1.4}}>Gestão de Estoque · Provedores FTTH</div>
@@ -225,6 +228,9 @@ function MobileDrawer({user,page,setPage,onLogout,onClose}){
     {k:"dev",icon:"↩️",label:"Devoluções"},
     {k:"os",icon:"🔧",label:"Ordens de Serviço"},
     {k:"rel",icon:"📊",label:"Relatórios"},
+    isAdm&&{k:"email",icon:"📧",label:"Enviar Relatório"},
+    isAdm&&{k:"cat",icon:"🏷️",label:"Categorias"},
+    isAdm&&{k:"produtos",icon:"🔩",label:"Produtos"},
     isAdm&&{k:"usr",icon:"👥",label:"Usuários"},
     isAdm&&{k:"log",icon:"📋",label:"Logs do Sistema"},
   ].filter(Boolean);
@@ -233,7 +239,7 @@ function MobileDrawer({user,page,setPage,onLogout,onClose}){
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"#000000aa",zIndex:200}}/>
     <div className="sl" style={{position:"fixed",top:0,left:0,bottom:0,width:280,background:C.surf,zIndex:201,display:"flex",flexDirection:"column",borderRight:`1px solid ${C.bdr}`}}>
       <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.bdr}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <img src="/logo-retelecom.jpg" alt="R&E Telecom" style={{height:42,objectFit:"contain"}}/>
+        <img src="/logo-retelecom.png" alt="R&E Telecom" style={{height:42,objectFit:"contain"}}/>
         <button onClick={onClose} style={{background:C.card,color:C.muted,width:32,height:32,borderRadius:8,fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
       </div>
       <div style={{padding:"10px 14px 8px",borderBottom:`1px solid ${C.bdr}`,display:"flex",alignItems:"center",gap:10}}>
@@ -1141,6 +1147,241 @@ function LogPage({logs,isMobile}){
   </div>;
 }
 
+/* ── CATEGORIAS ── */
+function CatPage({cats,setCats,isMobile}){
+  const[modal,setModal]=useState(false);
+  const[form,setForm]=useState({name:"",icon:"📦"});
+  const[editId,setEditId]=useState(null);
+  const icons=["📦","🔌","🔧","📡","🛠️","💡","🔩","🗃️","📋","⚙️","🔗","🏷️"];
+  const save=()=>{
+    if(!form.name.trim())return;
+    if(editId){setCats(p=>p.map(c=>c.id===editId?{...c,...form}:c));}
+    else{setCats(p=>[...p,{id:uid(),name:form.name.trim(),icon:form.icon}]);}
+    setModal(false);setForm({name:"",icon:"📦"});setEditId(null);
+  };
+  return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <div><h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Categorias</h1><p style={{fontSize:12,color:C.muted,marginTop:2}}>Gerencie as categorias de materiais</p></div>
+      <Btn color="gold" size={isMobile?"sm":"md"} onClick={()=>{setForm({name:"",icon:"📦"});setEditId(null);setModal(true);}}>+ Nova Categoria</Btn>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(auto-fill,minmax(200px,1fr))",gap:12}}>
+      {cats.map(c=>(
+        <Card key={c.id} style={{padding:16,display:"flex",alignItems:"center",gap:12}}>
+          <div style={{width:44,height:44,borderRadius:10,background:`${C.gold}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{c.icon}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:14,fontWeight:600,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</div>
+            <div style={{fontSize:11,color:C.muted,marginTop:2}}>Categoria ativa</div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:4,flexShrink:0}}>
+            <Btn size="xs" color="gold" outline onClick={()=>{setForm({name:c.name,icon:c.icon});setEditId(c.id);setModal(true);}}>✏️</Btn>
+            <Btn size="xs" color="red" outline onClick={()=>{if(window.confirm(`Remover "${c.name}"?`))setCats(p=>p.filter(x=>x.id!==c.id));}}>✕</Btn>
+          </div>
+        </Card>
+      ))}
+    </div>
+    {modal&&<Modal title={editId?"Editar Categoria":"Nova Categoria"} onClose={()=>{setModal(false);setEditId(null);}} isMobile={isMobile}>
+      <div style={{display:"flex",flexDirection:"column",gap:16}}>
+        <Inp label="Nome da Categoria *" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} placeholder="Ex: Equipamentos"/>
+        <div>
+          <label style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:".06em",textTransform:"uppercase",display:"block",marginBottom:8}}>Ícone</label>
+          <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+            {icons.map(ic=>(
+              <div key={ic} onClick={()=>setForm(f=>({...f,icon:ic}))}
+                style={{width:40,height:40,borderRadius:8,background:form.icon===ic?`${C.gold}33`:C.surf,border:`2px solid ${form.icon===ic?C.gold:C.bdr}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,cursor:"pointer"}}>
+                {ic}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <Btn color="ghost" outline onClick={()=>{setModal(false);setEditId(null);}}>Cancelar</Btn>
+          <Btn color="gold" onClick={save}>Salvar</Btn>
+        </div>
+      </div>
+    </Modal>}
+  </div>;
+}
+
+/* ── PRODUTOS ── */
+function ProdutosPage({produtos,setProdutos,cats,isMobile}){
+  const[q,setQ]=useState("");
+  const[modal,setModal]=useState(null);
+  const[form,setForm]=useState({code:"",name:"",cat:"",unit:"un",desc:""});
+  const filtered=produtos.filter(p=>p.name.toLowerCase().includes(q.toLowerCase())||p.code.toLowerCase().includes(q.toLowerCase()));
+  const save=()=>{
+    if(!form.name.trim())return;
+    if(modal==="new")setProdutos(p=>[...p,{id:uid(),...form,name:form.name.trim()}]);
+    else setProdutos(p=>p.map(x=>x.id===modal?{...x,...form,name:form.name.trim()}:x));
+    setModal(null);
+  };
+  return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+      <div><h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Produtos</h1><p style={{fontSize:12,color:C.muted,marginTop:2}}>Cadastro de produtos e materiais</p></div>
+      <div style={{display:"flex",gap:8,width:isMobile?"100%":"auto"}}>
+        <Inp value={q} onChange={setQ} placeholder="🔍 Buscar produto..." style={{flex:1}}/>
+        <Btn size="sm" color="gold" onClick={()=>{setForm({code:"",name:"",cat:cats[0]?.name||"",unit:"un",desc:""});setModal("new");}}>+ Novo</Btn>
+      </div>
+    </div>
+    {isMobile?(
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {filtered.map(p=>(
+          <Card key={p.id} style={{padding:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:2}}>{p.name}</div>
+                <div style={{fontSize:11,color:C.muted}}>{p.code} · {p.cat} · {p.unit}</div>
+                {p.desc&&<div style={{fontSize:11,color:C.muted2,marginTop:4}}>{p.desc}</div>}
+              </div>
+              <div style={{display:"flex",gap:6,flexShrink:0,marginLeft:10}}>
+                <Btn size="xs" color="gold" outline onClick={()=>{setForm({code:p.code,name:p.name,cat:p.cat,unit:p.unit,desc:p.desc||""});setModal(p.id);}}>✏️</Btn>
+                <Btn size="xs" color="red" outline onClick={()=>{if(window.confirm(`Remover "${p.name}"?`))setProdutos(x=>x.filter(i=>i.id!==p.id));}}>✕</Btn>
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+    ):(
+      <Card style={{padding:0,overflow:"hidden"}}>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead><THead cols={["CÓDIGO","NOME DO PRODUTO","CATEGORIA","UNIDADE","DESCRIÇÃO","AÇÕES"]}/></thead>
+            <tbody>
+              {filtered.length===0?<tr><td colSpan={6} style={{padding:30,textAlign:"center",color:C.muted}}>Nenhum produto cadastrado.</td></tr>
+              :filtered.map(p=>(
+                <TRow key={p.id} cells={[
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted}}>{p.code}</span>,
+                  <span style={{fontWeight:600,color:C.txt}}>{p.name}</span>,
+                  <Bdg color="muted">{p.cat}</Bdg>,
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted}}>{p.unit}</span>,
+                  <span style={{fontSize:11,color:C.muted}}>{p.desc||"—"}</span>,
+                  <div style={{display:"flex",gap:6}}>
+                    <Btn size="xs" color="gold" outline onClick={()=>{setForm({code:p.code,name:p.name,cat:p.cat,unit:p.unit,desc:p.desc||""});setModal(p.id);}}>Editar</Btn>
+                    <Btn size="xs" color="red" outline onClick={()=>{if(window.confirm(`Remover "${p.name}"?`))setProdutos(x=>x.filter(i=>i.id!==p.id));}}>✕</Btn>
+                  </div>
+                ]}/>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    )}
+    {modal&&<Modal title={modal==="new"?"Novo Produto":"Editar Produto"} onClose={()=>setModal(null)} isMobile={isMobile}>
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
+          <Inp label="Código" value={form.code} onChange={v=>setForm(f=>({...f,code:v}))} placeholder="ONU-001"/>
+          <Inp label="Nome do Produto *" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} placeholder="Ex: ONU Huawei HG8145V5"/>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
+          <Sel label="Categoria" value={form.cat} onChange={v=>setForm(f=>({...f,cat:v}))} options={cats.map(c=>({value:c.name,label:`${c.icon} ${c.name}`}))}/>
+          <Inp label="Unidade" value={form.unit} onChange={v=>setForm(f=>({...f,unit:v}))} placeholder="un, m, rolo, pç..."/>
+        </div>
+        <Inp label="Descrição" value={form.desc} onChange={v=>setForm(f=>({...f,desc:v}))} placeholder="Descrição opcional do produto"/>
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <Btn color="ghost" outline onClick={()=>setModal(null)}>Cancelar</Btn>
+          <Btn color="gold" onClick={save}>Salvar Produto</Btn>
+        </div>
+      </div>
+    </Modal>}
+  </div>;
+}
+
+/* ── EMAIL ── */
+function EmailPage({stock,os,returns,users,isMobile}){
+  const[emails,setEmails]=useState("");
+  const[assunto,setAssunto]=useState("Relatório R&E Telecom Estoque");
+  const[tipo,setTipo]=useState("completo");
+  const[msg,setMsg]=useState("");
+  const pendRet=returns.filter(r=>r.status==="pending").length;
+  const lowStock=stock.filter(s=>s.qty<=s.min);
+  const gerarCorpo=()=>{
+    const linha=(l)=>`${l}\n`;
+    let corpo=`R&E TELECOM — RELATÓRIO DE ESTOQUE\n`;
+    corpo+=`Gerado em: ${now()}\n${"=".repeat(50)}\n\n`;
+    if(tipo==="completo"||tipo==="estoque"){
+      corpo+=`📦 ESTOQUE ATUAL\n${"-".repeat(40)}\n`;
+      stock.forEach(s=>{corpo+=`${s.code} | ${s.name} | ${s.qty} ${s.unit} | ${s.qty<=s.min*0.6?"⚠️ CRÍTICO":s.qty<=s.min?"⬇️ BAIXO":"✅ OK"}\n`;});
+      corpo+="\n";
+    }
+    if(tipo==="completo"||tipo==="criticos"){
+      corpo+=`⚠️ ITENS COM BAIXO ESTOQUE (${lowStock.length})\n${"-".repeat(40)}\n`;
+      lowStock.forEach(s=>{corpo+=`${s.code} | ${s.name} | Atual: ${s.qty} | Mínimo: ${s.min}\n`;});
+      corpo+="\n";
+    }
+    if(tipo==="completo"||tipo==="os"){
+      corpo+=`🔧 ORDENS DE SERVIÇO (${os.length})\n${"-".repeat(40)}\n`;
+      os.slice(0,10).forEach(o=>{const t=users.find(u=>u.id===o.uid);corpo+=`${o.os} | ${o.client} | ${t?.name||"?"} | ${o.date}\n`;});
+      corpo+="\n";
+    }
+    corpo+=`↩️ DEVOLUÇÕES PENDENTES: ${pendRet}\n\n`;
+    corpo+=`${"=".repeat(50)}\nR&E Telecom Estoque v1.0.0`;
+    return corpo;
+  };
+  const enviar=()=>{
+    const lista=emails.split(/[,;\n]/).map(e=>e.trim()).filter(e=>e.includes("@"));
+    if(!lista.length){setMsg("❌ Informe ao menos um e-mail válido.");return;}
+    const corpo=gerarCorpo();
+    const mailto=`mailto:${lista.join(",")}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;
+    window.open(mailto,"_blank");
+    setMsg(`✅ Cliente de e-mail aberto com ${lista.length} destinatário(s)!`);
+    setTimeout(()=>setMsg(""),5000);
+  };
+  const copiar=()=>{
+    navigator.clipboard.writeText(gerarCorpo()).then(()=>{setMsg("✅ Relatório copiado! Cole no seu e-mail.");setTimeout(()=>setMsg(""),4000);});
+  };
+  return <div className="fi" style={{display:"flex",flexDirection:"column",gap:16}}>
+    <div><h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Enviar Relatório por E-mail</h1><p style={{fontSize:12,color:C.muted,marginTop:2}}>Envio manual para destinatários cadastrados</p></div>
+    {msg&&<div style={{background:msg.includes("✅")?C.grnD:C.redD,border:`1px solid ${msg.includes("✅")?C.grn:C.red}44`,borderRadius:8,padding:"12px 14px",color:msg.includes("✅")?C.grn:C.red,fontSize:13}}>{msg}</div>}
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:16}}>
+      <Card style={{padding:18,display:"flex",flexDirection:"column",gap:14}}>
+        <div style={{fontSize:14,fontWeight:700,color:C.txt,marginBottom:4}}>⚙️ Configurar Envio</div>
+        <div>
+          <label style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:".06em",textTransform:"uppercase",display:"block",marginBottom:6}}>Destinatários (um por linha ou separados por vírgula)</label>
+          <textarea value={emails} onChange={e=>setEmails(e.target.value)} rows={4} placeholder={"joao@empresa.com\ngerente@empresa.com\ndiretoria@empresa.com"}
+            style={{width:"100%",background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"11px 14px",color:C.txt,fontSize:13,resize:"vertical",fontFamily:"'Inter',sans-serif"}}/>
+        </div>
+        <Inp label="Assunto do E-mail" value={assunto} onChange={setAssunto}/>
+        <Sel label="Tipo de Relatório" value={tipo} onChange={setTipo} options={[
+          {value:"completo",label:"Relatório Completo"},
+          {value:"estoque",label:"Apenas Estoque"},
+          {value:"criticos",label:"Apenas Itens Críticos"},
+          {value:"os",label:"Apenas Ordens de Serviço"},
+        ]}/>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <Btn color="gold" onClick={enviar} style={{flex:1}}>📧 Abrir E-mail</Btn>
+          <Btn color="ghost" outline onClick={copiar} style={{flex:1}}>📋 Copiar Conteúdo</Btn>
+        </div>
+        <div style={{background:C.surf,borderRadius:8,padding:"10px 14px",border:`1px solid ${C.bdr}`}}>
+          <div style={{fontSize:11,color:C.muted,lineHeight:1.6}}>
+            💡 <strong style={{color:C.txt2}}>Como funciona:</strong> Clique em "Abrir E-mail" para abrir seu app de e-mail já preenchido, ou "Copiar Conteúdo" para colar manualmente.
+          </div>
+        </div>
+      </Card>
+      <Card style={{padding:18}}>
+        <div style={{fontSize:14,fontWeight:700,color:C.txt,marginBottom:14}}>📊 Resumo do Relatório</div>
+        {[
+          {icon:"📦",label:"Total de itens",value:stock.length,color:C.gold},
+          {icon:"⚠️",label:"Itens críticos",value:stock.filter(s=>s.qty<=s.min*0.6).length,color:C.red},
+          {icon:"⬇️",label:"Estoque baixo",value:stock.filter(s=>s.qty<=s.min&&s.qty>s.min*0.6).length,color:C.ylw},
+          {icon:"🔧",label:"Ordens de serviço",value:os.length,color:C.blue},
+          {icon:"↩️",label:"Devoluções pendentes",value:pendRet,color:C.ylw},
+        ].map((item,i)=>(
+          <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:`1px solid ${C.bdr}22`}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:18}}>{item.icon}</span>
+              <span style={{fontSize:13,color:C.txt2}}>{item.label}</span>
+            </div>
+            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:16,fontWeight:800,color:item.color}}>{item.value}</span>
+          </div>
+        ))}
+        <div style={{marginTop:14,padding:"10px 12px",background:`${C.gold}11`,borderRadius:8,border:`1px solid ${C.gold}33`}}>
+          <div style={{fontSize:11,color:C.gold,fontWeight:600}}>📅 Envio manual</div>
+          <div style={{fontSize:11,color:C.muted,marginTop:4}}>Envie quando precisar. Em breve teremos envio automático agendado.</div>
+        </div>
+      </Card>
+    </div>
+  </div>;
+}
+
 /* ── APP ── */
 export default function App(){
   const[user,setUser]=useState(null);
@@ -1153,6 +1394,18 @@ export default function App(){
   const[nf,setNf]=useState(NF0);
   const[logs,setLogs]=useState(LOGS0);
   const[drawerOpen,setDrawerOpen]=useState(false);
+  const[cats,setCats]=useState([
+    {id:"c1",name:"Equipamentos",icon:"📡"},{id:"c2",name:"Cabos e Fios",icon:"🔌"},
+    {id:"c3",name:"Conectores",icon:"🔗"},{id:"c4",name:"Caixas e Acessórios",icon:"🗃️"},
+    {id:"c5",name:"Acessórios",icon:"🔩"},{id:"c6",name:"Ferramentas",icon:"🛠️"},
+  ]);
+  const[produtos,setProdutos]=useState([
+    {id:"p1",code:"ONU-001",name:"ONU Huawei HG8145V5",cat:"Equipamentos",unit:"un",desc:"ONT para rede GPON"},
+    {id:"p2",code:"ONT-001",name:"ONT ZTE F601",cat:"Equipamentos",unit:"un",desc:""},
+    {id:"p3",code:"DROP-001",name:"Cabo Drop Flat 2FO",cat:"Cabos e Fios",unit:"m",desc:"Cabo óptico drop para cliente"},
+    {id:"p4",code:"CON-001",name:"Conector SC/APC",cat:"Conectores",unit:"un",desc:""},
+    {id:"p5",code:"SPL-001",name:"Splitter 1x8",cat:"Caixas e Acessórios",unit:"un",desc:""},
+  ]);
   const isMobile=useIsMobile();
   const addLog=(u,a,d)=>{
     const tipo=a.toLowerCase().includes("saída")||a.toLowerCase().includes("saida")?"saida":a.toLowerCase().includes("entrada")?"entrada":a.toLowerCase().includes("aprovada")?"aprovada":a.toLowerCase().includes("devolução")||a.toLowerCase().includes("solicitada")?"dev":"outro";
@@ -1171,6 +1424,9 @@ export default function App(){
     dev:<DevPage {...p}/>,
     nf:<NFPage nf={nf} setNf={setNf} stock={stock} setStock={setStock} addLog={addLog} currentUser={user} isMobile={isMobile}/>,
     rel:<RelPage stock={stock} os={os} returns={returns} users={users} isMobile={isMobile}/>,
+    email:<EmailPage stock={stock} os={os} returns={returns} users={users} isMobile={isMobile}/>,
+    cat:<CatPage cats={cats} setCats={setCats} isMobile={isMobile}/>,
+    produtos:<ProdutosPage produtos={produtos} setProdutos={setProdutos} cats={cats} isMobile={isMobile}/>,
     usr:<UsrPage users={users} setUsers={setUsers} addLog={addLog} currentUser={user} isMobile={isMobile}/>,
     log:<LogPage logs={logs} isMobile={isMobile}/>,
   };
