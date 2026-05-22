@@ -703,41 +703,93 @@ function EstoquePage({stock,setStock,isAdmin,addLog,currentUser,isMobile}){
   </div>;
 }
 
+
+/* ── COMPONENTE REUTILIZÁVEL: Lista de itens estilo botão + lista ── */
+function ItemList({items,onAdd,onUpdate,onRemove,stockOptions,isMobile,label,addLabel,showObs,showVal}){
+  return <div style={{display:"flex",flexDirection:"column",gap:6}}>
+    {label&&<div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:2}}>{label} <span style={{background:`${C.gold}22`,color:C.gold,fontSize:11,fontWeight:800,padding:"2px 8px",borderRadius:4,marginLeft:6}}>{items.filter(r=>r.sid&&parseInt(r.qty)>0).length} item(s)</span></div>}
+    {items.map((it,idx)=>{
+      const s=it.sid?stockOptions.find(x=>x.id===it.sid):null;
+      return <div key={it.id} style={{display:"flex",alignItems:"flex-start",gap:8,background:it.sid?`${C.gold}08`:C.surf,borderRadius:10,padding:"10px 12px",border:`1px solid ${it.sid?`${C.gold}44`:C.bdr2}`}}>
+        <div style={{width:24,height:24,borderRadius:"50%",background:`${C.gold}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:C.gold,flexShrink:0,marginTop:2}}>{idx+1}</div>
+        <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:6}}>
+          <select value={it.sid} onChange={e=>onUpdate(it.id,"sid",e.target.value)}
+            style={{width:"100%",background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:7,padding:"9px 10px",color:it.sid?C.txt:C.muted,fontSize:13}}>
+            <option value="">— Selecionar material —</option>
+            {stockOptions.map(s=><option key={s.id} value={s.id}>[{s.code||"—"}] {s.name} ({s.qty} {s.unit})</option>)}
+          </select>
+          {s&&<div style={{fontSize:10,color:C.grn}}>✓ {s.name} · Disponível: <strong>{s.qty}</strong> {s.unit}</div>}
+          <div style={{display:"flex",gap:6,flexWrap:isMobile?"wrap":"nowrap"}}>
+            <input type="number" value={it.qty} onChange={e=>onUpdate(it.id,"qty",e.target.value)}
+              placeholder="Quantidade" min="0"
+              style={{width:isMobile?"100%":110,background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:7,padding:"8px 10px",color:C.txt,fontSize:14,fontWeight:700,textAlign:"center",flex:isMobile?1:"none"}}/>
+            {showVal&&<input type="number" value={it.val||""} onChange={e=>onUpdate(it.id,"val",e.target.value)}
+              placeholder="Valor R$" min="0"
+              style={{width:isMobile?"100%":120,background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:7,padding:"8px 10px",color:C.txt,fontSize:13,flex:isMobile?1:"none"}}/>}
+            {showObs&&<input type="text" value={it.obs||""} onChange={e=>onUpdate(it.id,"obs",e.target.value)}
+              placeholder="Obs (opcional)"
+              style={{flex:1,background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:7,padding:"8px 10px",color:C.txt,fontSize:13}}/>}
+          </div>
+        </div>
+        <button onClick={()=>onRemove(it.id)} style={{background:C.redD,color:C.red,border:"none",borderRadius:7,width:30,height:30,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>✕</button>
+      </div>;
+    })}
+    <button onClick={onAdd} style={{
+      width:"100%",padding:"13px",
+      background:items.length===0?`${C.gold}18`:"transparent",
+      border:`2px dashed ${C.gold}`,
+      borderRadius:10,color:C.gold,
+      cursor:"pointer",fontSize:13,fontWeight:700,
+      display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+      <span style={{fontSize:20,lineHeight:1}}>+</span>
+      {items.length===0?(addLabel||"Clique para adicionar o primeiro material"):"Adicionar mais um material"}
+    </button>
+    {items.length===0&&<div style={{textAlign:"center",fontSize:11,color:C.muted2,marginTop:-4}}>Adicione os materiais e envie tudo junto no final</div>}
+  </div>;
+}
+
 /* ── DIST ── */
 function DistPage({stock,setStock,tstock,setTstock,users,addLog,currentUser,isMobile}){
   const techs=users.filter(u=>u.role==="tecnico");
   const[techId,setTechId]=useState(techs[0]?.id||"");
-  const[items,setItems]=useState([{sid:"",qty:""}]);
+  const[items,setItems]=useState([]);
   const[msg,setMsg]=useState("");
-  const updRow=(i,k,v)=>setItems(p=>p.map((r,j)=>j===i?{...r,[k]:v}:r));
+  const blank=()=>({id:uid(),sid:"",qty:""});
+  const updItem=(id,k,v)=>setItems(p=>p.map(r=>r.id===id?{...r,[k]:v}:r));
+  const remItem=(id)=>setItems(p=>p.filter(r=>r.id!==id));
+  const validItems=items.filter(r=>r.sid&&parseInt(r.qty)>0);
+
   const send=()=>{
-    const valid=items.filter(r=>r.sid&&parseInt(r.qty)>0);if(!valid.length)return;
-    let ok=true;valid.forEach(r=>{const si=stock.find(s=>s.id===r.sid);if(!si||si.qty<parseInt(r.qty)){ok=false;alert(`Estoque insuficiente: ${si?.name||r.sid}`);}});
+    if(!validItems.length){setMsg("err:Adicione ao menos 1 material.");return;}
+    let ok=true;
+    validItems.forEach(r=>{const si=stock.find(s=>s.id===r.sid);if(!si||si.qty<parseInt(r.qty)){ok=false;alert("Estoque insuficiente: "+(si?.name||r.sid));}});
     if(!ok)return;
-    setStock(p=>p.map(s=>{const it=valid.find(r=>r.sid===s.id);return it?{...s,qty:s.qty-parseInt(it.qty)}:s;}));
-    setTstock(p=>{let n=[...p];valid.forEach(r=>{const ex=n.find(t=>t.uid===techId&&t.sid===r.sid);if(ex)n=n.map(t=>t.id===ex.id?{...t,qty:t.qty+parseInt(r.qty)}:t);else n.push({id:uid(),uid:techId,sid:r.sid,qty:parseInt(r.qty)});});return n;});
+    setStock(p=>p.map(s=>{const it=validItems.find(r=>r.sid===s.id);return it?{...s,qty:s.qty-parseInt(it.qty)}:s;}));
+    setTstock(p=>{let n=[...p];validItems.forEach(r=>{const ex=n.find(t=>t.uid===techId&&t.sid===r.sid);if(ex)n=n.map(t=>t.id===ex.id?{...t,qty:t.qty+parseInt(r.qty)}:t);else n.push({id:uid(),uid:techId,sid:r.sid,qty:parseInt(r.qty)});});return n;});
     const tech=users.find(u=>u.id===techId);
-    addLog(currentUser.name,"Saída",`Liberação · ${tech?.name} · ${valid.length} item(s)`);
-    setMsg(`✅ Liberado para ${tech?.name}!`);setItems([{sid:"",qty:""}]);setTimeout(()=>setMsg(""),4000);
+    addLog(currentUser.name,"Saída","Liberação · "+tech?.name+" · "+validItems.length+" item(s)");
+    setMsg("ok:✅ Liberado para "+tech?.name+"!");
+    setItems([]);
+    setTimeout(()=>setMsg(""),4000);
   };
+
   return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
-    <h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Saída / Liberação</h1>
-    {msg&&<div style={{background:C.grnD,border:`1px solid ${C.grn}44`,borderRadius:8,padding:"12px 14px",color:C.grn,fontSize:13}}>{msg}</div>}
-    <Card style={{padding:isMobile?16:22,display:"flex",flexDirection:"column",gap:14}}>
+    <h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Saída / Liberação de Materiais</h1>
+    {msg&&<div style={{background:msg.startsWith("ok:")?C.grnD:C.redD,border:`1px solid ${msg.startsWith("ok:")?C.grn:C.red}44`,borderRadius:8,padding:"12px 14px",color:msg.startsWith("ok:")?C.grn:C.red,fontSize:13}}>{msg.replace(/^(ok|err):/,"")}</div>}
+    <Card style={{padding:18,display:"flex",flexDirection:"column",gap:14}}>
       <Sel label="Técnico Destinatário" value={techId} onChange={setTechId} options={techs.map(t=>({value:t.id,label:t.name}))}/>
-      <div style={{fontSize:12,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:".06em"}}>Materiais a Liberar</div>
-      {items.map((it,i)=>(
-        <div key={i} style={{display:"flex",flexDirection:isMobile?"column":"row",gap:8}}>
-          <div style={{flex:1}}><Sel value={it.sid} onChange={v=>updRow(i,"sid",v)} options={[{value:"",label:"Selecionar material..."},...stock.map(s=>({value:s.id,label:`[${s.code}] ${s.name} — ${fmt(s.qty)} ${s.unit}`}))]}/></div>
-          <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
-            <div style={{width:isMobile?"100%":130,flex:isMobile?1:"none"}}><Inp value={it.qty} onChange={v=>updRow(i,"qty",v)} placeholder="Quantidade" type="number"/></div>
-            <Btn size="sm" color="red" outline onClick={()=>setItems(p=>p.filter((_,j)=>j!==i))}>✕</Btn>
-          </div>
-        </div>
-      ))}
-      <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-        <Btn color="ghost" outline onClick={()=>setItems(p=>[...p,{sid:"",qty:""}])} size="sm">+ Adicionar</Btn>
-        <Btn color="gold" onClick={send} style={{flex:isMobile?1:"none"}}>🚀 Liberar</Btn>
+      <ItemList
+        items={items}
+        onAdd={()=>setItems(p=>[...p,blank()])}
+        onUpdate={updItem}
+        onRemove={remItem}
+        stockOptions={stock}
+        isMobile={isMobile}
+        label="Materiais a Liberar"
+        addLabel="Clique para adicionar o primeiro material a liberar"
+      />
+      <div style={{display:"flex",justifyContent:"flex-end"}}>
+        <Btn color="gold" onClick={send} disabled={validItems.length===0}>🚀 Liberar {validItems.length>0?validItems.length+" material(is)":""}</Btn>
       </div>
     </Card>
   </div>;
@@ -1538,6 +1590,445 @@ function LogPage({logs,isMobile}){
         </div>
       </Card>
     )}
+  </div>;
+}
+
+/* ── CATEGORIAS ── */
+function CatPage({cats,setCats,isMobile}){
+  const[modal,setModal]=useState(false);
+  const[form,setForm]=useState({name:"",icon:"📦"});
+  const[editId,setEditId]=useState(null);
+  const icons=["📦","🔌","🔧","📡","🛠️","💡","🔩","🗃️","📋","⚙️","🔗","🏷️"];
+  const save=()=>{
+    if(!form.name.trim())return;
+    if(editId){setCats(p=>p.map(c=>c.id===editId?{...c,...form}:c));}
+    else{setCats(p=>[...p,{id:uid(),name:form.name.trim(),icon:form.icon}]);}
+    setModal(false);setForm({name:"",icon:"📦"});setEditId(null);
+  };
+  return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <div><h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Categorias</h1><p style={{fontSize:12,color:C.muted,marginTop:2}}>Gerencie as categorias de materiais</p></div>
+      <Btn color="gold" size={isMobile?"sm":"md"} onClick={()=>{setForm({name:"",icon:"📦"});setEditId(null);setModal(true);}}>+ Nova Categoria</Btn>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(auto-fill,minmax(200px,1fr))",gap:12}}>
+      {cats.map(c=>(
+        <Card key={c.id} style={{padding:16,display:"flex",alignItems:"center",gap:12}}>
+          <div style={{width:44,height:44,borderRadius:10,background:`${C.gold}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{c.icon}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:14,fontWeight:600,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</div>
+            <div style={{fontSize:11,color:C.muted,marginTop:2}}>Categoria ativa</div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:4,flexShrink:0}}>
+            <Btn size="xs" color="gold" outline onClick={()=>{setForm({name:c.name,icon:c.icon});setEditId(c.id);setModal(true);}}>✏️</Btn>
+            <Btn size="xs" color="red" outline onClick={()=>{if(window.confirm(`Remover "${c.name}"?`))setCats(p=>p.filter(x=>x.id!==c.id));}}>✕</Btn>
+          </div>
+        </Card>
+      ))}
+    </div>
+    {modal&&<Modal title={editId?"Editar Categoria":"Nova Categoria"} onClose={()=>{setModal(false);setEditId(null);}} isMobile={isMobile}>
+      <div style={{display:"flex",flexDirection:"column",gap:16}}>
+        <Inp label="Nome da Categoria *" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} placeholder="Ex: Equipamentos"/>
+        <div>
+          <label style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:".06em",textTransform:"uppercase",display:"block",marginBottom:8}}>Ícone</label>
+          <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+            {icons.map(ic=>(
+              <div key={ic} onClick={()=>setForm(f=>({...f,icon:ic}))}
+                style={{width:40,height:40,borderRadius:8,background:form.icon===ic?`${C.gold}33`:C.surf,border:`2px solid ${form.icon===ic?C.gold:C.bdr}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,cursor:"pointer"}}>
+                {ic}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <Btn color="ghost" outline onClick={()=>{setModal(false);setEditId(null);}}>Cancelar</Btn>
+          <Btn color="gold" onClick={save}>Salvar</Btn>
+        </div>
+      </div>
+    </Modal>}
+  </div>;
+}
+
+/* ── PRODUTOS ── */
+function ProdutosPage({produtos,setProdutos,cats,isMobile}){
+  const[q,setQ]=useState("");
+  const[modal,setModal]=useState(null);
+  const[form,setForm]=useState({code:"",name:"",cat:"",unit:"un",desc:""});
+  const filtered=produtos.filter(p=>p.name.toLowerCase().includes(q.toLowerCase())||p.code.toLowerCase().includes(q.toLowerCase()));
+  const save=()=>{
+    if(!form.name.trim())return;
+    if(modal==="new")setProdutos(p=>[...p,{id:uid(),...form,name:form.name.trim()}]);
+    else setProdutos(p=>p.map(x=>x.id===modal?{...x,...form,name:form.name.trim()}:x));
+    setModal(null);
+  };
+  return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+      <div><h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Produtos</h1><p style={{fontSize:12,color:C.muted,marginTop:2}}>Cadastro de produtos e materiais</p></div>
+      <div style={{display:"flex",gap:8,width:isMobile?"100%":"auto"}}>
+        <Inp value={q} onChange={setQ} placeholder="🔍 Buscar produto..." style={{flex:1}}/>
+        <Btn size="sm" color="gold" onClick={()=>{setForm({code:"",name:"",cat:cats[0]?.name||"",unit:"un",desc:""});setModal("new");}}>+ Novo</Btn>
+      </div>
+    </div>
+    {isMobile?(
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {filtered.map(p=>(
+          <Card key={p.id} style={{padding:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:2}}>{p.name}</div>
+                <div style={{fontSize:11,color:C.muted}}>{p.code} · {p.cat} · {p.unit}</div>
+                {p.desc&&<div style={{fontSize:11,color:C.muted2,marginTop:4}}>{p.desc}</div>}
+              </div>
+              <div style={{display:"flex",gap:6,flexShrink:0,marginLeft:10}}>
+                <Btn size="xs" color="gold" outline onClick={()=>{setForm({code:p.code,name:p.name,cat:p.cat,unit:p.unit,desc:p.desc||""});setModal(p.id);}}>✏️</Btn>
+                <Btn size="xs" color="red" outline onClick={()=>{if(window.confirm(`Remover "${p.name}"?`))setProdutos(x=>x.filter(i=>i.id!==p.id));}}>✕</Btn>
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+    ):(
+      <Card style={{padding:0,overflow:"hidden"}}>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead><THead cols={["CÓDIGO","NOME DO PRODUTO","CATEGORIA","UNIDADE","DESCRIÇÃO","AÇÕES"]}/></thead>
+            <tbody>
+              {filtered.length===0?<tr><td colSpan={6} style={{padding:30,textAlign:"center",color:C.muted}}>Nenhum produto cadastrado.</td></tr>
+              :filtered.map(p=>(
+                <TRow key={p.id} cells={[
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted}}>{p.code}</span>,
+                  <span style={{fontWeight:600,color:C.txt}}>{p.name}</span>,
+                  <Bdg color="muted">{p.cat}</Bdg>,
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted}}>{p.unit}</span>,
+                  <span style={{fontSize:11,color:C.muted}}>{p.desc||"—"}</span>,
+                  <div style={{display:"flex",gap:6}}>
+                    <Btn size="xs" color="gold" outline onClick={()=>{setForm({code:p.code,name:p.name,cat:p.cat,unit:p.unit,desc:p.desc||""});setModal(p.id);}}>Editar</Btn>
+                    <Btn size="xs" color="red" outline onClick={()=>{if(window.confirm(`Remover "${p.name}"?`))setProdutos(x=>x.filter(i=>i.id!==p.id));}}>✕</Btn>
+                  </div>
+                ]}/>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    )}
+    {modal&&<Modal title={modal==="new"?"Novo Produto":"Editar Produto"} onClose={()=>setModal(null)} isMobile={isMobile}>
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
+          <Inp label="Código" value={form.code} onChange={v=>setForm(f=>({...f,code:v}))} placeholder="ONU-001"/>
+          <Inp label="Nome do Produto *" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} placeholder="Ex: ONU Huawei HG8145V5"/>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
+          <Sel label="Categoria" value={form.cat} onChange={v=>setForm(f=>({...f,cat:v}))} options={cats.map(c=>({value:c.name,label:`${c.icon} ${c.name}`}))}/>
+          <Inp label="Unidade" value={form.unit} onChange={v=>setForm(f=>({...f,unit:v}))} placeholder="un, m, rolo, pç..."/>
+        </div>
+        <Inp label="Descrição" value={form.desc} onChange={v=>setForm(f=>({...f,desc:v}))} placeholder="Descrição opcional do produto"/>
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <Btn color="ghost" outline onClick={()=>setModal(null)}>Cancelar</Btn>
+          <Btn color="gold" onClick={save}>Salvar Produto</Btn>
+        </div>
+      </div>
+    </Modal>}
+  </div>;
+}
+
+/* ── EMAIL ── */
+function EmailPage({stock,os,returns,users,isMobile}){
+  const[emails,setEmails]=useState("");
+  const[assunto,setAssunto]=useState("Relatório R&E Telecom Estoque");
+  const[tipo,setTipo]=useState("completo");
+  const[msg,setMsg]=useState("");
+  const goPage=(p)=>{setPage(p);try{localStorage.setItem("re_page",p);}catch{}};
+  const pendRet=returns.filter(r=>r.status==="pending").length;
+  const lowStock=stock.filter(s=>s.qty<=s.min);
+  const gerarCorpo=()=>{
+    const linha=(l)=>`${l}\n`;
+    let corpo=`R&E TELECOM — RELATÓRIO DE ESTOQUE\n`;
+    corpo+=`Gerado em: ${now()}\n${"=".repeat(50)}\n\n`;
+    if(tipo==="completo"||tipo==="estoque"){
+      corpo+=`📦 ESTOQUE ATUAL\n${"-".repeat(40)}\n`;
+      stock.forEach(s=>{corpo+=`${s.code} | ${s.name} | ${s.qty} ${s.unit} | ${s.qty<=s.min*0.6?"⚠️ CRÍTICO":s.qty<=s.min?"⬇️ BAIXO":"✅ OK"}\n`;});
+      corpo+="\n";
+    }
+    if(tipo==="completo"||tipo==="criticos"){
+      corpo+=`⚠️ ITENS COM BAIXO ESTOQUE (${lowStock.length})\n${"-".repeat(40)}\n`;
+      lowStock.forEach(s=>{corpo+=`${s.code} | ${s.name} | Atual: ${s.qty} | Mínimo: ${s.min}\n`;});
+      corpo+="\n";
+    }
+    if(tipo==="completo"||tipo==="os"){
+      corpo+=`🔧 ORDENS DE SERVIÇO (${os.length})\n${"-".repeat(40)}\n`;
+      os.slice(0,10).forEach(o=>{const t=users.find(u=>u.id===o.uid);corpo+=`${o.os} | ${o.client} | ${t?.name||"?"} | ${o.date}\n`;});
+      corpo+="\n";
+    }
+    corpo+=`↩️ DEVOLUÇÕES PENDENTES: ${pendRet}\n\n`;
+    corpo+=`${"=".repeat(50)}\nR&E Telecom Estoque v1.0.0`;
+    return corpo;
+  };
+  const enviar=()=>{
+    const lista=emails.split(/[,;\n]/).map(e=>e.trim()).filter(e=>e.includes("@"));
+    if(!lista.length){setMsg("❌ Informe ao menos um e-mail válido.");return;}
+    const corpo=gerarCorpo();
+    const mailto=`mailto:${lista.join(",")}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;
+    window.open(mailto,"_blank");
+    setMsg(`✅ Cliente de e-mail aberto com ${lista.length} destinatário(s)!`);
+    setTimeout(()=>setMsg(""),5000);
+  };
+  const copiar=()=>{
+    navigator.clipboard.writeText(gerarCorpo()).then(()=>{setMsg("✅ Relatório copiado! Cole no seu e-mail.");setTimeout(()=>setMsg(""),4000);});
+  };
+  return <div className="fi" style={{display:"flex",flexDirection:"column",gap:16}}>
+    <div><h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Enviar Relatório por E-mail</h1><p style={{fontSize:12,color:C.muted,marginTop:2}}>Envio manual para destinatários cadastrados</p></div>
+    {msg&&<div style={{background:msg.includes("✅")?C.grnD:C.redD,border:`1px solid ${msg.includes("✅")?C.grn:C.red}44`,borderRadius:8,padding:"12px 14px",color:msg.includes("✅")?C.grn:C.red,fontSize:13}}>{msg}</div>}
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:16}}>
+      <Card style={{padding:18,display:"flex",flexDirection:"column",gap:14}}>
+        <div style={{fontSize:14,fontWeight:700,color:C.txt,marginBottom:4}}>⚙️ Configurar Envio</div>
+        <div>
+          <label style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:".06em",textTransform:"uppercase",display:"block",marginBottom:6}}>Destinatários (um por linha ou separados por vírgula)</label>
+          <textarea value={emails} onChange={e=>setEmails(e.target.value)} rows={4} placeholder={"joao@empresa.com\ngerente@empresa.com\ndiretoria@empresa.com"}
+            style={{width:"100%",background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"11px 14px",color:C.txt,fontSize:13,resize:"vertical",fontFamily:"'Inter',sans-serif"}}/>
+        </div>
+        <Inp label="Assunto do E-mail" value={assunto} onChange={setAssunto}/>
+        <Sel label="Tipo de Relatório" value={tipo} onChange={setTipo} options={[
+          {value:"completo",label:"Relatório Completo"},
+          {value:"estoque",label:"Apenas Estoque"},
+          {value:"criticos",label:"Apenas Itens Críticos"},
+          {value:"os",label:"Apenas Ordens de Serviço"},
+        ]}/>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <Btn color="gold" onClick={enviar} style={{flex:1}}>📧 Abrir E-mail</Btn>
+          <Btn color="ghost" outline onClick={copiar} style={{flex:1}}>📋 Copiar Conteúdo</Btn>
+        </div>
+        <div style={{background:C.surf,borderRadius:8,padding:"10px 14px",border:`1px solid ${C.bdr}`}}>
+          <div style={{fontSize:11,color:C.muted,lineHeight:1.6}}>
+            💡 <strong style={{color:C.txt2}}>Como funciona:</strong> Clique em "Abrir E-mail" para abrir seu app de e-mail já preenchido, ou "Copiar Conteúdo" para colar manualmente.
+          </div>
+        </div>
+      </Card>
+      <Card style={{padding:18}}>
+        <div style={{fontSize:14,fontWeight:700,color:C.txt,marginBottom:14}}>📊 Resumo do Relatório</div>
+        {[
+          {icon:"📦",label:"Total de itens",value:stock.length,color:C.gold},
+          {icon:"⚠️",label:"Itens críticos",value:stock.filter(s=>s.qty<=s.min*0.6).length,color:C.red},
+          {icon:"⬇️",label:"Estoque baixo",value:stock.filter(s=>s.qty<=s.min&&s.qty>s.min*0.6).length,color:C.ylw},
+          {icon:"🔧",label:"Ordens de serviço",value:os.length,color:C.blue},
+          {icon:"↩️",label:"Devoluções pendentes",value:pendRet,color:C.ylw},
+        ].map((item,i)=>(
+          <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:`1px solid ${C.bdr}22`}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:18}}>{item.icon}</span>
+              <span style={{fontSize:13,color:C.txt2}}>{item.label}</span>
+            </div>
+            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:16,fontWeight:800,color:item.color}}>{item.value}</span>
+          </div>
+        ))}
+        <div style={{marginTop:14,padding:"10px 12px",background:`${C.gold}11`,borderRadius:8,border:`1px solid ${C.gold}33`}}>
+          <div style={{fontSize:11,color:C.gold,fontWeight:600}}>📅 Envio manual</div>
+          <div style={{fontSize:11,color:C.muted,marginTop:4}}>Envie quando precisar. Em breve teremos envio automático agendado.</div>
+        </div>
+      </Card>
+    </div>
+  </div>;
+}
+
+/* ── SOLICITAÇÕES DE MATERIAL ── */
+function SolicitacaoPage({solicitacoes,setSolicitacoes,stock,setStock,tstock,setTstock,users,currentUser,addLog,isMobile}){
+  const isTec=currentUser.role==="tecnico";
+  const[modal,setModal]=useState(false);
+  const[items,setItems]=useState([]);
+  const[urgencia,setUrgencia]=useState("normal");
+  const[notes,setNotes]=useState("");
+  const[msg,setMsg]=useState("");
+
+  const viewSol=isTec?solicitacoes.filter(s=>s.uid===currentUser.id):solicitacoes;
+  const pendentes=solicitacoes.filter(s=>s.status==="pending");
+
+  const abrirModal=()=>{setItems([]);setUrgencia("normal");setNotes("");setModal(true);};
+
+  const addItem=()=>setItems(p=>[...p,{id:uid(),sid:"",qty:""}]);
+  const updItem=(id,k,v)=>setItems(p=>p.map(r=>r.id===id?{...r,[k]:v}:r));
+  const remItem=(id)=>setItems(p=>p.filter(r=>r.id!==id));
+
+  const validItems=items.filter(r=>r.sid&&parseInt(r.qty)>0);
+
+  const enviar=()=>{
+    if(!validItems.length){setMsg("err:Adicione ao menos 1 material.");return;}
+    setSolicitacoes(p=>[{id:uid(),uid:currentUser.id,date:now(),
+      items:validItems.map(r=>({sid:r.sid,qty:parseInt(r.qty)})),
+      status:"pending",urgencia,notes,rDate:null,rBy:null},...p]);
+    addLog(currentUser.name,"Solicitação",currentUser.name+" solicitou "+validItems.length+" item(s)");
+    setModal(false);
+    setMsg("ok:Solicitação enviada!");
+    setTimeout(()=>setMsg(""),4000);
+  };
+
+  const confirmar=(sol)=>{
+    let ok=true;
+    sol.items.forEach(it=>{const s=stock.find(x=>x.id===it.sid);if(!s||s.qty<it.qty){ok=false;alert("Estoque insuficiente: "+(s?.name||it.sid));}});
+    if(!ok)return;
+    setStock(p=>p.map(s=>{const it=sol.items.find(i=>i.sid===s.id);return it?{...s,qty:s.qty-it.qty}:s;}));
+    setTstock(p=>{let n=[...p];sol.items.forEach(it=>{const ex=n.find(t=>t.uid===sol.uid&&t.sid===it.sid);if(ex)n=n.map(t=>t.id===ex.id?{...t,qty:t.qty+it.qty}:t);else n.push({id:uid(),uid:sol.uid,sid:it.sid,qty:it.qty});});return n;});
+    setSolicitacoes(p=>p.map(s=>s.id===sol.id?{...s,status:"confirmed",rDate:now(),rBy:currentUser.name}:s));
+    addLog(currentUser.name,"Saída","Solicitação confirmada · "+(users.find(u=>u.id===sol.uid)?.name));
+  };
+
+  const rejeitar=(sol)=>{
+    setSolicitacoes(p=>p.map(s=>s.id===sol.id?{...s,status:"rejected",rDate:now(),rBy:currentUser.name}:s));
+    addLog(currentUser.name,"Solicitação Rejeitada","Técnico: "+(users.find(u=>u.id===sol.uid)?.name));
+  };
+
+  const sc={pending:"ylw",confirmed:"grn",rejected:"red"};
+  const sl={pending:"⏳ Aguardando",confirmed:"✅ Confirmada",rejected:"❌ Rejeitada"};
+  const urg={normal:{label:"Normal",color:C.muted},alta:{label:"🟡 Alta",color:C.ylw},urgente:{label:"🔴 Urgente",color:C.red}};
+
+  return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+      <div>
+        <h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Solicitações de Material</h1>
+        <p style={{fontSize:12,color:C.muted,marginTop:2}}>{isTec?"Solicite materiais ao estoque":"Gerencie pedidos dos técnicos"}</p>
+      </div>
+      <div style={{display:"flex",gap:10,alignItems:"center"}}>
+        {!isTec&&pendentes.length>0&&<Bdg color="ylw">🔔 {pendentes.length} pendente{pendentes.length>1?"s":""}</Bdg>}
+        {isTec&&<Btn color="gold" size={isMobile?"sm":"md"} onClick={abrirModal}>📋 Nova Solicitação</Btn>}
+      </div>
+    </div>
+
+    {msg&&<div style={{background:msg.startsWith("ok:")?C.grnD:C.redD,border:`1px solid ${msg.startsWith("ok:")?C.grn:C.red}44`,borderRadius:8,padding:"12px 14px",color:msg.startsWith("ok:")?C.grn:C.red,fontSize:13}}>{msg.replace(/^(ok|err):/,"")}</div>}
+
+    {viewSol.length===0&&<Card style={{padding:40,textAlign:"center"}}>
+      <div style={{fontSize:32,marginBottom:10}}>📋</div>
+      <div style={{fontSize:14,color:C.muted}}>{isTec?"Nenhuma solicitação ainda. Clique em Nova Solicitação!":"Nenhuma solicitação recebida."}</div>
+    </Card>}
+
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {viewSol.map(sol=>{
+        const tech=users.find(u=>u.id===sol.uid);
+        const isUrg=sol.urgencia==="urgente";
+        return <Card key={sol.id} style={{padding:16,borderLeft:`3px solid ${sol.status==="pending"?isUrg?C.red:C.ylw:sol.status==="confirmed"?C.grn:C.red}`}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:10}}>
+                <Bdg color={sc[sol.status]}>{sl[sol.status]}</Bdg>
+                {sol.urgencia!=="normal"&&<span style={{fontSize:11,fontWeight:700,color:urg[sol.urgencia]?.color}}>{urg[sol.urgencia]?.label}</span>}
+                <span style={{fontSize:13,fontWeight:700,color:C.txt}}>👷 {tech?.name||"?"}</span>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:C.muted}}>{sol.date}</span>
+              </div>
+              {sol.notes&&<div style={{fontSize:12,color:C.muted,marginBottom:10,fontStyle:"italic"}}>"{sol.notes}"</div>}
+              <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:6}}>
+                {sol.items.map((it,i)=>{const s=stock.find(x=>x.id===it.sid);return(
+                  <div key={i} style={{background:C.surf,borderRadius:8,padding:"8px 10px",border:`1px solid ${C.bdr}`}}>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:C.muted}}>{s?.code||"—"}</div>
+                    <div style={{fontSize:12,fontWeight:600,color:C.txt,lineHeight:1.3,marginTop:2}}>{s?.name||"?"}</div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:4}}>
+                      <span style={{fontSize:10,color:C.muted}}>{s?.unit||""}</span>
+                      <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:16}}>{fmt(it.qty)}</span>
+                    </div>
+                  </div>
+                );})}
+              </div>
+              {sol.rBy&&<div style={{fontSize:11,color:C.muted,marginTop:8}}>Resolvido por <strong style={{color:C.txt2}}>{sol.rBy}</strong> em {sol.rDate}</div>}
+            </div>
+            {!isTec&&sol.status==="pending"&&<div style={{display:"flex",flexDirection:"column",gap:8,flexShrink:0}}>
+              <Btn size="sm" color="grn" onClick={()=>confirmar(sol)}>✓ Confirmar</Btn>
+              <Btn size="sm" color="red" outline onClick={()=>rejeitar(sol)}>✕ Rejeitar</Btn>
+            </div>}
+          </div>
+        </Card>;
+      })}
+    </div>
+
+    {/* Modal — layout limpo com botão adicionar */}
+    {modal&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
+      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,
+        borderRadius:isMobile?"16px 16px 0 0":12,
+        width:"100%",maxWidth:600,
+        height:isMobile?"95vh":"auto",
+        maxHeight:isMobile?"95vh":"88vh",
+        display:"flex",flexDirection:"column",
+        position:isMobile?"absolute":"relative",
+        bottom:isMobile?0:"auto"}}>
+
+        {/* Header */}
+        <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+          <div>
+            <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>📋 Nova Solicitação</h2>
+            <div style={{fontSize:11,color:C.muted,marginTop:2}}>{validItems.length} material(is) adicionado(s)</div>
+          </div>
+          <button onClick={()=>setModal(false)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+        </div>
+
+        {/* Body scroll */}
+        <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:12}}>
+
+          {/* Urgência e obs */}
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10}}>
+            <Sel label="Urgência" value={urgencia} onChange={setUrgencia} options={[{value:"normal",label:"Normal"},{value:"alta",label:"🟡 Alta Prioridade"},{value:"urgente",label:"🔴 Urgente"}]}/>
+            <Inp label="Observação" value={notes} onChange={setNotes} placeholder="Ex: Para OS de amanhã..."/>
+          </div>
+
+          {/* Lista de materiais adicionados */}
+          {items.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:4}}>
+              Materiais da Solicitação
+            </div>
+            {items.map((it,idx)=>{
+              const s=it.sid?stock.find(x=>x.id===it.sid):null;
+              return <div key={it.id} style={{
+                display:"flex",alignItems:"center",gap:8,
+                background:it.sid?`${C.gold}08`:C.surf,
+                borderRadius:10,padding:"10px 12px",
+                border:`1px solid ${it.sid?`${C.gold}44`:C.bdr2}`}}>
+                {/* Número */}
+                <div style={{width:24,height:24,borderRadius:"50%",background:`${C.gold}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:C.gold,flexShrink:0}}>{idx+1}</div>
+                {/* Select material */}
+                <div style={{flex:1,minWidth:0}}>
+                  <select value={it.sid} onChange={e=>updItem(it.id,"sid",e.target.value)}
+                    style={{width:"100%",background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:7,padding:"8px 10px",color:it.sid?C.txt:C.muted,fontSize:13}}>
+                    <option value="">— Selecionar material —</option>
+                    {stock.map(s=><option key={s.id} value={s.id}>[{s.code||"—"}] {s.name} ({s.qty} {s.unit})</option>)}
+                  </select>
+                  {s&&<div style={{fontSize:10,color:C.grn,marginTop:3}}>✓ Disponível: {s.qty} {s.unit}</div>}
+                </div>
+                {/* Qtd */}
+                <input type="number" value={it.qty} onChange={e=>updItem(it.id,"qty",e.target.value)}
+                  placeholder="Qtd" min="0"
+                  style={{width:70,background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:7,padding:"8px 10px",color:C.txt,fontSize:14,fontWeight:700,textAlign:"center",flexShrink:0}}/>
+                {/* Remover */}
+                <button onClick={()=>remItem(it.id)}
+                  style={{background:C.redD,color:C.red,border:"none",borderRadius:7,width:32,height:32,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
+              </div>;
+            })}
+          </div>}
+
+          {/* Botão adicionar material — bem destacado */}
+          <button onClick={addItem} style={{
+            width:"100%",padding:"14px",
+            background:items.length===0?`${C.gold}22`:"transparent",
+            border:`2px dashed ${C.gold}`,
+            borderRadius:10,color:C.gold,
+            cursor:"pointer",fontSize:14,fontWeight:700,
+            display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+            transition:"all .2s"}}>
+            <span style={{fontSize:22,lineHeight:1}}>+</span>
+            {items.length===0?"Clique aqui para adicionar o primeiro material":"Adicionar mais um material"}
+          </button>
+
+          {items.length===0&&<div style={{textAlign:"center",fontSize:12,color:C.muted2,marginTop:-4}}>
+            Adicione os materiais um por um e envie tudo junto no final
+          </div>}
+
+        </div>
+
+        {/* Footer fixo */}
+        <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+          <div style={{fontSize:13,color:C.muted}}>
+            <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:18}}>{validItems.length}</span> material(is)
+          </div>
+          <div style={{display:"flex",gap:10}}>
+            <Btn color="ghost" outline onClick={()=>setModal(false)}>Cancelar</Btn>
+            <Btn color="gold" onClick={enviar} disabled={validItems.length===0}>📤 Enviar Solicitação</Btn>
+          </div>
+        </div>
+      </div>
+    </div>}
   </div>;
 }
 
