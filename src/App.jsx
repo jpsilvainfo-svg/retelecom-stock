@@ -3,8 +3,8 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis
 import * as XLSX from "xlsx";
 import { sbGet, sbSet } from "./supabase.js";
 
-const C={bg:"#141414",surf:"#1c1c1c",card:"#222222",bdr:"#2e2e2e",bdr2:"#383838",gold:"#f0a500",goldD:"#f0a50022",goldL:"#f5b830",red:"#e53935",redD:"#e5393522",grn:"#43a047",grnD:"#43a04722",ylw:"#fb8c00",ylwD:"#fb8c0022",blue:"#1e88e5",txt:"#ffffff",txt2:"#cccccc",muted:"#888888",muted2:"#555555"};
-const PIE=["#f0a500","#666666","#999999","#444444","#bbbbbb"];
+const C={bg:"#161616",surf:"#1e1e1e",card:"#252525",bdr:"#2a2a2a",bdr2:"#333333",gold:"#cc0000",goldD:"#cc000022",goldL:"#e00000",red:"#cc0000",redD:"#cc000022",grn:"#43a047",grnD:"#43a04722",ylw:"#fb8c00",ylwD:"#fb8c0022",blue:"#1e88e5",txt:"#ffffff",txt2:"#cccccc",muted:"#888888",muted2:"#555555"};
+const PIE=["#cc0000","#666666","#999999","#444444","#aaaaaa"];
 let _id=300;
 const uid=()=>`${++_id}_${Date.now()}`;
 const now=()=>new Date().toLocaleString("pt-BR");
@@ -39,13 +39,13 @@ const useLS=(key,initial)=>{
 };
 
 const USERS0=[
-  {id:"u1",name:"Administrador",email:"admin@retelecom.com",phone:"(21)99999-0001",cpf:"000.000.000-01",login:"admin",pass:"admin123",role:"admin",photo:""},
-  {id:"u2",name:"Marcos Estoque",email:"estoque@retelecom.com",phone:"(21)99999-0002",cpf:"000.000.000-02",login:"estoque",pass:"est123",role:"estoque"},
-  {id:"u3",name:"João Silva",email:"joao@retelecom.com",phone:"(21)98888-0001",cpf:"111.111.111-01",login:"joao",pass:"tec123",role:"tecnico"},
-  {id:"u4",name:"Carlos Alberto",email:"carlos@retelecom.com",phone:"(21)98888-0002",cpf:"111.111.111-02",login:"carlos",pass:"tec456",role:"tecnico"},
-  {id:"u5",name:"João Paulo",email:"jpaulo@retelecom.com",phone:"(21)98888-0003",cpf:"111.111.111-03",login:"jpaulo",pass:"tec789",role:"tecnico"},
-  {id:"u6",name:"Marcos Vinícius",email:"marcos@retelecom.com",phone:"(21)98888-0004",cpf:"111.111.111-04",login:"marcos",pass:"tec321",role:"tecnico"},
-  {id:"u7",name:"Pedro Henrique",email:"pedro@retelecom.com",phone:"(21)98888-0005",cpf:"111.111.111-05",login:"pedro",pass:"tec654",role:"tecnico"},
+  {id:"u1",name:"Administrador",email:"admin@stocktel.com.br",phone:"(21)99999-0001",cpf:"000.000.000-01",login:"admin",pass:"admin123",role:"admin",photo:""},
+  {id:"u2",name:"Marcos Estoque",email:"estoque@stocktel.com.br",phone:"(21)99999-0002",cpf:"000.000.000-02",login:"estoque",pass:"est123",role:"estoque"},
+  {id:"u3",name:"João Silva",email:"joao@stocktel.com.br",phone:"(21)98888-0001",cpf:"111.111.111-01",login:"joao",pass:"tec123",role:"tecnico"},
+  {id:"u4",name:"Carlos Alberto",email:"carlos@stocktel.com.br",phone:"(21)98888-0002",cpf:"111.111.111-02",login:"carlos",pass:"tec456",role:"tecnico"},
+  {id:"u5",name:"João Paulo",email:"jpaulo@stocktel.com.br",phone:"(21)98888-0003",cpf:"111.111.111-03",login:"jpaulo",pass:"tec789",role:"tecnico"},
+  {id:"u6",name:"Marcos Vinícius",email:"marcos@stocktel.com.br",phone:"(21)98888-0004",cpf:"111.111.111-04",login:"marcos",pass:"tec321",role:"tecnico"},
+  {id:"u7",name:"Pedro Henrique",email:"pedro@stocktel.com.br",phone:"(21)98888-0005",cpf:"111.111.111-05",login:"pedro",pass:"tec654",role:"tecnico"},
 ];
 const STOCK0=[
   {id:"s1",code:"ONU-001",name:"ONU Huawei HG8145V5",cat:"Equipamentos",unit:"un",qty:12,min:20},
@@ -175,8 +175,8 @@ function LoginPage({users,onLogin}){
     <div style={{position:"fixed",inset:0,backgroundImage:`radial-gradient(ellipse at 50% 0%,${C.gold}18 0%,transparent 60%)`,pointerEvents:"none"}}/>
     <div className="fi" style={{width:"100%",maxWidth:400,position:"relative",zIndex:1}}>
       <div style={{textAlign:"center",marginBottom:32}}>
-        <img src="/logo-retelecom.png" alt="R&E Telecom" style={{width:"100%",maxWidth:isMobile?260:320,objectFit:"contain",marginBottom:12}}/>
-        <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:".12em",textTransform:"uppercase"}}>Sistema de Gestão de Estoque · FTTH</div>
+        <img src="/logo-stocktel.png" alt="StockTel" style={{width:"100%",maxWidth:isMobile?260:320,objectFit:"contain",marginBottom:12}}/>
+        <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:".12em",textTransform:"uppercase"}}>Soluções em Telecomunicações</div>
       </div>
       <Card style={{padding:isMobile?20:28,display:"flex",flexDirection:"column",gap:16,borderRadius:16}}>
         <Inp label="Login" value={login} onChange={setLogin} placeholder="Seu usuário"/>
@@ -184,7 +184,7 @@ function LoginPage({users,onLogin}){
         {err&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",color:C.red,fontSize:13}}>⚠️ {err}</div>}
         <Btn onClick={go} color="gold" size="lg" style={{width:"100%",borderRadius:10,marginTop:4}}>Entrar</Btn>
       </Card>
-      <div style={{marginTop:14,textAlign:"center",fontSize:11,color:C.muted2}}>R&E Telecom Estoque v1.0.0</div>
+      <div style={{marginTop:14,textAlign:"center",fontSize:11,color:C.muted2}}>StockTel v1.0.0</div>
     </div>
   </div>;
 }
@@ -211,16 +211,16 @@ function Sidebar({user,page,setPage,onLogout}){
   ].filter(Boolean);
   return <div style={{width:220,minWidth:220,background:C.surf,borderRight:`1px solid ${C.bdr}`,display:"flex",flexDirection:"column",height:"100vh",flexShrink:0}}>
     <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.bdr}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <img src="/logo-retelecom.png" alt="R&E Telecom" style={{width:"100%",maxWidth:160,objectFit:"contain"}}/>
+      <img src="/logo-stocktel.png" alt="StockTel" style={{width:"100%",maxWidth:160,objectFit:"contain"}}/>
     </div>
     <div style={{padding:"8px 16px 6px",borderBottom:`1px solid ${C.bdr}`}}>
-      <div style={{fontSize:10,color:C.muted2,lineHeight:1.4}}>Gestão de Estoque · Provedores FTTH</div>
+      <div style={{fontSize:10,color:C.muted2,lineHeight:1.4}}>Soluções em Telecomunicações</div>
     </div>
     <nav style={{flex:1,padding:"8px",overflowY:"auto"}}>
       {nav.map(n=>(
         <div key={n.k} onClick={()=>setPage(n.k)}
           style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:8,cursor:"pointer",marginBottom:2,
-            background:page===n.k?`${C.gold}18`:"transparent",
+            background:page===n.k?"#8b000066":"transparent",
             borderLeft:page===n.k?`3px solid ${C.gold}`:"3px solid transparent",
             color:page===n.k?C.gold:C.muted,fontWeight:page===n.k?600:400,fontSize:13}}>
           <span style={{fontSize:15}}>{n.icon}</span><span>{n.label}</span>
@@ -270,7 +270,7 @@ function MobileDrawer({user,page,setPage,onLogout,onClose}){
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"#000000aa",zIndex:200}}/>
     <div className="sl" style={{position:"fixed",top:0,left:0,bottom:0,width:280,background:C.surf,zIndex:201,display:"flex",flexDirection:"column",borderRight:`1px solid ${C.bdr}`}}>
       <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.bdr}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <img src="/logo-retelecom.png" alt="R&E Telecom" style={{height:50,objectFit:"contain"}}/>
+        <img src="/logo-stocktel.png" alt="StockTel" style={{height:44,objectFit:"contain"}}/>
         <button onClick={onClose} style={{background:C.card,color:C.muted,width:32,height:32,borderRadius:8,fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
       </div>
       <div style={{padding:"10px 14px 8px",borderBottom:`1px solid ${C.bdr}`,display:"flex",alignItems:"center",gap:10}}>
@@ -286,7 +286,7 @@ function MobileDrawer({user,page,setPage,onLogout,onClose}){
         {nav.map(n=>(
           <div key={n.k} onClick={()=>go(n.k)}
             style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderRadius:8,cursor:"pointer",marginBottom:2,
-              background:page===n.k?`${C.gold}18`:"transparent",
+              background:page===n.k?`${C.gold}25`:"transparent",
               borderLeft:page===n.k?`3px solid ${C.gold}`:"3px solid transparent",
               color:page===n.k?C.gold:C.txt2,fontWeight:page===n.k?600:400,fontSize:14}}>
             <span style={{fontSize:18}}>{n.icon}</span><span>{n.label}</span>
@@ -1248,17 +1248,17 @@ function RelPage({stock,os,returns,users,isMobile,currentUser}){
   const matData=useMemo(()=>{const m={};viewOs.forEach(o=>o.items.forEach(it=>{m[it.sid]=(m[it.sid]||0)+it.qty;}));return Object.entries(m).map(([sid,value])=>{const s=stock.find(x=>x.id===sid);return{name:s?.name?.split(" ").slice(0,2).join(" ")||sid,value};}).sort((a,b)=>b.value-a.value);},[viewOs,stock]);
   const techData=useMemo(()=>{const m={};viewOs.forEach(o=>{const u=users.find(x=>x.id===o.uid);const nm=u?.name.split(" ")[0]||"?";const tot=o.items.reduce((a,i)=>a+i.qty,0);m[nm]=(m[nm]||0)+tot;});return Object.entries(m).map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value);},[viewOs,users]);
   const maxT=techData[0]?.value||1;
-  const exportXLS=(name,data)=>{const ws=XLSX.utils.json_to_sheet(data);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,name);XLSX.writeFile(wb,`RE_Telecom_${name}_${new Date().toISOString().slice(0,10)}.xlsx`);};
+  const exportXLS=(name,data)=>{const ws=XLSX.utils.json_to_sheet(data);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,name);XLSX.writeFile(wb,`StockTel_${name}_${new Date().toISOString().slice(0,10)}.xlsx`);};
   const print=()=>{
     const w=window.open("","_blank");
-    w.document.write(`<html><head><title>R&E Telecom Relatório</title><style>body{font-family:Arial;padding:20px;color:#111;}h1{color:#c68500;}h2{border-bottom:2px solid #f0a500;padding-bottom:4px;margin:20px 0 8px;}table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px;}th{background:#f5f5f5;padding:7px 10px;text-align:left;border:1px solid #ddd;}td{padding:6px 10px;border:1px solid #eee;}.ok{color:green}.low{color:orange}.crit{color:red}@media print{button{display:none}}</style></head><body>
-    <h1>⚡ R&E TELECOM ESTOQUE</h1><p style="color:#888;font-size:11px">Gerado em ${now()}</p>
+    w.document.write(`<html><head><title>StockTel Relatório</title><style>body{font-family:Arial;padding:20px;color:#111;}h1{color:#c68500;}h2{border-bottom:2px solid #f0a500;padding-bottom:4px;margin:20px 0 8px;}table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px;}th{background:#f5f5f5;padding:7px 10px;text-align:left;border:1px solid #ddd;}td{padding:6px 10px;border:1px solid #eee;}.ok{color:green}.low{color:orange}.crit{color:red}@media print{button{display:none}}</style></head><body>
+    <h1>⚡ STOCKTEL</h1><p style="color:#888;font-size:11px">Gerado em ${now()}</p>
     <button onclick="window.print()" style="margin:10px 0;padding:8px 16px;background:#f0a500;color:#000;border:none;cursor:pointer;border-radius:4px;font-weight:700">🖨️ Imprimir PDF</button>
     <h2>Estoque</h2><table><tr><th>Código</th><th>Material</th><th>Qtd</th><th>Mín.</th><th>Status</th></tr>
     ${stock.map(s=>`<tr><td>${s.code}</td><td>${s.name}</td><td class="${s.qty<=s.min*0.6?"crit":s.qty<=s.min?"low":"ok"}">${s.qty} ${s.unit}</td><td>${s.min}</td><td class="${s.qty<=s.min*0.6?"crit":s.qty<=s.min?"low":"ok"}">${s.qty<=s.min*0.6?"CRÍTICO":s.qty<=s.min?"BAIXO":"OK"}</td></tr>`).join("")}
     </table><h2>Ordens de Serviço</h2><table><tr><th>OS</th><th>Técnico</th><th>Cliente</th><th>Data</th></tr>
     ${os.map(o=>{const t=users.find(u=>u.id===o.uid);return`<tr><td>${o.os}</td><td>${t?.name||"?"}</td><td>${o.client}</td><td>${o.date}</td></tr>`;}).join("")}
-    </table><p style="margin-top:30px;font-size:10px;color:#999">R&E Telecom Estoque v1.0.0 © ${new Date().getFullYear()}</p></body></html>`);
+    </table><p style="margin-top:30px;font-size:10px;color:#999">StockTel v1.0.0 © ${new Date().getFullYear()}</p></body></html>`);
     w.document.close();
   };
   const sc2={pending:"ylw",approved:"grn",rejected:"red"};
@@ -1639,7 +1639,7 @@ function ProdutosPage({produtos,setProdutos,cats,isMobile}){
 /* ── EMAIL ── */
 function EmailPage({stock,os,returns,users,isMobile}){
   const[emails,setEmails]=useState("");
-  const[assunto,setAssunto]=useState("Relatório R&E Telecom Estoque");
+  const[assunto,setAssunto]=useState("Relatório StockTel");
   const[tipo,setTipo]=useState("completo");
   const[msg,setMsg]=useState("");
   const goPage=(p)=>{setPage(p);try{localStorage.setItem("re_page",p);}catch{}};
@@ -1647,7 +1647,7 @@ function EmailPage({stock,os,returns,users,isMobile}){
   const lowStock=stock.filter(s=>s.qty<=s.min);
   const gerarCorpo=()=>{
     const linha=(l)=>`${l}\n`;
-    let corpo=`R&E TELECOM — RELATÓRIO DE ESTOQUE\n`;
+    let corpo=`STOCKTEL — RELATÓRIO DE ESTOQUE\n`;
     corpo+=`Gerado em: ${now()}\n${"=".repeat(50)}\n\n`;
     if(tipo==="completo"||tipo==="estoque"){
       corpo+=`📦 ESTOQUE ATUAL\n${"-".repeat(40)}\n`;
@@ -1665,7 +1665,7 @@ function EmailPage({stock,os,returns,users,isMobile}){
       corpo+="\n";
     }
     corpo+=`↩️ DEVOLUÇÕES PENDENTES: ${pendRet}\n\n`;
-    corpo+=`${"=".repeat(50)}\nR&E Telecom Estoque v1.0.0`;
+    corpo+=`${"=".repeat(50)}\nStockTel v1.0.0`;
     return corpo;
   };
   const enviar=()=>{
@@ -2078,7 +2078,7 @@ function ProdutosPage({produtos,setProdutos,cats,isMobile}){
 /* ── EMAIL ── */
 function EmailPage({stock,os,returns,users,isMobile}){
   const[emails,setEmails]=useState("");
-  const[assunto,setAssunto]=useState("Relatório R&E Telecom Estoque");
+  const[assunto,setAssunto]=useState("Relatório StockTel");
   const[tipo,setTipo]=useState("completo");
   const[msg,setMsg]=useState("");
   const goPage=(p)=>{setPage(p);try{localStorage.setItem("re_page",p);}catch{}};
@@ -2086,7 +2086,7 @@ function EmailPage({stock,os,returns,users,isMobile}){
   const lowStock=stock.filter(s=>s.qty<=s.min);
   const gerarCorpo=()=>{
     const linha=(l)=>`${l}\n`;
-    let corpo=`R&E TELECOM — RELATÓRIO DE ESTOQUE\n`;
+    let corpo=`STOCKTEL — RELATÓRIO DE ESTOQUE\n`;
     corpo+=`Gerado em: ${now()}\n${"=".repeat(50)}\n\n`;
     if(tipo==="completo"||tipo==="estoque"){
       corpo+=`📦 ESTOQUE ATUAL\n${"-".repeat(40)}\n`;
@@ -2104,7 +2104,7 @@ function EmailPage({stock,os,returns,users,isMobile}){
       corpo+="\n";
     }
     corpo+=`↩️ DEVOLUÇÕES PENDENTES: ${pendRet}\n\n`;
-    corpo+=`${"=".repeat(50)}\nR&E Telecom Estoque v1.0.0`;
+    corpo+=`${"=".repeat(50)}\nStockTel v1.0.0`;
     return corpo;
   };
   const enviar=()=>{
@@ -2457,8 +2457,8 @@ export default function App(){
         {pages[page]||pages.dash}
       </main>
       {!isMobile&&<div style={{padding:"8px 24px",background:C.surf,borderTop:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <span style={{fontSize:11,color:C.muted}}>R&E Telecom Estoque — v1.0.0</span>
-        <span style={{fontSize:11,color:C.muted}}>© {new Date().getFullYear()} R&E Telecom — Todos os direitos reservados.</span>
+        <span style={{fontSize:11,color:C.muted}}>StockTel — v1.0.0</span>
+        <span style={{fontSize:11,color:C.muted}}>© {new Date().getFullYear()} StockTel — Todos os direitos reservados.</span>
       </div>}
     </div>
     {isMobile&&<BottomNav page={page} setPage={goPage} user={user} onMenuOpen={()=>setDrawerOpen(true)}/>}
