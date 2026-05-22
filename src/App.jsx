@@ -339,25 +339,109 @@ function BottomNav({page,setPage,user,onMenuOpen}){
 }
 
 /* ── DASHBOARD ── */
-function Dashboard({stock,tstock,users,os,returns,logs,setPage,isMobile}){
+function Dashboard({stock,tstock,users,os,returns,logs,setPage,isMobile,currentUser,pendSol}){
+  const isTec=currentUser?.role==="tecnico";
   const totalQty=stock.reduce((a,s)=>a+s.qty,0);
+  const myTstock=tstock.filter(t=>t.uid===currentUser?.id);
+  const myTstockQty=myTstock.reduce((a,t)=>a+t.qty,0);
   const techQty=tstock.reduce((a,t)=>a+t.qty,0);
-  const goPage=(p)=>{setPage(p);try{localStorage.setItem("re_page",p);}catch{}};
   const pendRet=returns.filter(r=>r.status==="pending").length;
+  const myPendRet=returns.filter(r=>r.uid===currentUser?.id&&r.status==="pending").length;
   const low=stock.filter(s=>s.qty<=s.min);
+  const myOs=os.filter(o=>o.uid===currentUser?.id);
   const catData=useMemo(()=>{const m={};stock.forEach(s=>{m[s.cat]=(m[s.cat]||0)+s.qty;});return Object.entries(m).map(([name,value])=>({name,value}));},[stock]);
   const techUsage=useMemo(()=>{const m={};os.forEach(o=>{const u=users.find(x=>x.id===o.uid);const nm=u?.name.split(" ")[0]||"?";const tot=o.items.reduce((a,i)=>a+i.qty,0);if(!m[o.uid])m[o.uid]={name:nm,value:0};m[o.uid].value+=tot;});return Object.values(m).sort((a,b)=>b.value-a.value);},[os,users]);
   const maxU=techUsage[0]?.value||1;
   const lc={saida:C.gold,entrada:C.grn,dev:C.ylw,aprovada:C.grn};
   const li={saida:"→",entrada:"↓",dev:"↺",aprovada:"✓"};
+
+  // ── DASHBOARD DO TÉCNICO ──
+  if(isTec) return <div className="fi" style={{display:"flex",flexDirection:"column",gap:isMobile?14:20}}>
+    {/* Cards do técnico */}
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)",gap:isMobile?10:16}}>
+      {[
+        {label:"MEU KIT",value:fmt(myTstockQty),sub:"Materiais em posse",icon:"🎒",color:C.gold},
+        {label:"MINHAS OS",value:fmt(myOs.length),sub:"Ordens abertas",icon:"🔧",color:C.blue},
+        {label:"DEVOLUÇÕES",value:fmt(myPendRet),sub:"Aguardando",icon:"↩️",color:myPendRet>0?C.ylw:C.gold},
+      ].map((s,i)=>(
+        <Card key={i} style={{padding:isMobile?"12px":"18px",display:"flex",gap:12,alignItems:"center"}}>
+          <div style={{width:isMobile?36:48,height:isMobile?36:48,borderRadius:10,background:`${s.color}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:isMobile?18:22,flexShrink:0}}>{s.icon}</div>
+          <div>
+            <div style={{fontSize:9,fontWeight:700,color:C.muted,letterSpacing:".06em",marginBottom:2}}>{s.label}</div>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:isMobile?20:26,fontWeight:800,color:C.txt,lineHeight:1}}>{s.value}</div>
+            <div style={{fontSize:10,color:C.muted,marginTop:2}}>{s.sub}</div>
+          </div>
+        </Card>
+      ))}
+    </div>
+
+    {/* Kit do técnico resumo */}
+    <Card style={{padding:0,overflow:"hidden"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",borderBottom:`1px solid ${C.bdr}`}}>
+        <span style={{fontSize:13,fontWeight:700,color:C.txt}}>🎒 Meu Kit — Materiais em Posse</span>
+        <Btn size="xs" color="gold" outline onClick={()=>setPage("kit")}>Ver tudo</Btn>
+      </div>
+      {myTstock.length===0
+        ?<div style={{padding:24,textAlign:"center",color:C.muted,fontSize:13}}>Nenhum material no seu kit ainda.</div>
+        :myTstock.slice(0,5).map(t=>{const s=stock.find(x=>x.id===t.sid);return s?
+          <div key={t.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 16px",borderBottom:`1px solid ${C.bdr}18`}}>
+            <div>
+              <div style={{fontSize:12,fontWeight:600,color:C.txt}}>{s.name}</div>
+              <div style={{fontSize:10,color:C.muted}}>{s.code} · {s.unit}</div>
+            </div>
+            <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:18}}>{fmt(t.qty)}</span>
+          </div>:null;
+        })
+      }
+    </Card>
+
+    {/* Últimas OS do técnico */}
+    <Card style={{padding:0,overflow:"hidden"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",borderBottom:`1px solid ${C.bdr}`}}>
+        <span style={{fontSize:13,fontWeight:700,color:C.txt}}>🔧 Minhas Últimas OS</span>
+        <Btn size="xs" color="gold" outline onClick={()=>setPage("os")}>Ver todas</Btn>
+      </div>
+      {myOs.length===0
+        ?<div style={{padding:24,textAlign:"center",color:C.muted,fontSize:13}}>Nenhuma OS registrada ainda.</div>
+        :myOs.slice(0,3).map(o=>(
+          <div key={o.id} style={{padding:"10px 16px",borderBottom:`1px solid ${C.bdr}18`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:C.gold,fontWeight:700}}>{o.os}</span>
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:C.muted}}>{o.date}</span>
+            </div>
+            <div style={{fontSize:12,color:C.txt2,marginTop:2}}>{o.client}</div>
+          </div>
+        ))
+      }
+    </Card>
+
+    {/* Ações rápidas técnico */}
+    <Card style={{padding:16}}>
+      <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:12}}>Ações Rápidas</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        {[
+          {icon:"🔧",label:"Nova OS",p:"os"},
+          {icon:"📋",label:"Solicitar Material",p:"sol"},
+          {icon:"↩️",label:"Solicitar Devolução",p:"dev"},
+          {icon:"🎒",label:"Meu Kit",p:"kit"},
+        ].map((a,i)=>(
+          <div key={i} onClick={()=>setPage(a.p)} style={{display:"flex",alignItems:"center",gap:10,padding:"14px",background:C.surf,borderRadius:10,cursor:"pointer",border:`1px solid ${C.bdr}`}}>
+            <span style={{fontSize:24}}>{a.icon}</span>
+            <span style={{fontSize:13,color:C.txt2,fontWeight:500}}>{a.label}</span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  </div>;
+
+  // ── DASHBOARD ADMIN/ESTOQUE ──
   return <div className="fi" style={{display:"flex",flexDirection:"column",gap:isMobile?14:20}}>
-    {/* Stat cards */}
     <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:isMobile?10:16}}>
       {[
-        {label:"ITENS",value:fmt(stock.length),sub:"Cadastrados",icon:"📦"},
-        {label:"ESTOQUE",value:fmt(totalQty),sub:"Unidades",icon:"🗄️"},
-        {label:"EM USO",value:fmt(techQty),sub:"Com técnicos",icon:"👷"},
-        {label:"DEVOL.",value:fmt(pendRet),sub:"Pendentes",icon:"↩️"},
+        {label:"TOTAL DE ITENS",value:fmt(stock.length),sub:"Itens cadastrados",icon:"📦"},
+        {label:"ESTOQUE TOTAL",value:fmt(totalQty),sub:"Unidades disponíveis",icon:"🗄️"},
+        {label:"MATERIAIS EM USO",value:fmt(techQty),sub:"Com técnicos",icon:"👷"},
+        {label:"DEVOLUÇÕES PEND.",value:fmt(pendRet),sub:"Aguardando aprovação",icon:"↩️"},
       ].map((s,i)=>(
         <Card key={i} style={{padding:isMobile?"12px":"18px",display:"flex",gap:isMobile?10:14,alignItems:"center"}}>
           <div style={{width:isMobile?36:48,height:isMobile?36:48,borderRadius:10,background:`${C.gold}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:isMobile?18:22,flexShrink:0}}>{s.icon}</div>
@@ -371,9 +455,7 @@ function Dashboard({stock,tstock,users,os,returns,logs,setPage,isMobile}){
     </div>
 
     {isMobile?(
-      /* MOBILE layout */
       <>
-        {/* Movimentações */}
         <Card style={{padding:0,overflow:"hidden"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 14px",borderBottom:`1px solid ${C.bdr}`}}>
             <span style={{fontSize:13,fontWeight:700,color:C.txt}}>Movimentações Recentes</span>
@@ -390,8 +472,6 @@ function Dashboard({stock,tstock,users,os,returns,logs,setPage,isMobile}){
             </div>
           ))}
         </Card>
-
-        {/* Itens críticos mobile */}
         <Card style={{padding:0,overflow:"hidden"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 14px",borderBottom:`1px solid ${C.bdr}`}}>
             <span style={{fontSize:13,fontWeight:700,color:C.txt}}>Itens com Baixo Nível</span>
@@ -410,19 +490,10 @@ function Dashboard({stock,tstock,users,os,returns,logs,setPage,isMobile}){
             </div>
           );})}
         </Card>
-
-        {/* Ações rápidas mobile */}
         <Card style={{padding:14}}>
           <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:12}}>Ações Rápidas</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            {[
-              {icon:"📥",label:"Nova Entrada (NF)",p:"nf"},
-              {icon:"🚀",label:"Liberar Material",p:"dist"},
-              {icon:"↩️",label:"Solicitar Devolução",p:"dev"},
-              {icon:"🔧",label:"Nova OS",p:"os"},
-              {icon:"📦",label:"Ver Estoque",p:"estoque"},
-              {icon:"📊",label:"Relatórios",p:"rel"},
-            ].map((a,i)=>(
+            {[{icon:"📥",label:"Nova Entrada (NF)",p:"nf"},{icon:"🚀",label:"Liberar Material",p:"dist"},{icon:"↩️",label:"Devoluções",p:"dev"},{icon:"🔧",label:"Nova OS",p:"os"},{icon:"📦",label:"Ver Estoque",p:"estoque"},{icon:"📊",label:"Relatórios",p:"rel"}].map((a,i)=>(
               <div key={i} onClick={()=>setPage(a.p)} style={{display:"flex",alignItems:"center",gap:10,padding:"12px",background:C.surf,borderRadius:10,cursor:"pointer",border:`1px solid ${C.bdr}`}}>
                 <span style={{fontSize:22}}>{a.icon}</span>
                 <span style={{fontSize:12,color:C.txt2,lineHeight:1.3,fontWeight:500}}>{a.label}</span>
@@ -432,7 +503,6 @@ function Dashboard({stock,tstock,users,os,returns,logs,setPage,isMobile}){
         </Card>
       </>
     ):(
-      /* DESKTOP layout */
       <>
         <div style={{display:"grid",gridTemplateColumns:"1.2fr 1fr 1fr",gap:16}}>
           <Card style={{padding:0,overflow:"hidden"}}>
@@ -540,7 +610,6 @@ function Dashboard({stock,tstock,users,os,returns,logs,setPage,isMobile}){
   </div>;
 }
 
-/* ── ESTOQUE ── */
 function EstoquePage({stock,setStock,isAdmin,addLog,currentUser,isMobile}){
   const[q,setQ]=useState("");
   const[modal,setModal]=useState(null);
@@ -1142,11 +1211,14 @@ function NFPage({nf,setNf,stock,setStock,addLog,currentUser,isMobile}){
 }
 
 /* ── RELATÓRIOS ── */
-function RelPage({stock,os,returns,users,isMobile}){
+function RelPage({stock,os,returns,users,isMobile,currentUser}){
+  const isTec=currentUser?.role==="tecnico";
+  const viewOs=isTec?os.filter(o=>o.uid===currentUser.id):os;
+  const viewRet=isTec?returns.filter(r=>r.uid===currentUser.id):returns;
   const[tab,setTab]=useState("estoque");
   const catData=useMemo(()=>{const m={};stock.forEach(s=>{m[s.cat]=(m[s.cat]||0)+s.qty;});return Object.entries(m).map(([name,value])=>({name,value}));},[stock]);
-  const matData=useMemo(()=>{const m={};os.forEach(o=>o.items.forEach(it=>{m[it.sid]=(m[it.sid]||0)+it.qty;}));return Object.entries(m).map(([sid,value])=>{const s=stock.find(x=>x.id===sid);return{name:s?.name?.split(" ").slice(0,2).join(" ")||sid,value};}).sort((a,b)=>b.value-a.value);},[os,stock]);
-  const techData=useMemo(()=>{const m={};os.forEach(o=>{const u=users.find(x=>x.id===o.uid);const nm=u?.name.split(" ")[0]||"?";const tot=o.items.reduce((a,i)=>a+i.qty,0);m[nm]=(m[nm]||0)+tot;});return Object.entries(m).map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value);},[os,users]);
+  const matData=useMemo(()=>{const m={};viewOs.forEach(o=>o.items.forEach(it=>{m[it.sid]=(m[it.sid]||0)+it.qty;}));return Object.entries(m).map(([sid,value])=>{const s=stock.find(x=>x.id===sid);return{name:s?.name?.split(" ").slice(0,2).join(" ")||sid,value};}).sort((a,b)=>b.value-a.value);},[viewOs,stock]);
+  const techData=useMemo(()=>{const m={};viewOs.forEach(o=>{const u=users.find(x=>x.id===o.uid);const nm=u?.name.split(" ")[0]||"?";const tot=o.items.reduce((a,i)=>a+i.qty,0);m[nm]=(m[nm]||0)+tot;});return Object.entries(m).map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value);},[viewOs,users]);
   const maxT=techData[0]?.value||1;
   const exportXLS=(name,data)=>{const ws=XLSX.utils.json_to_sheet(data);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,name);XLSX.writeFile(wb,`RE_Telecom_${name}_${new Date().toISOString().slice(0,10)}.xlsx`);};
   const print=()=>{
@@ -1166,7 +1238,7 @@ function RelPage({stock,os,returns,users,isMobile}){
   const tabs=[{k:"estoque",l:"Estoque"},{k:"os",l:"OS"},{k:"tecnicos",l:"Técnicos"},{k:"dev",l:"Devoluções"}];
   return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-      <h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Relatórios</h1>
+      <h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>{isTec?"Meus Relatórios":"Relatórios"}</h1>
       <div style={{display:"flex",gap:8}}>
         <Btn color="gold" outline size="sm" onClick={print}>🖨️ PDF</Btn>
         <Btn color="grn" size="sm" onClick={()=>{
@@ -1776,7 +1848,7 @@ export default function App(){
     dev:<DevPage {...p}/>,
     sol:<SolicitacaoPage solicitacoes={solicitacoes} setSolicitacoes={setSolicitacoes} stock={stock} setStock={setStock} tstock={tstock} setTstock={setTstock} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
     nf:<NFPage nf={nf} setNf={setNf} stock={stock} setStock={setStock} addLog={addLog} currentUser={user} isMobile={isMobile}/>,
-    rel:<RelPage stock={stock} os={os} returns={returns} users={users} isMobile={isMobile}/>,
+    rel:<RelPage stock={stock} os={os} returns={returns} users={users} isMobile={isMobile} currentUser={user}/>,
     email:<EmailPage stock={stock} os={os} returns={returns} users={users} isMobile={isMobile}/>,
     cat:<CatPage cats={cats} setCats={setCats} isMobile={isMobile}/>,
     produtos:<ProdutosPage produtos={produtos} setProdutos={setProdutos} cats={cats} isMobile={isMobile}/>,
