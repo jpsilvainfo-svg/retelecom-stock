@@ -342,6 +342,7 @@ function BottomNav({page,setPage,user,onMenuOpen}){
 function Dashboard({stock,tstock,users,os,returns,logs,setPage,isMobile}){
   const totalQty=stock.reduce((a,s)=>a+s.qty,0);
   const techQty=tstock.reduce((a,t)=>a+t.qty,0);
+  const goPage=(p)=>{setPage(p);try{localStorage.setItem("re_page",p);}catch{}};
   const pendRet=returns.filter(r=>r.status==="pending").length;
   const low=stock.filter(s=>s.qty<=s.min);
   const catData=useMemo(()=>{const m={};stock.forEach(s=>{m[s.cat]=(m[s.cat]||0)+s.qty;});return Object.entries(m).map(([name,value])=>({name,value}));},[stock]);
@@ -893,47 +894,52 @@ function DevPage({returns,setReturns,tstock,setTstock,stock,users,currentUser,ad
 
 /* ── NF ── */
 function NFPage({nf,setNf,stock,setStock,addLog,currentUser,isMobile}){
-  const[modal,setModal]=useState(false);
-  const[novoMatIdx,setNovoMatIdx]=useState(null);
-  const[formNM,setFormNM]=useState({code:"",name:"",cat:"Equipamentos",unit:"un",min:"0"});
   const CATS=["Equipamentos","Cabos e Fios","Conectores","Caixas e Acessórios","Acessórios","Ferramentas"];
   const blank=()=>({id:uid(),sid:"",qty:"",val:""});
-  const[form,setForm]=useState({num:"",supplier:"",date:"",obs:"",items:[blank()]});
+  const[modal,setModal]=useState(false);
+  const[form,setForm]=useState({num:"",supplier:"",date:"",obs:""});
+  const[items,setItems]=useState([blank(),blank(),blank()]);
+  const[novoMat,setNovoMat]=useState(null);
+  const[formNM,setFormNM]=useState({code:"",name:"",cat:"Equipamentos",unit:"un",min:"0"});
   const[err,setErr]=useState("");
 
-  const updItem=(id,k,v)=>setForm(f=>({...f,items:f.items.map(r=>r.id===id?{...r,[k]:v}:r)}));
-  const addItem=()=>setForm(f=>({...f,items:[...f.items,blank()]}));
-  const remItem=(id)=>setForm(f=>({...f,items:f.items.length>1?f.items.filter(r=>r.id!==id):f.items}));
+  const updItem=(id,k,v)=>setItems(p=>p.map(r=>r.id===id?{...r,[k]:v}:r));
+  const addLinhas=(n)=>setItems(p=>[...p,...Array.from({length:n},blank)]);
+  const remItem=(id)=>setItems(p=>p.length>1?p.filter(r=>r.id!==id):p);
 
   const salvarNM=()=>{
     if(!formNM.name.trim())return;
     const nm={id:uid(),code:formNM.code,name:formNM.name.trim(),cat:formNM.cat,unit:formNM.unit,qty:0,min:parseInt(formNM.min)||0};
     setStock(p=>[...p,nm]);
-    updItem(novoMatIdx,"sid",nm.id);
+    updItem(novoMat,"sid",nm.id);
     addLog(currentUser.name,"Novo Material","Via NF: "+nm.name);
-    setNovoMatIdx(null);
+    setNovoMat(null);
     setFormNM({code:"",name:"",cat:"Equipamentos",unit:"un",min:"0"});
   };
 
-  const totalPreview=form.items.reduce((a,r)=>a+(parseFloat(r.val)||0),0);
-  const validItems=form.items.filter(r=>r.sid&&parseInt(r.qty)>0);
+  const validItems=items.filter(r=>r.sid&&parseInt(r.qty)>0);
+  const totalPreview=items.reduce((a,r)=>a+(parseFloat(r.val)||0),0);
+
+  const abrirModal=()=>{
+    setForm({num:"",supplier:"",date:"",obs:""});
+    setItems([blank(),blank(),blank()]);
+    setErr(""); setNovoMat(null);
+    setModal(true);
+  };
 
   const save=()=>{
     if(!form.num.trim()){setErr("Informe o número da NF.");return;}
     if(!form.supplier.trim()){setErr("Informe o fornecedor.");return;}
     if(!validItems.length){setErr("Adicione ao menos 1 item com material e quantidade.");return;}
     const total=validItems.reduce((a,r)=>a+(parseFloat(r.val)||0),0);
-    setNf(p=>[{id:uid(),num:form.num.trim(),supplier:form.supplier.trim(),date:form.date,obs:form.obs,
+    setNf(p=>[{id:uid(),num:form.num.trim(),supplier:form.supplier.trim(),
+      date:form.date,obs:form.obs,
       items:validItems.map(r=>({sid:r.sid,qty:parseInt(r.qty),val:parseFloat(r.val)||0})),
       total,registeredBy:currentUser.name,registeredAt:now()},...p]);
     setStock(p=>p.map(s=>{const it=validItems.find(r=>r.sid===s.id);return it?{...s,qty:s.qty+parseInt(it.qty)}:s;}));
     addLog(currentUser.name,"Entrada","NF: "+form.num.trim()+" · "+form.supplier.trim()+" · "+validItems.length+" item(s)");
     setModal(false);
-    setForm({num:"",supplier:"",date:"",obs:"",items:[blank()]});
-    setErr(""); setNovoMatIdx(null);
   };
-
-  const fechar=()=>{setModal(false);setErr("");setNovoMatIdx(null);};
 
   return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -941,10 +947,10 @@ function NFPage({nf,setNf,stock,setStock,addLog,currentUser,isMobile}){
         <h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Entrada de Materiais</h1>
         <p style={{fontSize:12,color:C.muted,marginTop:2}}>Registro de notas fiscais com entrada automática no estoque</p>
       </div>
-      <Btn color="gold" size={isMobile?"sm":"md"} onClick={()=>{setModal(true);setErr("");}}>+ Nova NF</Btn>
+      <Btn color="gold" size={isMobile?"sm":"md"} onClick={abrirModal}>+ Nova NF</Btn>
     </div>
 
-    {nf.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{fontSize:13,color:C.muted}}>Nenhuma nota fiscal registrada.</span></Card>}
+    {nf.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{fontSize:13,color:C.muted}}>Nenhuma nota fiscal registrada ainda.</span></Card>}
     <div style={{display:"flex",flexDirection:"column",gap:10}}>
       {nf.map(n=>(
         <Card key={n.id} style={{padding:16}}>
@@ -954,48 +960,52 @@ function NFPage({nf,setNf,stock,setStock,addLog,currentUser,isMobile}){
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:15}}>{n.num}</span>
                 <span style={{fontSize:13,color:C.txt,fontWeight:600}}>{n.supplier}</span>
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted}}>{n.date}</span>
-                {n.registeredBy&&<span style={{fontSize:11,color:C.muted}}>· por {n.registeredBy}</span>}
+                {n.registeredBy&&<span style={{fontSize:11,color:C.muted}}>· {n.registeredBy}</span>}
               </div>
-              <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:4}}>
+              <div style={{display:"flex",flexDirection:"column",gap:3}}>
                 {n.items.map((it,i)=>{const s=stock.find(x=>x.id===it.sid);return(
-                  <div key={i} style={{display:"flex",alignItems:"center",gap:8,background:C.surf,borderRadius:6,padding:"6px 10px",flexWrap:"wrap"}}>
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:8,background:C.surf,borderRadius:6,padding:"5px 10px"}}>
                     <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:C.muted,minWidth:60}}>{s?.code||"—"}</span>
                     <span style={{fontSize:12,color:C.txt,flex:1}}>{s?.name||"?"}</span>
-                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:C.grn,fontSize:13}}>+{fmt(it.qty)} {s?.unit||""}</span>
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:C.grn,fontSize:12}}>+{fmt(it.qty)} {s?.unit||""}</span>
                     {it.val>0&&<span style={{fontSize:11,color:C.muted}}>R$ {fmt(it.val)}</span>}
                   </div>
                 );})}
               </div>
-              {n.obs&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>📝 {n.obs}</div>}
+              {n.obs&&<div style={{fontSize:11,color:C.muted,marginTop:6,fontStyle:"italic"}}>📝 {n.obs}</div>}
             </div>
             <div style={{textAlign:"right",flexShrink:0}}>
               <div style={{fontSize:10,color:C.muted}}>TOTAL</div>
-              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:isMobile?20:24,fontWeight:800,color:C.grn}}>R$ {fmt(n.total)}</div>
-              <div style={{fontSize:10,color:C.muted,marginTop:2}}>{n.items.length} item(s)</div>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:22,fontWeight:800,color:C.grn}}>R$ {fmt(n.total)}</div>
+              <div style={{fontSize:10,color:C.muted}}>{n.items.length} item(s)</div>
             </div>
           </div>
         </Card>
       ))}
     </div>
 
-    {modal&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?"0":"16px"}}>
-      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,
-        width:"100%",maxWidth:780,height:isMobile?"95vh":"90vh",
-        display:"flex",flexDirection:"column",
-        position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
+    {modal&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:"16px"}}>
+      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,
+        borderRadius:isMobile?"16px 16px 0 0":12,
+        width:"100%",maxWidth:860,
+        height:isMobile?"95vh":"92vh",
+        display:"flex",flexDirection:"column"}}>
 
-        {/* Header fixo */}
-        <div style={{padding:"18px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
-          <h2 style={{fontSize:16,fontWeight:700,color:C.txt}}>📥 Registrar Nota Fiscal</h2>
-          <button onClick={fechar} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+        {/* Cabeçalho fixo */}
+        <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+          <div>
+            <h2 style={{fontSize:16,fontWeight:700,color:C.txt}}>📥 Nova Nota Fiscal</h2>
+            <div style={{fontSize:11,color:C.muted,marginTop:2}}>{validItems.length} item(s) preenchido(s) · Total: <span style={{color:C.grn,fontWeight:700}}>R$ {fmt(totalPreview)}</span></div>
+          </div>
+          <button onClick={()=>setModal(false)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
         </div>
 
-        {/* Corpo scrollável */}
+        {/* Corpo com scroll */}
         <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:14}}>
 
           {/* Dados da NF */}
           <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".08em",marginBottom:12}}>📄 DADOS DA NOTA FISCAL</div>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".08em",marginBottom:10}}>📄 DADOS DA NOTA FISCAL</div>
             <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10}}>
               <Inp label="Número da NF *" value={form.num} onChange={v=>setForm(f=>({...f,num:v}))} placeholder="Ex: NF-1259"/>
               <Inp label="Fornecedor / Empresa *" value={form.supplier} onChange={v=>setForm(f=>({...f,supplier:v}))} placeholder="Nome do fornecedor"/>
@@ -1006,57 +1016,79 @@ function NFPage({nf,setNf,stock,setStock,addLog,currentUser,isMobile}){
             </div>
           </div>
 
-          {/* Itens */}
-          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          {/* Tabela de itens */}
+          <div style={{background:C.surf,borderRadius:10,border:`1px solid ${C.bdr}`,overflow:"hidden"}}>
+            <div style={{padding:"12px 14px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".08em"}}>
                 📦 ITENS DA NOTA
-                <span style={{background:`${C.gold}22`,color:C.gold,fontSize:11,fontWeight:800,padding:"2px 8px",borderRadius:4,marginLeft:8}}>{form.items.length}</span>
+                <span style={{background:`${C.gold}22`,color:C.gold,fontSize:11,fontWeight:800,padding:"2px 8px",borderRadius:4,marginLeft:8}}>{items.length} linhas</span>
+                <span style={{background:`${C.grn}22`,color:C.grn,fontSize:11,fontWeight:800,padding:"2px 8px",borderRadius:4,marginLeft:6}}>{validItems.length} preenchidos</span>
               </div>
-              <Btn size="sm" color="gold" onClick={addItem}>+ Adicionar Item</Btn>
+              <div style={{display:"flex",gap:8}}>
+                <Btn size="xs" color="gold" outline onClick={()=>addLinhas(5)}>+5 linhas</Btn>
+                <Btn size="xs" color="gold" onClick={()=>addLinhas(1)}>+ 1 linha</Btn>
+              </div>
             </div>
 
-            {/* Cabeçalho da tabela — só desktop */}
-            {!isMobile&&<div style={{display:"grid",gridTemplateColumns:"1fr 90px 110px 36px",gap:8,marginBottom:6,padding:"0 4px"}}>
-              <span style={{fontSize:10,fontWeight:700,color:C.muted,letterSpacing:".06em",textTransform:"uppercase"}}>Material</span>
-              <span style={{fontSize:10,fontWeight:700,color:C.muted,letterSpacing:".06em",textTransform:"uppercase"}}>Qtd</span>
-              <span style={{fontSize:10,fontWeight:700,color:C.muted,letterSpacing:".06em",textTransform:"uppercase"}}>Valor (R$)</span>
+            {/* Cabeçalho da tabela */}
+            {!isMobile&&<div style={{display:"grid",gridTemplateColumns:"2fr 100px 110px 36px",gap:8,padding:"8px 14px",background:C.card,borderBottom:`1px solid ${C.bdr}`}}>
+              <span style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:".06em"}}>Material</span>
+              <span style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:".06em"}}>Quantidade</span>
+              <span style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:".06em"}}>Valor (R$)</span>
               <span/>
             </div>}
 
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {form.items.map((it,idx)=>(
-                <div key={it.id} style={{background:C.card,borderRadius:8,padding:isMobile?12:"8px 10px",border:`1px solid ${C.bdr2}`}}>
-                  {isMobile&&<div style={{fontSize:10,fontWeight:700,color:C.muted,marginBottom:8}}>ITEM {idx+1}</div>}
-                  <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 90px 110px 36px",gap:8,alignItems:"end"}}>
-                    {/* Material */}
-                    <div>
-                      <div style={{display:"flex",gap:6,alignItems:"flex-end"}}>
-                        <div style={{flex:1}}>
-                          <Sel value={it.sid} onChange={v=>updItem(it.id,"sid",v)} label={isMobile?"Material *":undefined}
-                            options={[{value:"",label:"— Selecionar material —"},...stock.map(s=>({value:s.id,label:`[${s.code||"—"}] ${s.name} (${s.qty} ${s.unit})`}))]}/>
-                        </div>
-                        <button onClick={()=>{setNovoMatIdx(it.id);setFormNM({code:"",name:"",cat:"Equipamentos",unit:"un",min:"0"});}}
-                          title="Cadastrar novo material"
-                          style={{background:`${C.gold}22`,color:C.gold,border:`1px solid ${C.gold}44`,borderRadius:6,padding:"9px 10px",cursor:"pointer",fontWeight:700,fontSize:14,flexShrink:0,whiteSpace:"nowrap"}}>
-                          +
-                        </button>
-                      </div>
-                      {it.sid&&<div style={{fontSize:10,color:C.grn,marginTop:3}}>✓ {stock.find(s=>s.id===it.sid)?.name}</div>}
+            {/* Linhas de itens */}
+            <div style={{padding:"8px 14px",display:"flex",flexDirection:"column",gap:6}}>
+              {items.map((it,idx)=>(
+                <div key={it.id} style={{
+                  display:"grid",
+                  gridTemplateColumns:isMobile?"1fr":"2fr 100px 110px 36px",
+                  gap:isMobile?8:6,
+                  alignItems:"center",
+                  padding:isMobile?"10px":"6px 8px",
+                  background:it.sid?`${C.gold}08`:C.card,
+                  borderRadius:8,
+                  border:`1px solid ${it.sid?`${C.gold}33`:C.bdr2}`}}>
+
+                  {isMobile&&<div style={{fontSize:10,fontWeight:700,color:C.muted}}>ITEM {idx+1}</div>}
+
+                  {/* Material + botão novo */}
+                  <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                    <div style={{flex:1}}>
+                      <select value={it.sid} onChange={e=>updItem(it.id,"sid",e.target.value)}
+                        style={{width:"100%",background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:6,padding:"8px 10px",color:it.sid?C.txt:C.muted,fontSize:13}}>
+                        <option value="">— Selecionar material —</option>
+                        {stock.map(s=><option key={s.id} value={s.id}>[{s.code||"—"}] {s.name} ({s.qty} {s.unit})</option>)}
+                      </select>
                     </div>
-                    {/* Qtd */}
-                    <Inp value={it.qty} onChange={v=>updItem(it.id,"qty",v)} type="number" placeholder="0" label={isMobile?"Quantidade":undefined}/>
-                    {/* Valor */}
-                    <Inp value={it.val} onChange={v=>updItem(it.id,"val",v)} type="number" placeholder="0,00" label={isMobile?"Valor R$":undefined}/>
-                    {/* Remover */}
-                    <button onClick={()=>remItem(it.id)}
-                      style={{background:C.redD,color:C.red,border:"none",borderRadius:6,width:36,height:36,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,alignSelf:isMobile?"center":"auto",marginTop:isMobile?8:0}}>
-                      ✕
+                    <button onClick={()=>{setNovoMat(it.id);setFormNM({code:"",name:"",cat:"Equipamentos",unit:"un",min:"0"});}}
+                      title="Cadastrar novo material"
+                      style={{background:`${C.gold}22`,color:C.gold,border:`1px solid ${C.gold}55`,borderRadius:6,
+                        width:32,height:32,cursor:"pointer",fontWeight:800,fontSize:16,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                      +
                     </button>
                   </div>
 
-                  {/* Mini form novo material */}
-                  {novoMatIdx===it.id&&<div style={{background:`${C.gold}11`,border:`1px solid ${C.gold}44`,borderRadius:8,padding:12,marginTop:10}}>
+                  {/* Qtd */}
+                  <input type="number" value={it.qty} onChange={e=>updItem(it.id,"qty",e.target.value)}
+                    placeholder="0"
+                    style={{background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:6,padding:"8px 10px",color:C.txt,fontSize:13,width:"100%"}}/>
+
+                  {/* Valor */}
+                  <input type="number" value={it.val} onChange={e=>updItem(it.id,"val",e.target.value)}
+                    placeholder="0,00"
+                    style={{background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:6,padding:"8px 10px",color:C.txt,fontSize:13,width:"100%"}}/>
+
+                  {/* Remover */}
+                  <button onClick={()=>remItem(it.id)}
+                    style={{background:"transparent",color:C.muted2,border:"none",cursor:"pointer",fontSize:16,
+                      width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:6}}>
+                    ✕
+                  </button>
+
+                  {/* Cadastro novo material inline */}
+                  {novoMat===it.id&&<div style={{gridColumn:"1/-1",background:`${C.gold}11`,border:`1px solid ${C.gold}44`,borderRadius:8,padding:12,marginTop:4}}>
                     <div style={{fontSize:11,fontWeight:700,color:C.gold,marginBottom:10}}>✨ CADASTRAR NOVO MATERIAL</div>
                     <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:8,marginBottom:8}}>
                       <Inp label="Código" value={formNM.code} onChange={v=>setFormNM(f=>({...f,code:v}))} placeholder="Ex: ONU-010"/>
@@ -1068,7 +1100,7 @@ function NFPage({nf,setNf,stock,setStock,addLog,currentUser,isMobile}){
                       <Inp label="Qtd Mínima" value={formNM.min} onChange={v=>setFormNM(f=>({...f,min:v}))} type="number"/>
                     </div>
                     <div style={{display:"flex",gap:8}}>
-                      <Btn size="sm" color="ghost" outline onClick={()=>setNovoMatIdx(null)}>Cancelar</Btn>
+                      <Btn size="sm" color="ghost" outline onClick={()=>setNovoMat(null)}>Cancelar</Btn>
                       <Btn size="sm" color="gold" onClick={salvarNM}>✓ Cadastrar e Selecionar</Btn>
                     </div>
                   </div>}
@@ -1076,37 +1108,33 @@ function NFPage({nf,setNf,stock,setStock,addLog,currentUser,isMobile}){
               ))}
             </div>
 
-            {/* Botão adicionar item — sempre visível */}
-            <button onClick={addItem} style={{
-              width:"100%",marginTop:10,padding:"10px",background:"transparent",
-              border:`2px dashed ${C.bdr2}`,borderRadius:8,color:C.muted,
-              cursor:"pointer",fontSize:13,fontWeight:600,
-              display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-              <span style={{fontSize:18}}>+</span> Adicionar mais um item
-            </button>
+            {/* Botões adicionar linhas */}
+            <div style={{padding:"10px 14px",borderTop:`1px solid ${C.bdr}`,display:"flex",gap:8,flexWrap:"wrap"}}>
+              <button onClick={()=>addLinhas(1)} style={{background:"transparent",border:`1.5px dashed ${C.bdr2}`,borderRadius:7,padding:"7px 16px",color:C.muted,cursor:"pointer",fontSize:12,fontWeight:600}}>+ 1 linha</button>
+              <button onClick={()=>addLinhas(5)} style={{background:"transparent",border:`1.5px dashed ${C.bdr2}`,borderRadius:7,padding:"7px 16px",color:C.muted,cursor:"pointer",fontSize:12,fontWeight:600}}>+ 5 linhas</button>
+              <button onClick={()=>addLinhas(10)} style={{background:"transparent",border:`1.5px dashed ${C.bdr2}`,borderRadius:7,padding:"7px 16px",color:C.muted,cursor:"pointer",fontSize:12,fontWeight:600}}>+ 10 linhas</button>
+            </div>
           </div>
-
-          {/* Totalizador */}
-          {validItems.length>0&&<div style={{background:`${C.grn}15`,border:`1px solid ${C.grn}44`,borderRadius:8,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div>
-              <div style={{fontSize:12,color:C.grn,fontWeight:600}}>{validItems.length} item(s) preenchido(s)</div>
-              <div style={{fontSize:11,color:C.muted,marginTop:2}}>
-                {validItems.reduce((a,r)=>a+parseInt(r.qty||0),0)} unidades no total
-              </div>
-            </div>
-            <div style={{textAlign:"right"}}>
-              <div style={{fontSize:10,color:C.muted}}>VALOR TOTAL DA NOTA</div>
-              <div style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.grn,fontSize:20}}>R$ {fmt(totalPreview)}</div>
-            </div>
-          </div>}
 
           {err&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",color:C.red,fontSize:13}}>⚠️ {err}</div>}
         </div>
 
-        {/* Footer fixo */}
-        <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,display:"flex",gap:10,justifyContent:"flex-end",flexShrink:0,background:C.card}}>
-          <Btn color="ghost" outline onClick={fechar}>Cancelar</Btn>
-          <Btn color="gold" onClick={save}>✅ Registrar Nota Fiscal</Btn>
+        {/* Rodapé fixo com total e botão */}
+        <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+          <div style={{display:"flex",gap:20,alignItems:"center"}}>
+            <div>
+              <div style={{fontSize:10,color:C.muted}}>ITENS PREENCHIDOS</div>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:20,fontWeight:800,color:C.gold}}>{validItems.length}</div>
+            </div>
+            <div>
+              <div style={{fontSize:10,color:C.muted}}>VALOR TOTAL</div>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:20,fontWeight:800,color:C.grn}}>R$ {fmt(totalPreview)}</div>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:10}}>
+            <Btn color="ghost" outline onClick={()=>setModal(false)}>Cancelar</Btn>
+            <Btn color="gold" onClick={save} style={{minWidth:180}}>✅ Registrar Nota Fiscal</Btn>
+          </div>
         </div>
       </div>
     </div>}
@@ -1481,6 +1509,7 @@ function EmailPage({stock,os,returns,users,isMobile}){
   const[assunto,setAssunto]=useState("Relatório R&E Telecom Estoque");
   const[tipo,setTipo]=useState("completo");
   const[msg,setMsg]=useState("");
+  const goPage=(p)=>{setPage(p);try{localStorage.setItem("re_page",p);}catch{}};
   const pendRet=returns.filter(r=>r.status==="pending").length;
   const lowStock=stock.filter(s=>s.qty<=s.min);
   const gerarCorpo=()=>{
@@ -1700,8 +1729,12 @@ function SolicitacaoPage({solicitacoes,setSolicitacoes,stock,setStock,tstock,set
 
 /* ── APP ── */
 export default function App(){
-  const[user,setUser]=useState(null);
-  const[page,setPage]=useState("dash");
+  const[user,setUser]=useState(()=>{
+    try{const u=localStorage.getItem("re_session");return u?JSON.parse(u):null;}catch{return null;}
+  });
+  const[page,setPage]=useState(()=>{
+    try{return localStorage.getItem("re_page")||"dash";}catch{return "dash";}
+  });
   const[users,setUsers]=useLS("re_users",USERS0);
   const[stock,setStock]=useLS("re_stock",STOCK0);
   const[tstock,setTstock]=useLS("re_tstock",TSTOCK0);
@@ -1728,8 +1761,9 @@ export default function App(){
     const tipo=a.toLowerCase().includes("saída")||a.toLowerCase().includes("saida")?"saida":a.toLowerCase().includes("entrada")?"entrada":a.toLowerCase().includes("aprovada")?"aprovada":a.toLowerCase().includes("devolução")||a.toLowerCase().includes("solicitada")?"dev":"outro";
     setLogs(p=>[{id:uid(),date:now(),user:u,action:a,detail:d,tipo},...p]);
   };
-  if(!user)return <LoginPage users={users} onLogin={u=>{setUser(u);setPage("dash");}}/>;
+  if(!user)return <LoginPage users={users} onLogin={u=>{setUser(u);setPage("dash");try{localStorage.setItem("re_session",JSON.stringify(u));localStorage.setItem("re_page","dash");}catch{}}}/>;
   const isAdm=user.role==="admin";
+  const goPage=(p)=>{setPage(p);try{localStorage.setItem("re_page",p);}catch{}};
   const pendRet=returns.filter(r=>r.status==="pending").length;
   const pendSol=solicitacoes.filter(s=>s.status==="pending").length;
   const p={stock,setStock,tstock,setTstock,os,setOs,returns,setReturns,nf,setNf,users,setUsers,currentUser:user,addLog,isAdmin:isAdm,isMobile};
@@ -1751,10 +1785,10 @@ export default function App(){
   };
   return <div style={{height:"100dvh",background:C.bg,color:C.txt,display:"flex",overflow:"hidden"}}>
     <style>{CSS}</style>
-    {!isMobile&&<Sidebar user={user} page={page} setPage={setPage} onLogout={()=>setUser(null)}/>}
-    {isMobile&&drawerOpen&&<MobileDrawer user={user} page={page} setPage={setPage} onLogout={()=>setUser(null)} onClose={()=>setDrawerOpen(false)}/>}
+    {!isMobile&&<Sidebar user={user} page={page} setPage={goPage} onLogout={()=>{setUser(null);try{localStorage.removeItem("re_session");localStorage.removeItem("re_page");}catch{}}}/>}
+    {isMobile&&drawerOpen&&<MobileDrawer user={user} page={page} setPage={goPage} onLogout={()=>setUser(null)} onClose={()=>setDrawerOpen(false)}/>}
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-      <TopBar user={user} pendRet={pendRet} pendSol={pendSol} setPage={setPage} isMobile={isMobile} onMenuOpen={()=>setDrawerOpen(true)}/>
+      <TopBar user={user} pendRet={pendRet} pendSol={pendSol} setPage={goPage} isMobile={isMobile} onMenuOpen={()=>setDrawerOpen(true)}/>
       <main style={{flex:1,overflowY:"auto",padding:isMobile?"14px 14px 80px":"24px"}}>
         {pages[page]||pages.dash}
       </main>
@@ -1763,6 +1797,6 @@ export default function App(){
         <span style={{fontSize:11,color:C.muted}}>© {new Date().getFullYear()} R&E Telecom — Todos os direitos reservados.</span>
       </div>}
     </div>
-    {isMobile&&<BottomNav page={page} setPage={setPage} user={user} onMenuOpen={()=>setDrawerOpen(true)}/>}
+    {isMobile&&<BottomNav page={page} setPage={goPage} user={user} onMenuOpen={()=>setDrawerOpen(true)}/>}
   </div>;
 }
