@@ -39,7 +39,7 @@ const useLS=(key,initial)=>{
 };
 
 const USERS0=[
-  {id:"u1",name:"Administrador",email:"admin@retelecom.com",phone:"(21)99999-0001",cpf:"000.000.000-01",login:"admin",pass:"admin123",role:"admin"},
+  {id:"u1",name:"Administrador",email:"admin@retelecom.com",phone:"(21)99999-0001",cpf:"000.000.000-01",login:"admin",pass:"admin123",role:"admin",photo:""},
   {id:"u2",name:"Marcos Estoque",email:"estoque@retelecom.com",phone:"(21)99999-0002",cpf:"000.000.000-02",login:"estoque",pass:"est123",role:"estoque"},
   {id:"u3",name:"João Silva",email:"joao@retelecom.com",phone:"(21)98888-0001",cpf:"111.111.111-01",login:"joao",pass:"tec123",role:"tecnico"},
   {id:"u4",name:"Carlos Alberto",email:"carlos@retelecom.com",phone:"(21)98888-0002",cpf:"111.111.111-02",login:"carlos",pass:"tec456",role:"tecnico"},
@@ -229,7 +229,9 @@ function Sidebar({user,page,setPage,onLogout}){
     </nav>
     <div style={{padding:"10px",borderTop:`1px solid ${C.bdr}`}}>
       <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px",background:C.card,borderRadius:8,marginBottom:6}}>
-        <div style={{width:32,height:32,borderRadius:"50%",background:`${C.gold}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>👤</div>
+        <div style={{width:32,height:32,borderRadius:"50%",background:`${C.gold}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0,overflow:"hidden"}}>
+          {user.photo?<img src={user.photo} alt={user.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span>👤</span>}
+        </div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:12,fontWeight:600,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</div>
           <div style={{fontSize:10,color:C.muted}}>{user.email}</div>
@@ -272,7 +274,9 @@ function MobileDrawer({user,page,setPage,onLogout,onClose}){
         <button onClick={onClose} style={{background:C.card,color:C.muted,width:32,height:32,borderRadius:8,fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
       </div>
       <div style={{padding:"10px 14px 8px",borderBottom:`1px solid ${C.bdr}`,display:"flex",alignItems:"center",gap:10}}>
-        <div style={{width:36,height:36,borderRadius:"50%",background:`${C.gold}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>👤</div>
+        <div style={{width:36,height:36,borderRadius:"50%",background:`${C.gold}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,overflow:"hidden"}}>
+          {user.photo?<img src={user.photo} alt={user.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span>👤</span>}
+        </div>
         <div>
           <div style={{fontSize:13,fontWeight:600,color:C.txt}}>{user.name}</div>
           <span style={{background:C.gold,color:"#000",fontSize:9,fontWeight:800,padding:"2px 6px",borderRadius:3}}>{user.role==="admin"?"ADMINISTRADOR":user.role==="estoque"?"ESTOQUE":"TÉCNICO"}</span>
@@ -797,93 +801,160 @@ function KitPage({tstock,stock,users,currentUser,isMobile}){
 function OSPage({os,setOs,tstock,setTstock,stock,users,currentUser,addLog,isMobile}){
   const isTec=currentUser.role==="tecnico";
   const[modal,setModal]=useState(false);
-  const[form,setForm]=useState({os:"",client:"",cpf:"",notes:"",items:[{sid:"",qty:""}]});
+  const[form,setForm]=useState({os:"",client:"",notes:"",items:[{sid:"",qty:""}]});
   const[err,setErr]=useState("");
   const myTstock=tstock.filter(t=>t.uid===currentUser.id);
-  const myOpts=[{value:"",label:"Selecionar material..."},...myTstock.map(t=>{const s=stock.find(x=>x.id===t.sid);return s?{value:s.id,label:`[${s.code}] ${s.name} — ${t.qty} ${s.unit}`}:null;}).filter(Boolean)];
+  const myOpts=[{value:"",label:"— Selecionar material —"},...myTstock.map(t=>{const s=stock.find(x=>x.id===t.sid);return s?{value:s.id,label:`[${s.code||"—"}] ${s.name} — Disponível: ${t.qty} ${s.unit}`}:null;}).filter(Boolean)];
   const updRow=(i,k,v)=>setForm(f=>({...f,items:f.items.map((r,j)=>j===i?{...r,[k]:v}:r)}));
   const viewOs=isTec?os.filter(o=>o.uid===currentUser.id):os;
+
   const save=()=>{
-    if(!form.os||!form.client){setErr("Preencha OS e Cliente.");return;}
+    if(!form.os.trim()){setErr("Informe o número da OS.");return;}
+    if(!form.client.trim()){setErr("Informe o nome do cliente.");return;}
     const valid=form.items.filter(r=>r.sid&&parseInt(r.qty)>0);
-    if(!valid.length){setErr("Adicione ao menos 1 material.");return;}
-    let ok=true;valid.forEach(r=>{const ts=myTstock.find(t=>t.sid===r.sid);if(!ts||ts.qty<parseInt(r.qty)){ok=false;setErr(`Qtd insuficiente: ${stock.find(s=>s.id===r.sid)?.name}`);}});
+    if(!valid.length){setErr("Adicione ao menos 1 material utilizado.");return;}
+    let ok=true;
+    valid.forEach(r=>{const ts=myTstock.find(t=>t.sid===r.sid);if(!ts||ts.qty<parseInt(r.qty)){ok=false;setErr(`Quantidade insuficiente: ${stock.find(s=>s.id===r.sid)?.name}`);}});
     if(!ok)return;
-    setOs(p=>[{id:uid(),uid:currentUser.id,os:form.os,client:form.client,cpf:form.cpf,date:now(),items:valid.map(r=>({sid:r.sid,qty:parseInt(r.qty)})),notes:form.notes},...p]);
+    setOs(p=>[{id:uid(),uid:currentUser.id,os:form.os.trim(),client:form.client.trim(),date:now(),items:valid.map(r=>({sid:r.sid,qty:parseInt(r.qty)})),notes:form.notes},...p]);
     setTstock(p=>p.map(t=>{const it=valid.find(r=>r.sid===t.sid&&t.uid===currentUser.id);return it?{...t,qty:t.qty-parseInt(it.qty)}:t;}));
-    addLog(currentUser.name,"Saída",`OS: ${form.os} · ${form.client}`);
-    setModal(false);setErr("");setForm({os:"",client:"",cpf:"",notes:"",items:[{sid:"",qty:""}]});
+    addLog(currentUser.name,"Saída","OS: "+form.os.trim()+" · "+form.client.trim());
+    setModal(false);setErr("");setForm({os:"",client:"",notes:"",items:[{sid:"",qty:""}]});
   };
+
   return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-      <h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Ordens de Serviço</h1>
+      <div>
+        <h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Ordens de Serviço</h1>
+        <p style={{fontSize:12,color:C.muted,marginTop:2}}>Registro de materiais utilizados por OS</p>
+      </div>
       {isTec&&<Btn color="gold" size={isMobile?"sm":"md"} onClick={()=>setModal(true)}>+ Nova OS</Btn>}
     </div>
-    {isMobile?(
-      <div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {viewOs.length===0?<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted}}>Nenhuma OS lançada.</span></Card>
-        :viewOs.map(o=>{const t=users.find(u=>u.id===o.uid);const mats=o.items.map(it=>{const s=stock.find(x=>x.id===it.sid);return s?`${s.name.split(" ")[0]} ×${it.qty}`:it.sid;}).join(", ");
-          return <Card key={o.id} style={{padding:14}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-              <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:C.gold,fontSize:13}}>{o.os}</span>
-              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:C.muted}}>{o.date}</span>
+
+    {/* Lista de OS */}
+    {viewOs.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted,fontSize:13}}>Nenhuma OS registrada.</span></Card>}
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {viewOs.map(o=>{
+        const tech=users.find(u=>u.id===o.uid);
+        return <Card key={o.id} style={{padding:16}}>
+          {/* Cabeçalho da OS */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8,marginBottom:12}}>
+            <div>
+              <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:15}}>{o.os}</span>
+                <span style={{fontSize:14,fontWeight:700,color:C.txt}}>{o.client}</span>
+                {!isTec&&<span style={{fontSize:12,color:C.muted}}>· {tech?.name||"?"}</span>}
+              </div>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted,marginTop:4}}>{o.date}</div>
+              {o.notes&&<div style={{fontSize:12,color:C.muted,marginTop:4,fontStyle:"italic"}}>📝 {o.notes}</div>}
             </div>
-            <div style={{fontSize:13,fontWeight:600,color:C.txt,marginBottom:2}}>{o.client}</div>
-            <div style={{fontSize:11,color:C.muted,marginBottom:6}}>{t?.name||"?"} · {o.cpf}</div>
-            <div style={{fontSize:11,color:C.muted,background:C.surf,borderRadius:6,padding:"6px 10px"}}>{mats}</div>
-          </Card>;
-        })}
-      </div>
-    ):(
-      <Card style={{padding:0,overflow:"hidden"}}>
-        <div style={{overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse"}}>
-            <thead><THead cols={["OS","TÉCNICO","CLIENTE","CPF","DATA","MATERIAIS","OBS"]}/></thead>
-            <tbody>{viewOs.length===0?<tr><td colSpan={7} style={{padding:30,textAlign:"center",color:C.muted}}>Nenhuma OS.</td></tr>
-            :viewOs.map(o=>{const t=users.find(u=>u.id===o.uid);const mats=o.items.map(it=>{const s=stock.find(x=>x.id===it.sid);return s?`${s.name.split(" ")[0]} ×${it.qty}`:it.sid;}).join(", ");
-              return <TRow key={o.id} cells={[
-                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:C.gold,fontWeight:700}}>{o.os}</span>,
-                t?.name||"?",o.client,
-                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted}}>{o.cpf}</span>,
-                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted}}>{o.date}</span>,
-                <span style={{fontSize:11,color:C.muted}}>{mats}</span>,
-                <span style={{fontSize:11,color:C.muted}}>{o.notes}</span>
-              ]}/>;
-            })}</tbody>
-          </table>
+            <Bdg color="grn">✓ Concluída</Bdg>
+          </div>
+
+          {/* Materiais utilizados — grade 3 colunas */}
+          <div style={{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:".06em",textTransform:"uppercase",marginBottom:8}}>Materiais Utilizados</div>
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:6}}>
+            {o.items.map((it,i)=>{
+              const s=stock.find(x=>x.id===it.sid);
+              return <div key={i} style={{background:C.surf,borderRadius:8,padding:"10px 12px",border:`1px solid ${C.bdr}`,display:"flex",flexDirection:"column",gap:4}}>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:C.muted}}>{s?.code||"—"}</div>
+                <div style={{fontSize:12,fontWeight:600,color:C.txt,lineHeight:1.3}}>{s?.name||"Material removido"}</div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:2}}>
+                  <span style={{fontSize:10,color:C.muted}}>{s?.unit||""}</span>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:16}}>{fmt(it.qty)}</span>
+                </div>
+              </div>;
+            })}
+          </div>
+        </Card>;
+      })}
+    </div>
+
+    {/* Modal Nova OS */}
+    {modal&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
+      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,
+        width:"100%",maxWidth:640,maxHeight:isMobile?"92vh":"88vh",
+        display:"flex",flexDirection:"column",position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
+
+        {/* Header */}
+        <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+          <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>🔧 Nova Ordem de Serviço</h2>
+          <button onClick={()=>{setModal(false);setErr("");}} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
         </div>
-      </Card>
-    )}
-    {modal&&<Modal title="Nova OS" onClose={()=>{setModal(false);setErr("");}} isMobile={isMobile}>
-      <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
-          <Inp label="Nº da OS *" value={form.os} onChange={v=>setForm(f=>({...f,os:v}))} placeholder="OS-20250523001"/>
-          <Inp label="Cliente *" value={form.client} onChange={v=>setForm(f=>({...f,client:v}))}/>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
-          <Inp label="CPF" value={form.cpf} onChange={v=>setForm(f=>({...f,cpf:v}))} placeholder="000.000.000-00"/>
-          <Inp label="Observação" value={form.notes} onChange={v=>setForm(f=>({...f,notes:v}))}/>
-        </div>
-        <div style={{fontSize:12,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:".06em"}}>Materiais Utilizados</div>
-        {form.items.map((it,i)=>(
-          <div key={i} style={{display:"flex",flexDirection:isMobile?"column":"row",gap:8}}>
-            <div style={{flex:1}}><Sel value={it.sid} onChange={v=>updRow(i,"sid",v)} options={myOpts}/></div>
-            <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
-              <div style={{width:isMobile?"100%":110,flex:isMobile?1:"none"}}><Inp value={it.qty} onChange={v=>updRow(i,"qty",v)} placeholder="Qtd" type="number"/></div>
-              <Btn size="sm" color="red" outline onClick={()=>setForm(f=>({...f,items:f.items.filter((_,j)=>j!==i)}))}>✕</Btn>
+
+        {/* Body scroll */}
+        <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:14}}>
+
+          {/* Dados da OS */}
+          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".08em",marginBottom:12}}>📋 DADOS DA OS</div>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
+              <Inp label="Nº da OS *" value={form.os} onChange={v=>setForm(f=>({...f,os:v}))} placeholder="OS-20250523001"/>
+              <Inp label="Nome do Cliente *" value={form.client} onChange={v=>setForm(f=>({...f,client:v}))} placeholder="Nome completo"/>
+            </div>
+            <div style={{marginTop:12}}>
+              <Inp label="Observação / Tipo de Serviço" value={form.notes} onChange={v=>setForm(f=>({...f,notes:v}))} placeholder="Ex: Instalação FTTH, Manutenção, Reconexão..."/>
             </div>
           </div>
-        ))}
-        {err&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 12px",color:C.red,fontSize:12}}>⚠️ {err}</div>}
-        <div style={{display:"flex",gap:10,justifyContent:"space-between",marginTop:4}}>
-          <Btn color="ghost" outline size="sm" onClick={()=>setForm(f=>({...f,items:[...f.items,{sid:"",qty:""}]}))}>+ Material</Btn>
-          <div style={{display:"flex",gap:8}}>
-            <Btn color="ghost" outline onClick={()=>{setModal(false);setErr("");}}>Cancelar</Btn>
-            <Btn color="gold" onClick={save}>Confirmar</Btn>
+
+          {/* Materiais utilizados */}
+          <div style={{background:C.surf,borderRadius:10,border:`1px solid ${C.bdr}`,overflow:"hidden"}}>
+            <div style={{padding:"12px 14px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".08em"}}>
+                🔩 MATERIAIS UTILIZADOS
+                <span style={{background:`${C.gold}22`,color:C.gold,fontSize:11,fontWeight:800,padding:"2px 8px",borderRadius:4,marginLeft:8}}>
+                  {form.items.filter(r=>r.sid&&parseInt(r.qty)>0).length} item(s)
+                </span>
+              </div>
+              <Btn size="xs" color="gold" onClick={()=>setForm(f=>({...f,items:[...f.items,{sid:"",qty:""}]}))}>+ Adicionar</Btn>
+            </div>
+
+            {/* Cabeçalho */}
+            {!isMobile&&<div style={{display:"grid",gridTemplateColumns:"1fr 100px 32px",gap:8,padding:"8px 14px",background:C.card,borderBottom:`1px solid ${C.bdr}`}}>
+              <span style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:".06em"}}>Material</span>
+              <span style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:".06em"}}>Quantidade</span>
+              <span/>
+            </div>}
+
+            <div style={{padding:"8px 14px",display:"flex",flexDirection:"column",gap:6}}>
+              {form.items.map((it,i)=>{
+                const s=it.sid?stock.find(x=>x.id===it.sid):null;
+                const ts=it.sid?myTstock.find(t=>t.sid===it.sid):null;
+                return <div key={i} style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 100px 32px",gap:8,alignItems:"center",
+                  background:it.sid?`${C.gold}08`:C.card,borderRadius:8,padding:"8px 10px",border:`1px solid ${it.sid?`${C.gold}33`:C.bdr2}`}}>
+                  <div>
+                    <select value={it.sid} onChange={e=>updRow(i,"sid",e.target.value)}
+                      style={{width:"100%",background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:6,padding:"9px 10px",color:it.sid?C.txt:C.muted,fontSize:13}}>
+                      {myOpts.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                    {s&&ts&&<div style={{fontSize:10,color:C.grn,marginTop:3}}>✓ {s.name} · Disponível: <strong>{ts.qty}</strong> {s.unit}</div>}
+                  </div>
+                  <input type="number" value={it.qty} onChange={e=>updRow(i,"qty",e.target.value)}
+                    placeholder="Qtd" min="0"
+                    style={{background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:6,padding:"9px 10px",color:C.txt,fontSize:14,fontWeight:700,width:"100%",textAlign:"center"}}/>
+                  <button onClick={()=>setForm(f=>({...f,items:f.items.length>1?f.items.filter((_,j)=>j!==i):f.items}))}
+                    style={{background:"transparent",color:C.muted2,border:"none",cursor:"pointer",fontSize:16,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:6}}>✕</button>
+                </div>;
+              })}
+            </div>
+
+            <button onClick={()=>setForm(f=>({...f,items:[...f.items,{sid:"",qty:""}]}))}
+              style={{width:"100%",margin:"0 0 8px",padding:"9px",background:"transparent",border:`2px dashed ${C.bdr2}`,
+                borderRadius:0,color:C.muted,cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+              <span style={{fontSize:18}}>+</span> Adicionar material
+            </button>
           </div>
+
+          {err&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",color:C.red,fontSize:13}}>⚠️ {err}</div>}
+        </div>
+
+        {/* Footer */}
+        <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,flexShrink:0,display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <Btn color="ghost" outline onClick={()=>{setModal(false);setErr("");}}>Cancelar</Btn>
+          <Btn color="gold" onClick={save}>✅ Confirmar Baixa de Materiais</Btn>
         </div>
       </div>
-    </Modal>}
+    </div>}
   </div>;
 }
 
@@ -1305,35 +1376,57 @@ function RelPage({stock,os,returns,users,isMobile,currentUser}){
   </div>;
 }
 
+
 /* ── USUÁRIOS ── */
 function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
   const[modal,setModal]=useState(null);
-  const[form,setForm]=useState({name:"",email:"",phone:"",cpf:"",login:"",pass:"",role:"tecnico"});
+  const[form,setForm]=useState({name:"",email:"",phone:"",cpf:"",login:"",pass:"",role:"tecnico",photo:""});
   const roles=[{value:"admin",label:"Administrador"},{value:"estoque",label:"Estoque"},{value:"tecnico",label:"Técnico"}];
   const rl={admin:"ADM",estoque:"EST",tecnico:"TEC"};
+  const rc={admin:C.gold,estoque:C.blue,tecnico:C.grn};
+
+  const handlePhoto=(e)=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    if(file.size>2*1024*1024){alert("Foto muito grande! Máximo 2MB.");return;}
+    const reader=new FileReader();
+    reader.onload=(ev)=>setForm(f=>({...f,photo:ev.target.result}));
+    reader.readAsDataURL(file);
+  };
+
   const save=()=>{
-    if(!form.name||!form.login||!form.pass)return;
-    if(modal==="new"){setUsers(p=>[...p,{id:uid(),...form}]);addLog(currentUser.name,"Usuário Criado",`${form.name} (${form.role})`);}
+    if(!form.name.trim()||!form.login.trim()||!form.pass.trim())return;
+    if(modal==="new"){setUsers(p=>[...p,{id:uid(),...form}]);addLog(currentUser.name,"Usuário Criado",form.name+" ("+form.role+")");}
     else{setUsers(p=>p.map(u=>u.id===modal?{...u,...form}:u));addLog(currentUser.name,"Usuário Editado",form.name);}
     setModal(null);
   };
+
+  const Avatar=({user,size=36})=>(
+    <div style={{width:size,height:size,borderRadius:"50%",flexShrink:0,overflow:"hidden",
+      background:rc[user.role]+"33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*0.4}}>
+      {user.photo
+        ?<img src={user.photo} alt={user.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+        :<span>👤</span>}
+    </div>
+  );
+
   return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-      <h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Usuários</h1>
-      <Btn color="gold" size={isMobile?"sm":"md"} onClick={()=>{setForm({name:"",email:"",phone:"",cpf:"",login:"",pass:"",role:"tecnico"});setModal("new");}}>+ Novo</Btn>
+      <div><h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Usuários</h1></div>
+      <Btn color="gold" size={isMobile?"sm":"md"} onClick={()=>{setForm({name:"",email:"",phone:"",cpf:"",login:"",pass:"",role:"tecnico",photo:""});setModal("new");}}>+ Novo</Btn>
     </div>
     {isMobile?(
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         {users.map(u=>(
           <Card key={u.id} style={{padding:14,display:"flex",alignItems:"center",gap:12}}>
-            <div style={{width:38,height:38,borderRadius:"50%",background:`${C.gold}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>👤</div>
+            <Avatar user={u} size={44}/>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:13,fontWeight:600,color:C.txt}}>{u.name}</div>
               <div style={{fontSize:11,color:C.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.login} · {u.email}</div>
             </div>
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6,flexShrink:0}}>
-              <span style={{background:C.gold,color:"#000",fontSize:9,fontWeight:800,padding:"2px 6px",borderRadius:3}}>{rl[u.role]}</span>
-              <Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf,login:u.login,pass:u.pass,role:u.role});setModal(u.id);}}>Editar</Btn>
+              <span style={{background:rc[u.role],color:"#000",fontSize:9,fontWeight:800,padding:"2px 6px",borderRadius:3}}>{rl[u.role]}</span>
+              <Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf||"",login:u.login,pass:u.pass,role:u.role,photo:u.photo||""});setModal(u.id);}}>Editar</Btn>
             </div>
           </Card>
         ))}
@@ -1342,21 +1435,18 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
       <Card style={{padding:0,overflow:"hidden"}}>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
-            <thead><THead cols={["USUÁRIO","LOGIN","E-MAIL","TELEFONE","CPF","PERFIL","AÇÕES"]}/></thead>
+            <thead><THead cols={["FOTO","USUÁRIO","LOGIN","E-MAIL","TELEFONE","PERFIL","AÇÕES"]}/></thead>
             <tbody>{users.map(u=>(
               <TRow key={u.id} cells={[
-                <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <div style={{width:30,height:30,borderRadius:"50%",background:`${C.gold}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>👤</div>
-                  <span style={{fontWeight:600,color:C.txt}}>{u.name}</span>
-                </div>,
+                <Avatar user={u} size={36}/>,
+                <span style={{fontWeight:600,color:C.txt}}>{u.name}</span>,
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:C.gold}}>{u.login}</span>,
                 <span style={{fontSize:12,color:C.muted}}>{u.email}</span>,
                 <span style={{fontSize:12,color:C.muted}}>{u.phone}</span>,
-                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted}}>{u.cpf}</span>,
-                <span style={{background:C.gold,color:"#000",fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:4}}>{rl[u.role]}</span>,
+                <span style={{background:rc[u.role],color:"#000",fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:4}}>{rl[u.role]}</span>,
                 <div style={{display:"flex",gap:6}}>
-                  <Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf,login:u.login,pass:u.pass,role:u.role});setModal(u.id);}}>Editar</Btn>
-                  {u.id!==currentUser.id&&<Btn size="xs" color="red" outline onClick={()=>{if(window.confirm(`Remover ${u.name}?`)){setUsers(p=>p.filter(x=>x.id!==u.id));addLog(currentUser.name,"Usuário Removido",u.name);}}}>✕</Btn>}
+                  <Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf||"",login:u.login,pass:u.pass,role:u.role,photo:u.photo||""});setModal(u.id);}}>Editar</Btn>
+                  {u.id!==currentUser.id&&<Btn size="xs" color="red" outline onClick={()=>{if(window.confirm("Remover "+u.name+"?")){setUsers(p=>p.filter(x=>x.id!==u.id));addLog(currentUser.name,"Usuário Removido",u.name);}}}>✕</Btn>}
                 </div>
               ]}/>
             ))}</tbody>
@@ -1366,35 +1456,49 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
     )}
     {modal&&<Modal title={modal==="new"?"Novo Usuário":"Editar Usuário"} onClose={()=>setModal(null)} isMobile={isMobile}>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        {/* Foto de perfil */}
+        <div style={{display:"flex",alignItems:"center",gap:16,padding:14,background:C.surf,borderRadius:10,border:`1px solid ${C.bdr}`}}>
+          <div style={{width:72,height:72,borderRadius:"50%",overflow:"hidden",background:`${C.gold}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,flexShrink:0,border:`2px solid ${C.bdr2}`}}>
+            {form.photo?<img src={form.photo} alt="foto" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span>👤</span>}
+          </div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:12,fontWeight:600,color:C.txt,marginBottom:6}}>Foto de Perfil</div>
+            <div style={{fontSize:11,color:C.muted,marginBottom:10}}>JPG, PNG ou GIF · Máximo 2MB</div>
+            <label style={{background:C.gold,color:"#000",padding:"7px 14px",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:700,display:"inline-block"}}>
+              📷 Escolher Foto
+              <input type="file" accept="image/*" onChange={handlePhoto} style={{display:"none"}}/>
+            </label>
+            {form.photo&&<button onClick={()=>setForm(f=>({...f,photo:""}))} style={{background:"transparent",color:C.red,border:"none",cursor:"pointer",fontSize:12,marginLeft:10,fontWeight:600}}>✕ Remover</button>}
+          </div>
+        </div>
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
           <Inp label="Nome Completo *" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))}/>
           <Inp label="E-mail" value={form.email} onChange={v=>setForm(f=>({...f,email:v}))} type="email"/>
         </div>
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
           <Inp label="Telefone" value={form.phone} onChange={v=>setForm(f=>({...f,phone:v}))} placeholder="(00) 00000-0000"/>
-          <Inp label="CPF" value={form.cpf} onChange={v=>setForm(f=>({...f,cpf:v}))} placeholder="000.000.000-00"/>
+          <Inp label="CPF" value={form.cpf||""} onChange={v=>setForm(f=>({...f,cpf:v}))} placeholder="000.000.000-00"/>
         </div>
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:12}}>
           <Inp label="Login *" value={form.login} onChange={v=>setForm(f=>({...f,login:v}))}/>
           <Inp label="Senha *" value={form.pass} onChange={v=>setForm(f=>({...f,pass:v}))} type="password"/>
           <div style={{gridColumn:isMobile?"1 / -1":"auto"}}><Sel label="Perfil" value={form.role} onChange={v=>setForm(f=>({...f,role:v}))} options={roles}/></div>
         </div>
-        <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
           <Btn color="ghost" outline onClick={()=>setModal(null)}>Cancelar</Btn>
-          <Btn color="gold" onClick={save}>Salvar</Btn>
+          <Btn color="gold" onClick={save}>Salvar Usuário</Btn>
         </div>
       </div>
     </Modal>}
     <div style={{marginTop:8,padding:"12px 16px",background:C.redD,border:`1px solid ${C.red}33`,borderRadius:8,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
       <div>
         <div style={{fontSize:12,fontWeight:700,color:C.red}}>⚠️ Zona de Perigo</div>
-        <div style={{fontSize:11,color:C.muted,marginTop:2}}>Apaga todos os dados e volta ao estado inicial do sistema.</div>
+        <div style={{fontSize:11,color:C.muted,marginTop:2}}>Apaga todos os dados e volta ao estado inicial.</div>
       </div>
-      <Btn size="sm" color="red" outline onClick={()=>{if(window.confirm("ATENÇÃO: Apaga TODOS os dados (usuários, estoque, OS, devoluções, etc). Confirmar?")){Object.keys(localStorage).filter(k=>k.startsWith("re_")).forEach(k=>localStorage.removeItem(k));window.location.reload();}}}>🗑️ Resetar Todos os Dados</Btn>
+      <Btn size="sm" color="red" outline onClick={()=>{if(window.confirm("ATENÇÃO: Apaga TODOS os dados. Confirmar?")){Object.keys(localStorage).filter(k=>k.startsWith("re_")).forEach(k=>localStorage.removeItem(k));window.location.reload();}}}>🗑️ Resetar Todos os Dados</Btn>
     </div>
   </div>;
 }
-
 /* ── LOGS ── */
 function LogPage({logs,isMobile}){
   const tc={saida:C.gold,entrada:C.grn,dev:C.ylw,aprovada:C.grn};
