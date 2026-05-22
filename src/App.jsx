@@ -853,25 +853,30 @@ function KitPage({tstock,stock,users,currentUser,isMobile}){
 function OSPage({os,setOs,tstock,setTstock,stock,users,currentUser,addLog,isMobile}){
   const isTec=currentUser.role==="tecnico";
   const[modal,setModal]=useState(false);
-  const[form,setForm]=useState({os:"",client:"",notes:"",items:[{sid:"",qty:""}]});
+  const[osNum,setOsNum]=useState("");
+  const[client,setClient]=useState("");
+  const[notes,setNotes]=useState("");
+  const[items,setItems]=useState([]);
   const[err,setErr]=useState("");
+  const blank=()=>({id:uid(),sid:"",qty:""});
   const myTstock=tstock.filter(t=>t.uid===currentUser.id);
-  const myOpts=[{value:"",label:"— Selecionar material —"},...myTstock.map(t=>{const s=stock.find(x=>x.id===t.sid);return s?{value:s.id,label:`[${s.code||"—"}] ${s.name} — Disponível: ${t.qty} ${s.unit}`}:null;}).filter(Boolean)];
-  const updRow=(i,k,v)=>setForm(f=>({...f,items:f.items.map((r,j)=>j===i?{...r,[k]:v}:r)}));
+  const updItem=(id,k,v)=>setItems(p=>p.map(r=>r.id===id?{...r,[k]:v}:r));
+  const remItem=(id)=>setItems(p=>p.filter(r=>r.id!==id));
   const viewOs=isTec?os.filter(o=>o.uid===currentUser.id):os;
+  const validItems=items.filter(r=>r.sid&&parseInt(r.qty)>0);
+  const myStockOpts=myTstock.map(t=>{const s=stock.find(x=>x.id===t.sid);return s?{...s,qty:t.qty}:null;}).filter(Boolean);
 
   const save=()=>{
-    if(!form.os.trim()){setErr("Informe o número da OS.");return;}
-    if(!form.client.trim()){setErr("Informe o nome do cliente.");return;}
-    const valid=form.items.filter(r=>r.sid&&parseInt(r.qty)>0);
-    if(!valid.length){setErr("Adicione ao menos 1 material utilizado.");return;}
+    if(!osNum.trim()){setErr("Informe o número da OS.");return;}
+    if(!client.trim()){setErr("Informe o nome do cliente.");return;}
+    if(!validItems.length){setErr("Adicione ao menos 1 material.");return;}
     let ok=true;
-    valid.forEach(r=>{const ts=myTstock.find(t=>t.sid===r.sid);if(!ts||ts.qty<parseInt(r.qty)){ok=false;setErr(`Quantidade insuficiente: ${stock.find(s=>s.id===r.sid)?.name}`);}});
+    validItems.forEach(r=>{const ts=myTstock.find(t=>t.sid===r.sid);if(!ts||ts.qty<parseInt(r.qty)){ok=false;setErr("Qtd insuficiente: "+(stock.find(s=>s.id===r.sid)?.name));}});
     if(!ok)return;
-    setOs(p=>[{id:uid(),uid:currentUser.id,os:form.os.trim(),client:form.client.trim(),date:now(),items:valid.map(r=>({sid:r.sid,qty:parseInt(r.qty)})),notes:form.notes},...p]);
-    setTstock(p=>p.map(t=>{const it=valid.find(r=>r.sid===t.sid&&t.uid===currentUser.id);return it?{...t,qty:t.qty-parseInt(it.qty)}:t;}));
-    addLog(currentUser.name,"Saída","OS: "+form.os.trim()+" · "+form.client.trim());
-    setModal(false);setErr("");setForm({os:"",client:"",notes:"",items:[{sid:"",qty:""}]});
+    setOs(p=>[{id:uid(),uid:currentUser.id,os:osNum.trim(),client:client.trim(),date:now(),items:validItems.map(r=>({sid:r.sid,qty:parseInt(r.qty)})),notes},...p]);
+    setTstock(p=>p.map(t=>{const it=validItems.find(r=>r.sid===t.sid&&t.uid===currentUser.id);return it?{...t,qty:t.qty-parseInt(it.qty)}:t;}));
+    addLog(currentUser.name,"Saída","OS: "+osNum.trim()+" · "+client.trim());
+    setModal(false);setErr("");setOsNum("");setClient("");setNotes("");setItems([]);
   };
 
   return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
@@ -880,16 +885,14 @@ function OSPage({os,setOs,tstock,setTstock,stock,users,currentUser,addLog,isMobi
         <h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Ordens de Serviço</h1>
         <p style={{fontSize:12,color:C.muted,marginTop:2}}>Registro de materiais utilizados por OS</p>
       </div>
-      {isTec&&<Btn color="gold" size={isMobile?"sm":"md"} onClick={()=>setModal(true)}>+ Nova OS</Btn>}
+      {isTec&&<Btn color="gold" size={isMobile?"sm":"md"} onClick={()=>{setItems([]);setOsNum("");setClient("");setNotes("");setErr("");setModal(true);}}>+ Nova OS</Btn>}
     </div>
 
-    {/* Lista de OS */}
     {viewOs.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted,fontSize:13}}>Nenhuma OS registrada.</span></Card>}
     <div style={{display:"flex",flexDirection:"column",gap:10}}>
       {viewOs.map(o=>{
         const tech=users.find(u=>u.id===o.uid);
         return <Card key={o.id} style={{padding:16}}>
-          {/* Cabeçalho da OS */}
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8,marginBottom:12}}>
             <div>
               <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
@@ -902,108 +905,53 @@ function OSPage({os,setOs,tstock,setTstock,stock,users,currentUser,addLog,isMobi
             </div>
             <Bdg color="grn">✓ Concluída</Bdg>
           </div>
-
-          {/* Materiais utilizados — grade 3 colunas */}
           <div style={{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:".06em",textTransform:"uppercase",marginBottom:8}}>Materiais Utilizados</div>
           <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:6}}>
-            {o.items.map((it,i)=>{
-              const s=stock.find(x=>x.id===it.sid);
-              return <div key={i} style={{background:C.surf,borderRadius:8,padding:"10px 12px",border:`1px solid ${C.bdr}`,display:"flex",flexDirection:"column",gap:4}}>
+            {o.items.map((it,i)=>{const s=stock.find(x=>x.id===it.sid);return(
+              <div key={i} style={{background:C.surf,borderRadius:8,padding:"8px 10px",border:`1px solid ${C.bdr}`}}>
                 <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:C.muted}}>{s?.code||"—"}</div>
-                <div style={{fontSize:12,fontWeight:600,color:C.txt,lineHeight:1.3}}>{s?.name||"Material removido"}</div>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:2}}>
+                <div style={{fontSize:12,fontWeight:600,color:C.txt,lineHeight:1.3,marginTop:2}}>{s?.name||"?"}</div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:4}}>
                   <span style={{fontSize:10,color:C.muted}}>{s?.unit||""}</span>
                   <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:16}}>{fmt(it.qty)}</span>
                 </div>
-              </div>;
-            })}
+              </div>
+            );})}
           </div>
         </Card>;
       })}
     </div>
 
-    {/* Modal Nova OS */}
     {modal&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
-      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,
-        width:"100%",maxWidth:640,maxHeight:isMobile?"92vh":"88vh",
-        display:"flex",flexDirection:"column",position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
-
-        {/* Header */}
+      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,width:"100%",maxWidth:600,maxHeight:isMobile?"92vh":"88vh",display:"flex",flexDirection:"column",position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
         <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
-          <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>🔧 Nova Ordem de Serviço</h2>
-          <button onClick={()=>{setModal(false);setErr("");}} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+          <div>
+            <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>🔧 Nova OS</h2>
+            <div style={{fontSize:11,color:C.muted,marginTop:2}}>{validItems.length} material(is) adicionado(s)</div>
+          </div>
+          <button onClick={()=>setModal(false)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
         </div>
-
-        {/* Body scroll */}
-        <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:14}}>
-
-          {/* Dados da OS */}
-          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".08em",marginBottom:12}}>📋 DADOS DA OS</div>
-            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
-              <Inp label="Nº da OS *" value={form.os} onChange={v=>setForm(f=>({...f,os:v}))} placeholder="OS-20250523001"/>
-              <Inp label="Nome do Cliente *" value={form.client} onChange={v=>setForm(f=>({...f,client:v}))} placeholder="Nome completo"/>
-            </div>
-            <div style={{marginTop:12}}>
-              <Inp label="Observação / Tipo de Serviço" value={form.notes} onChange={v=>setForm(f=>({...f,notes:v}))} placeholder="Ex: Instalação FTTH, Manutenção, Reconexão..."/>
-            </div>
+        <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:12}}>
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10}}>
+            <Inp label="Nº da OS *" value={osNum} onChange={setOsNum} placeholder="OS-20250523001"/>
+            <Inp label="Cliente *" value={client} onChange={setClient} placeholder="Nome do cliente"/>
           </div>
-
-          {/* Materiais utilizados */}
-          <div style={{background:C.surf,borderRadius:10,border:`1px solid ${C.bdr}`,overflow:"hidden"}}>
-            <div style={{padding:"12px 14px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".08em"}}>
-                🔩 MATERIAIS UTILIZADOS
-                <span style={{background:`${C.gold}22`,color:C.gold,fontSize:11,fontWeight:800,padding:"2px 8px",borderRadius:4,marginLeft:8}}>
-                  {form.items.filter(r=>r.sid&&parseInt(r.qty)>0).length} item(s)
-                </span>
-              </div>
-              <Btn size="xs" color="gold" onClick={()=>setForm(f=>({...f,items:[...f.items,{sid:"",qty:""}]}))}>+ Adicionar</Btn>
-            </div>
-
-            {/* Cabeçalho */}
-            {!isMobile&&<div style={{display:"grid",gridTemplateColumns:"1fr 100px 32px",gap:8,padding:"8px 14px",background:C.card,borderBottom:`1px solid ${C.bdr}`}}>
-              <span style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:".06em"}}>Material</span>
-              <span style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:".06em"}}>Quantidade</span>
-              <span/>
-            </div>}
-
-            <div style={{padding:"8px 14px",display:"flex",flexDirection:"column",gap:6}}>
-              {form.items.map((it,i)=>{
-                const s=it.sid?stock.find(x=>x.id===it.sid):null;
-                const ts=it.sid?myTstock.find(t=>t.sid===it.sid):null;
-                return <div key={i} style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 100px 32px",gap:8,alignItems:"center",
-                  background:it.sid?`${C.gold}08`:C.card,borderRadius:8,padding:"8px 10px",border:`1px solid ${it.sid?`${C.gold}33`:C.bdr2}`}}>
-                  <div>
-                    <select value={it.sid} onChange={e=>updRow(i,"sid",e.target.value)}
-                      style={{width:"100%",background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:6,padding:"9px 10px",color:it.sid?C.txt:C.muted,fontSize:13}}>
-                      {myOpts.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
-                    </select>
-                    {s&&ts&&<div style={{fontSize:10,color:C.grn,marginTop:3}}>✓ {s.name} · Disponível: <strong>{ts.qty}</strong> {s.unit}</div>}
-                  </div>
-                  <input type="number" value={it.qty} onChange={e=>updRow(i,"qty",e.target.value)}
-                    placeholder="Qtd" min="0"
-                    style={{background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:6,padding:"9px 10px",color:C.txt,fontSize:14,fontWeight:700,width:"100%",textAlign:"center"}}/>
-                  <button onClick={()=>setForm(f=>({...f,items:f.items.length>1?f.items.filter((_,j)=>j!==i):f.items}))}
-                    style={{background:"transparent",color:C.muted2,border:"none",cursor:"pointer",fontSize:16,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:6}}>✕</button>
-                </div>;
-              })}
-            </div>
-
-            <button onClick={()=>setForm(f=>({...f,items:[...f.items,{sid:"",qty:""}]}))}
-              style={{width:"100%",margin:"0 0 8px",padding:"9px",background:"transparent",border:`2px dashed ${C.bdr2}`,
-                borderRadius:0,color:C.muted,cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-              <span style={{fontSize:18}}>+</span> Adicionar material
-            </button>
-          </div>
-
+          <Inp label="Observação / Tipo de Serviço" value={notes} onChange={setNotes} placeholder="Ex: Instalação FTTH, Manutenção..."/>
+          <ItemList
+            items={items}
+            onAdd={()=>setItems(p=>[...p,blank()])}
+            onUpdate={updItem}
+            onRemove={remItem}
+            stockOptions={myStockOpts}
+            isMobile={isMobile}
+            label="Materiais Utilizados"
+            addLabel="Clique para adicionar o primeiro material utilizado"
+          />
           {err&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",color:C.red,fontSize:13}}>⚠️ {err}</div>}
         </div>
-
-        {/* Footer */}
-        <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,flexShrink:0,display:"flex",gap:10,justifyContent:"flex-end"}}>
-          <Btn color="ghost" outline onClick={()=>{setModal(false);setErr("");}}>Cancelar</Btn>
-          <Btn color="gold" onClick={save}>✅ Confirmar Baixa de Materiais</Btn>
+        <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,flexShrink:0,display:"flex",justifyContent:"flex-end",gap:10}}>
+          <Btn color="ghost" outline onClick={()=>setModal(false)}>Cancelar</Btn>
+          <Btn color="gold" onClick={save} disabled={validItems.length===0}>✅ Confirmar Baixa</Btn>
         </div>
       </div>
     </div>}
@@ -1014,73 +962,99 @@ function OSPage({os,setOs,tstock,setTstock,stock,users,currentUser,addLog,isMobi
 function DevPage({returns,setReturns,tstock,setTstock,stock,users,currentUser,addLog,isMobile}){
   const isTec=currentUser.role==="tecnico";
   const[modal,setModal]=useState(false);
-  const[form,setForm]=useState({notes:"",items:[{sid:"",qty:""}]});
+  const[items,setItems]=useState([]);
+  const[notes,setNotes]=useState("");
   const myTstock=tstock.filter(t=>t.uid===currentUser.id);
-  const myOpts=[{value:"",label:"Selecionar..."},...myTstock.map(t=>{const s=stock.find(x=>x.id===t.sid);return s?{value:s.id,label:`[${s.code}] ${s.name} — ${t.qty}`}:null;}).filter(Boolean)];
-  const updRow=(i,k,v)=>setForm(f=>({...f,items:f.items.map((r,j)=>j===i?{...r,[k]:v}:r)}));
+  const blank=()=>({id:uid(),sid:"",qty:""});
+  const updItem=(id,k,v)=>setItems(p=>p.map(r=>r.id===id?{...r,[k]:v}:r));
+  const remItem=(id)=>setItems(p=>p.filter(r=>r.id!==id));
   const viewRet=isTec?returns.filter(r=>r.uid===currentUser.id):returns;
+  const validItems=items.filter(r=>r.sid&&parseInt(r.qty)>0);
+
   const submit=()=>{
-    const valid=form.items.filter(r=>r.sid&&parseInt(r.qty)>0);if(!valid.length)return;
-    setReturns(p=>[{id:uid(),uid:currentUser.id,date:now(),items:valid.map(r=>({sid:r.sid,qty:parseInt(r.qty)})),status:"pending",notes:form.notes,rDate:null,rBy:null},...p]);
-    addLog(currentUser.name,"Devolução Solicitada",`${currentUser.name} · ${valid.length} item(s)`);
-    setModal(false);setForm({notes:"",items:[{sid:"",qty:""}]});
+    if(!validItems.length)return;
+    setReturns(p=>[{id:uid(),uid:currentUser.id,date:now(),items:validItems.map(r=>({sid:r.sid,qty:parseInt(r.qty)})),status:"pending",notes,rDate:null,rBy:null},...p]);
+    addLog(currentUser.name,"Devolução Solicitada",currentUser.name+" · "+validItems.length+" item(s)");
+    setModal(false);setItems([]);setNotes("");
   };
+
   const approve=(r)=>{
     setTstock(p=>p.map(t=>{const it=r.items.find(i=>i.sid===t.sid&&t.uid===r.uid);return it?{...t,qty:Math.max(0,t.qty-it.qty)}:t;}));
     setReturns(p=>p.map(x=>x.id===r.id?{...x,status:"approved",rDate:now(),rBy:currentUser.name}:x));
-    addLog(currentUser.name,"Devolução Aprovada",`Técnico: ${users.find(u=>u.id===r.uid)?.name}`);
+    addLog(currentUser.name,"Devolução Aprovada","Técnico: "+(users.find(u=>u.id===r.uid)?.name));
   };
+
   const sc={pending:"ylw",approved:"grn",rejected:"red"};
   const sl={pending:"⏳ Pendente",approved:"✅ Aprovada",rejected:"❌ Rejeitada"};
+
   return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
       <h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Devoluções</h1>
-      {isTec&&<Btn color="gold" size={isMobile?"sm":"md"} onClick={()=>setModal(true)}>↩ Solicitar</Btn>}
+      {isTec&&<Btn color="gold" size={isMobile?"sm":"md"} onClick={()=>{setItems([]);setNotes("");setModal(true);}}>↩ Solicitar Devolução</Btn>}
     </div>
-    {viewRet.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted}}>Nenhuma devolução registrada.</span></Card>}
+
+    {viewRet.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted,fontSize:13}}>Nenhuma devolução registrada.</span></Card>}
     {viewRet.map(r=>{
       const tech=users.find(u=>u.id===r.uid);
       return <Card key={r.id} style={{padding:16,borderLeft:`3px solid ${r.status==="pending"?C.ylw:r.status==="approved"?C.grn:C.red}`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:8}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:10}}>
               <Bdg color={sc[r.status]}>{sl[r.status]}</Bdg>
-              <span style={{fontSize:13,fontWeight:600,color:C.txt}}>{tech?.name||"?"}</span>
+              <span style={{fontSize:13,fontWeight:700,color:C.txt}}>{tech?.name||"?"}</span>
               <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:C.muted}}>{r.date}</span>
             </div>
-            {r.notes&&<div style={{fontSize:12,color:C.muted,marginBottom:8}}>"{r.notes}"</div>}
-            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-              {r.items.map((it,i)=>{const s=stock.find(x=>x.id===it.sid);return <div key={i} style={{background:C.surf,borderRadius:5,padding:"4px 10px",fontSize:11,color:C.txt2}}>{s?.name?.split(" ")[0]||it.sid} <span style={{color:C.gold}}>×{it.qty}</span></div>;})}
+            {r.notes&&<div style={{fontSize:12,color:C.muted,marginBottom:8,fontStyle:"italic"}}>"{r.notes}"</div>}
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:6}}>
+              {r.items.map((it,i)=>{const s=stock.find(x=>x.id===it.sid);return(
+                <div key={i} style={{background:C.surf,borderRadius:8,padding:"8px 10px",border:`1px solid ${C.bdr}`}}>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:C.muted}}>{s?.code||"—"}</div>
+                  <div style={{fontSize:12,fontWeight:600,color:C.txt,lineHeight:1.3,marginTop:2}}>{s?.name||"?"}</div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:4}}>
+                    <span style={{fontSize:10,color:C.muted}}>{s?.unit||""}</span>
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:16}}>{fmt(it.qty)}</span>
+                  </div>
+                </div>
+              );})}
             </div>
+            {r.rBy&&<div style={{fontSize:11,color:C.muted,marginTop:8}}>{sl[r.status]} por <strong style={{color:C.txt2}}>{r.rBy}</strong> em {r.rDate}</div>}
           </div>
-          {!isTec&&r.status==="pending"&&<div style={{display:"flex",gap:8,flexShrink:0}}>
+          {!isTec&&r.status==="pending"&&<div style={{display:"flex",flexDirection:"column",gap:8,flexShrink:0}}>
             <Btn size="sm" color="grn" onClick={()=>approve(r)}>✓ Aprovar</Btn>
-            <Btn size="sm" color="red" outline onClick={()=>setReturns(p=>p.map(x=>x.id===r.id?{...x,status:"rejected",rDate:now(),rBy:currentUser.name}:x))}>✕</Btn>
+            <Btn size="sm" color="red" outline onClick={()=>setReturns(p=>p.map(x=>x.id===r.id?{...x,status:"rejected",rDate:now(),rBy:currentUser.name}:x))}>✕ Rejeitar</Btn>
           </div>}
         </div>
       </Card>;
     })}
-    {modal&&<Modal title="Solicitar Devolução" onClose={()=>setModal(false)} isMobile={isMobile}>
-      <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        <Inp label="Observação" value={form.notes} onChange={v=>setForm(f=>({...f,notes:v}))} placeholder="Ex: Sobrou do serviço"/>
-        {form.items.map((it,i)=>(
-          <div key={i} style={{display:"flex",flexDirection:isMobile?"column":"row",gap:8}}>
-            <div style={{flex:1}}><Sel value={it.sid} onChange={v=>updRow(i,"sid",v)} options={myOpts}/></div>
-            <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
-              <div style={{width:isMobile?"100%":110,flex:isMobile?1:"none"}}><Inp value={it.qty} onChange={v=>updRow(i,"qty",v)} placeholder="Qtd" type="number"/></div>
-              <Btn size="sm" color="red" outline onClick={()=>setForm(f=>({...f,items:f.items.filter((_,j)=>j!==i)}))}>✕</Btn>
-            </div>
+
+    {modal&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
+      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,width:"100%",maxWidth:560,maxHeight:isMobile?"92vh":"85vh",display:"flex",flexDirection:"column",position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
+        <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+          <div>
+            <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>↩ Solicitar Devolução</h2>
+            <div style={{fontSize:11,color:C.muted,marginTop:2}}>{validItems.length} material(is) selecionado(s)</div>
           </div>
-        ))}
-        <div style={{display:"flex",gap:10,justifyContent:"space-between"}}>
-          <Btn color="ghost" outline size="sm" onClick={()=>setForm(f=>({...f,items:[...f.items,{sid:"",qty:""}]}))}>+ Material</Btn>
-          <div style={{display:"flex",gap:8}}>
-            <Btn color="ghost" outline onClick={()=>setModal(false)}>Cancelar</Btn>
-            <Btn color="gold" onClick={submit}>Enviar</Btn>
-          </div>
+          <button onClick={()=>setModal(false)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+        </div>
+        <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:12}}>
+          <Inp label="Observação" value={notes} onChange={setNotes} placeholder="Ex: Sobrou do serviço, OS-001..."/>
+          <ItemList
+            items={items}
+            onAdd={()=>setItems(p=>[...p,blank()])}
+            onUpdate={updItem}
+            onRemove={remItem}
+            stockOptions={myTstock.map(t=>{const s=stock.find(x=>x.id===t.sid);return s?{...s,qty:t.qty}:null;}).filter(Boolean)}
+            isMobile={isMobile}
+            label="Materiais a Devolver"
+            addLabel="Clique para adicionar o primeiro material a devolver"
+          />
+        </div>
+        <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,flexShrink:0,display:"flex",justifyContent:"flex-end",gap:10}}>
+          <Btn color="ghost" outline onClick={()=>setModal(false)}>Cancelar</Btn>
+          <Btn color="gold" onClick={submit} disabled={validItems.length===0}>📤 Enviar {validItems.length>0?validItems.length+" item(is)":""}</Btn>
         </div>
       </div>
-    </Modal>}
+    </div>}
   </div>;
 }
 
@@ -1090,14 +1064,15 @@ function NFPage({nf,setNf,stock,setStock,addLog,currentUser,isMobile}){
   const blank=()=>({id:uid(),sid:"",qty:"",val:""});
   const[modal,setModal]=useState(false);
   const[form,setForm]=useState({num:"",supplier:"",date:"",obs:""});
-  const[items,setItems]=useState([blank(),blank(),blank()]);
+  const[items,setItems]=useState([]);
   const[novoMat,setNovoMat]=useState(null);
   const[formNM,setFormNM]=useState({code:"",name:"",cat:"Equipamentos",unit:"un",min:"0"});
   const[err,setErr]=useState("");
 
   const updItem=(id,k,v)=>setItems(p=>p.map(r=>r.id===id?{...r,[k]:v}:r));
-  const addLinhas=(n)=>setItems(p=>[...p,...Array.from({length:n},blank)]);
-  const remItem=(id)=>setItems(p=>p.length>1?p.filter(r=>r.id!==id):p);
+  const remItem=(id)=>setItems(p=>p.filter(r=>r.id!==id));
+  const validItems=items.filter(r=>r.sid&&parseInt(r.qty)>0);
+  const totalPreview=items.reduce((a,r)=>a+(parseFloat(r.val)||0),0);
 
   const salvarNM=()=>{
     if(!formNM.name.trim())return;
@@ -1109,23 +1084,14 @@ function NFPage({nf,setNf,stock,setStock,addLog,currentUser,isMobile}){
     setFormNM({code:"",name:"",cat:"Equipamentos",unit:"un",min:"0"});
   };
 
-  const validItems=items.filter(r=>r.sid&&parseInt(r.qty)>0);
-  const totalPreview=items.reduce((a,r)=>a+(parseFloat(r.val)||0),0);
-
-  const abrirModal=()=>{
-    setForm({num:"",supplier:"",date:"",obs:""});
-    setItems([blank(),blank(),blank()]);
-    setErr(""); setNovoMat(null);
-    setModal(true);
-  };
+  const abrirModal=()=>{setForm({num:"",supplier:"",date:"",obs:""});setItems([]);setErr("");setNovoMat(null);setModal(true);};
 
   const save=()=>{
     if(!form.num.trim()){setErr("Informe o número da NF.");return;}
     if(!form.supplier.trim()){setErr("Informe o fornecedor.");return;}
     if(!validItems.length){setErr("Adicione ao menos 1 item com material e quantidade.");return;}
     const total=validItems.reduce((a,r)=>a+(parseFloat(r.val)||0),0);
-    setNf(p=>[{id:uid(),num:form.num.trim(),supplier:form.supplier.trim(),
-      date:form.date,obs:form.obs,
+    setNf(p=>[{id:uid(),num:form.num.trim(),supplier:form.supplier.trim(),date:form.date,obs:form.obs,
       items:validItems.map(r=>({sid:r.sid,qty:parseInt(r.qty),val:parseFloat(r.val)||0})),
       total,registeredBy:currentUser.name,registeredAt:now()},...p]);
     setStock(p=>p.map(s=>{const it=validItems.find(r=>r.sid===s.id);return it?{...s,qty:s.qty+parseInt(it.qty)}:s;}));
@@ -1154,17 +1120,19 @@ function NFPage({nf,setNf,stock,setStock,addLog,currentUser,isMobile}){
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted}}>{n.date}</span>
                 {n.registeredBy&&<span style={{fontSize:11,color:C.muted}}>· {n.registeredBy}</span>}
               </div>
-              <div style={{display:"flex",flexDirection:"column",gap:3}}>
+              <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:6,marginBottom:6}}>
                 {n.items.map((it,i)=>{const s=stock.find(x=>x.id===it.sid);return(
-                  <div key={i} style={{display:"flex",alignItems:"center",gap:8,background:C.surf,borderRadius:6,padding:"5px 10px"}}>
-                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:C.muted,minWidth:60}}>{s?.code||"—"}</span>
-                    <span style={{fontSize:12,color:C.txt,flex:1}}>{s?.name||"?"}</span>
-                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:C.grn,fontSize:12}}>+{fmt(it.qty)} {s?.unit||""}</span>
-                    {it.val>0&&<span style={{fontSize:11,color:C.muted}}>R$ {fmt(it.val)}</span>}
+                  <div key={i} style={{background:C.surf,borderRadius:8,padding:"8px 10px",border:`1px solid ${C.bdr}`}}>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:C.muted}}>{s?.code||"—"}</div>
+                    <div style={{fontSize:12,fontWeight:600,color:C.txt,lineHeight:1.3,marginTop:2}}>{s?.name||"?"}</div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:4}}>
+                      <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:C.grn,fontSize:13}}>+{fmt(it.qty)} {s?.unit||""}</span>
+                      {it.val>0&&<span style={{fontSize:10,color:C.muted}}>R${fmt(it.val)}</span>}
+                    </div>
                   </div>
                 );})}
               </div>
-              {n.obs&&<div style={{fontSize:11,color:C.muted,marginTop:6,fontStyle:"italic"}}>📝 {n.obs}</div>}
+              {n.obs&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>📝 {n.obs}</div>}
             </div>
             <div style={{textAlign:"right",flexShrink:0}}>
               <div style={{fontSize:10,color:C.muted}}>TOTAL</div>
@@ -1176,26 +1144,17 @@ function NFPage({nf,setNf,stock,setStock,addLog,currentUser,isMobile}){
       ))}
     </div>
 
-    {modal&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:"16px"}}>
-      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,
-        borderRadius:isMobile?"16px 16px 0 0":12,
-        width:"100%",maxWidth:860,
-        height:isMobile?"95vh":"92vh",
-        display:"flex",flexDirection:"column"}}>
-
-        {/* Cabeçalho fixo */}
+    {modal&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
+      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,width:"100%",maxWidth:640,height:isMobile?"95vh":"90vh",display:"flex",flexDirection:"column",position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
         <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
           <div>
-            <h2 style={{fontSize:16,fontWeight:700,color:C.txt}}>📥 Nova Nota Fiscal</h2>
-            <div style={{fontSize:11,color:C.muted,marginTop:2}}>{validItems.length} item(s) preenchido(s) · Total: <span style={{color:C.grn,fontWeight:700}}>R$ {fmt(totalPreview)}</span></div>
+            <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>📥 Nova Nota Fiscal</h2>
+            <div style={{fontSize:11,color:C.muted,marginTop:2}}>{validItems.length} item(s) · Total: <span style={{color:C.grn,fontWeight:700}}>R$ {fmt(totalPreview)}</span></div>
           </div>
           <button onClick={()=>setModal(false)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
         </div>
 
-        {/* Corpo com scroll */}
         <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:14}}>
-
-          {/* Dados da NF */}
           <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
             <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".08em",marginBottom:10}}>📄 DADOS DA NOTA FISCAL</div>
             <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10}}>
@@ -1208,124 +1167,70 @@ function NFPage({nf,setNf,stock,setStock,addLog,currentUser,isMobile}){
             </div>
           </div>
 
-          {/* Tabela de itens */}
-          <div style={{background:C.surf,borderRadius:10,border:`1px solid ${C.bdr}`,overflow:"hidden"}}>
-            <div style={{padding:"12px 14px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".08em"}}>
-                📦 ITENS DA NOTA
-                <span style={{background:`${C.gold}22`,color:C.gold,fontSize:11,fontWeight:800,padding:"2px 8px",borderRadius:4,marginLeft:8}}>{items.length} linhas</span>
-                <span style={{background:`${C.grn}22`,color:C.grn,fontSize:11,fontWeight:800,padding:"2px 8px",borderRadius:4,marginLeft:6}}>{validItems.length} preenchidos</span>
-              </div>
-              <div style={{display:"flex",gap:8}}>
-                <Btn size="xs" color="gold" outline onClick={()=>addLinhas(5)}>+5 linhas</Btn>
-                <Btn size="xs" color="gold" onClick={()=>addLinhas(1)}>+ 1 linha</Btn>
-              </div>
+          {/* Itens usando ItemList + botão novo material inline */}
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:2}}>
+              Itens da Nota <span style={{background:`${C.gold}22`,color:C.gold,fontSize:11,fontWeight:800,padding:"2px 8px",borderRadius:4,marginLeft:6}}>{validItems.length} item(s)</span>
             </div>
-
-            {/* Cabeçalho da tabela */}
-            {!isMobile&&<div style={{display:"grid",gridTemplateColumns:"2fr 100px 110px 36px",gap:8,padding:"8px 14px",background:C.card,borderBottom:`1px solid ${C.bdr}`}}>
-              <span style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:".06em"}}>Material</span>
-              <span style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:".06em"}}>Quantidade</span>
-              <span style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:".06em"}}>Valor (R$)</span>
-              <span/>
-            </div>}
-
-            {/* Linhas de itens */}
-            <div style={{padding:"8px 14px",display:"flex",flexDirection:"column",gap:6}}>
-              {items.map((it,idx)=>(
-                <div key={it.id} style={{
-                  display:"grid",
-                  gridTemplateColumns:isMobile?"1fr":"2fr 100px 110px 36px",
-                  gap:isMobile?8:6,
-                  alignItems:"center",
-                  padding:isMobile?"10px":"6px 8px",
-                  background:it.sid?`${C.gold}08`:C.card,
-                  borderRadius:8,
-                  border:`1px solid ${it.sid?`${C.gold}33`:C.bdr2}`}}>
-
-                  {isMobile&&<div style={{fontSize:10,fontWeight:700,color:C.muted}}>ITEM {idx+1}</div>}
-
-                  {/* Material + botão novo */}
+            {items.map((it,idx)=>{
+              const s=it.sid?stock.find(x=>x.id===it.sid):null;
+              return <div key={it.id} style={{display:"flex",alignItems:"flex-start",gap:8,background:it.sid?`${C.gold}08`:C.surf,borderRadius:10,padding:"10px 12px",border:`1px solid ${it.sid?`${C.gold}44`:C.bdr2}`}}>
+                <div style={{width:24,height:24,borderRadius:"50%",background:`${C.gold}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:C.gold,flexShrink:0,marginTop:2}}>{idx+1}</div>
+                <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:6}}>
                   <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                    <div style={{flex:1}}>
-                      <select value={it.sid} onChange={e=>updItem(it.id,"sid",e.target.value)}
-                        style={{width:"100%",background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:6,padding:"8px 10px",color:it.sid?C.txt:C.muted,fontSize:13}}>
-                        <option value="">— Selecionar material —</option>
-                        {stock.map(s=><option key={s.id} value={s.id}>[{s.code||"—"}] {s.name} ({s.qty} {s.unit})</option>)}
-                      </select>
-                    </div>
+                    <select value={it.sid} onChange={e=>updItem(it.id,"sid",e.target.value)}
+                      style={{flex:1,background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:7,padding:"9px 10px",color:it.sid?C.txt:C.muted,fontSize:13}}>
+                      <option value="">— Selecionar material —</option>
+                      {stock.map(s=><option key={s.id} value={s.id}>[{s.code||"—"}] {s.name} ({s.qty} {s.unit})</option>)}
+                    </select>
                     <button onClick={()=>{setNovoMat(it.id);setFormNM({code:"",name:"",cat:"Equipamentos",unit:"un",min:"0"});}}
-                      title="Cadastrar novo material"
-                      style={{background:`${C.gold}22`,color:C.gold,border:`1px solid ${C.gold}55`,borderRadius:6,
-                        width:32,height:32,cursor:"pointer",fontWeight:800,fontSize:16,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                      +
-                    </button>
+                      title="Novo material" style={{background:`${C.gold}22`,color:C.gold,border:`1px solid ${C.gold}55`,borderRadius:7,width:32,height:36,cursor:"pointer",fontWeight:800,fontSize:16,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
                   </div>
-
-                  {/* Qtd */}
-                  <input type="number" value={it.qty} onChange={e=>updItem(it.id,"qty",e.target.value)}
-                    placeholder="0"
-                    style={{background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:6,padding:"8px 10px",color:C.txt,fontSize:13,width:"100%"}}/>
-
-                  {/* Valor */}
-                  <input type="number" value={it.val} onChange={e=>updItem(it.id,"val",e.target.value)}
-                    placeholder="0,00"
-                    style={{background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:6,padding:"8px 10px",color:C.txt,fontSize:13,width:"100%"}}/>
-
-                  {/* Remover */}
-                  <button onClick={()=>remItem(it.id)}
-                    style={{background:"transparent",color:C.muted2,border:"none",cursor:"pointer",fontSize:16,
-                      width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:6}}>
-                    ✕
-                  </button>
-
-                  {/* Cadastro novo material inline */}
-                  {novoMat===it.id&&<div style={{gridColumn:"1/-1",background:`${C.gold}11`,border:`1px solid ${C.gold}44`,borderRadius:8,padding:12,marginTop:4}}>
-                    <div style={{fontSize:11,fontWeight:700,color:C.gold,marginBottom:10}}>✨ CADASTRAR NOVO MATERIAL</div>
+                  {s&&<div style={{fontSize:10,color:C.grn}}>✓ {s.name} · Estoque: {s.qty} {s.unit}</div>}
+                  {novoMat===it.id&&<div style={{background:`${C.gold}11`,border:`1px solid ${C.gold}44`,borderRadius:8,padding:10}}>
+                    <div style={{fontSize:11,fontWeight:700,color:C.gold,marginBottom:8}}>✨ Cadastrar Novo Material</div>
                     <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:8,marginBottom:8}}>
-                      <Inp label="Código" value={formNM.code} onChange={v=>setFormNM(f=>({...f,code:v}))} placeholder="Ex: ONU-010"/>
-                      <Inp label="Nome do Material *" value={formNM.name} onChange={v=>setFormNM(f=>({...f,name:v}))} placeholder="Nome completo"/>
+                      <Inp label="Código" value={formNM.code} onChange={v=>setFormNM(f=>({...f,code:v}))} placeholder="ONU-010"/>
+                      <Inp label="Nome *" value={formNM.name} onChange={v=>setFormNM(f=>({...f,name:v}))} placeholder="Nome completo"/>
                     </div>
-                    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:8,marginBottom:10}}>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
                       <Sel label="Categoria" value={formNM.cat} onChange={v=>setFormNM(f=>({...f,cat:v}))} options={CATS.map(c=>({value:c,label:c}))}/>
-                      <Inp label="Unidade" value={formNM.unit} onChange={v=>setFormNM(f=>({...f,unit:v}))} placeholder="un, m, rolo..."/>
-                      <Inp label="Qtd Mínima" value={formNM.min} onChange={v=>setFormNM(f=>({...f,min:v}))} type="number"/>
+                      <Inp label="Unidade" value={formNM.unit} onChange={v=>setFormNM(f=>({...f,unit:v}))} placeholder="un, m..."/>
+                      <Inp label="Qtd Mín." value={formNM.min} onChange={v=>setFormNM(f=>({...f,min:v}))} type="number"/>
                     </div>
                     <div style={{display:"flex",gap:8}}>
                       <Btn size="sm" color="ghost" outline onClick={()=>setNovoMat(null)}>Cancelar</Btn>
                       <Btn size="sm" color="gold" onClick={salvarNM}>✓ Cadastrar e Selecionar</Btn>
                     </div>
                   </div>}
+                  <div style={{display:"flex",gap:6}}>
+                    <input type="number" value={it.qty} onChange={e=>updItem(it.id,"qty",e.target.value)} placeholder="Quantidade" min="0"
+                      style={{flex:1,background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:7,padding:"8px 10px",color:C.txt,fontSize:14,fontWeight:700,textAlign:"center"}}/>
+                    <input type="number" value={it.val||""} onChange={e=>updItem(it.id,"val",e.target.value)} placeholder="Valor R$" min="0"
+                      style={{flex:1,background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:7,padding:"8px 10px",color:C.txt,fontSize:13}}/>
+                  </div>
                 </div>
-              ))}
-            </div>
-
-            {/* Botões adicionar linhas */}
-            <div style={{padding:"10px 14px",borderTop:`1px solid ${C.bdr}`,display:"flex",gap:8,flexWrap:"wrap"}}>
-              <button onClick={()=>addLinhas(1)} style={{background:"transparent",border:`1.5px dashed ${C.bdr2}`,borderRadius:7,padding:"7px 16px",color:C.muted,cursor:"pointer",fontSize:12,fontWeight:600}}>+ 1 linha</button>
-              <button onClick={()=>addLinhas(5)} style={{background:"transparent",border:`1.5px dashed ${C.bdr2}`,borderRadius:7,padding:"7px 16px",color:C.muted,cursor:"pointer",fontSize:12,fontWeight:600}}>+ 5 linhas</button>
-              <button onClick={()=>addLinhas(10)} style={{background:"transparent",border:`1.5px dashed ${C.bdr2}`,borderRadius:7,padding:"7px 16px",color:C.muted,cursor:"pointer",fontSize:12,fontWeight:600}}>+ 10 linhas</button>
-            </div>
+                <button onClick={()=>remItem(it.id)} style={{background:C.redD,color:C.red,border:"none",borderRadius:7,width:30,height:30,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>✕</button>
+              </div>;
+            })}
+            <button onClick={()=>setItems(p=>[...p,blank()])} style={{width:"100%",padding:"13px",background:items.length===0?`${C.gold}18`:"transparent",border:`2px dashed ${C.gold}`,borderRadius:10,color:C.gold,cursor:"pointer",fontSize:13,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+              <span style={{fontSize:20,lineHeight:1}}>+</span>
+              {items.length===0?"Clique para adicionar o primeiro item da nota":"Adicionar mais um item"}
+            </button>
+            {items.length===0&&<div style={{textAlign:"center",fontSize:11,color:C.muted2,marginTop:-4}}>Adicione todos os itens da nota e registre no final</div>}
           </div>
 
           {err&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",color:C.red,fontSize:13}}>⚠️ {err}</div>}
         </div>
 
-        {/* Rodapé fixo com total e botão */}
         <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-          <div style={{display:"flex",gap:20,alignItems:"center"}}>
-            <div>
-              <div style={{fontSize:10,color:C.muted}}>ITENS PREENCHIDOS</div>
-              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:20,fontWeight:800,color:C.gold}}>{validItems.length}</div>
-            </div>
-            <div>
-              <div style={{fontSize:10,color:C.muted}}>VALOR TOTAL</div>
-              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:20,fontWeight:800,color:C.grn}}>R$ {fmt(totalPreview)}</div>
-            </div>
+          <div>
+            <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.grn,fontSize:18}}>R$ {fmt(totalPreview)}</span>
+            <span style={{fontSize:12,color:C.muted,marginLeft:8}}>{validItems.length} item(s)</span>
           </div>
           <div style={{display:"flex",gap:10}}>
             <Btn color="ghost" outline onClick={()=>setModal(false)}>Cancelar</Btn>
-            <Btn color="gold" onClick={save} style={{minWidth:180}}>✅ Registrar Nota Fiscal</Btn>
+            <Btn color="gold" onClick={save} disabled={validItems.length===0}>✅ Registrar Nota Fiscal</Btn>
           </div>
         </div>
       </div>
