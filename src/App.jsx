@@ -1781,42 +1781,49 @@ function EmailPage({stock,os,returns,users,isMobile}){
 function SolicitacaoPage({solicitacoes,setSolicitacoes,stock,setStock,tstock,setTstock,users,currentUser,addLog,isMobile}){
   const isTec=currentUser.role==="tecnico";
   const[modal,setModal]=useState(false);
-  const[form,setForm]=useState({items:[{sid:"",qty:"",obs:""}],urgencia:"normal",notes:""});
+  const blank=()=>({id:uid(),sid:"",qty:""});
+  const[form,setForm]=useState({urgencia:"normal",notes:"",items:[blank(),blank(),blank()]});
   const[msg,setMsg]=useState("");
-  const updRow=(i,k,v)=>setForm(f=>({...f,items:f.items.map((r,j)=>j===i?{...r,[k]:v}:r)}));
+
+  const updItem=(id,k,v)=>setForm(f=>({...f,items:f.items.map(r=>r.id===id?{...r,[k]:v}:r)}));
+  const addLinhas=(n)=>setForm(f=>({...f,items:[...f.items,...Array.from({length:n},blank)]}));
+  const remItem=(id)=>setForm(f=>({...f,items:f.items.length>1?f.items.filter(r=>r.id!==id):f.items}));
+
+  const validItems=form.items.filter(r=>r.sid&&parseInt(r.qty)>0);
   const viewSol=isTec?solicitacoes.filter(s=>s.uid===currentUser.id):solicitacoes;
   const pendentes=solicitacoes.filter(s=>s.status==="pending");
 
   const enviar=()=>{
-    const valid=form.items.filter(r=>r.sid&&parseInt(r.qty)>0);
-    if(!valid.length){setMsg("err:Adicione ao menos 1 material.");return;}
-    const nova={id:uid(),uid:currentUser.id,date:now(),items:valid.map(r=>({sid:r.sid,qty:parseInt(r.qty),obs:r.obs})),status:"pending",urgencia:form.urgencia,notes:form.notes,rDate:null,rBy:null};
+    if(!validItems.length){setMsg("err:Preencha ao menos 1 material e quantidade.");return;}
+    const nova={id:uid(),uid:currentUser.id,date:now(),
+      items:validItems.map(r=>({sid:r.sid,qty:parseInt(r.qty)})),
+      status:"pending",urgencia:form.urgencia,notes:form.notes,rDate:null,rBy:null};
     setSolicitacoes(p=>[nova,...p]);
-    addLog(currentUser.name,"Solicitação",`${currentUser.name} solicitou ${valid.length} item(s)`);
-    setModal(false);setForm({items:[{sid:"",qty:"",obs:""}],urgencia:"normal",notes:""});
-    setMsg("ok:Solicitação enviada! O estoque será notificado.");
+    addLog(currentUser.name,"Solicitação",currentUser.name+" solicitou "+validItems.length+" item(s)");
+    setModal(false);
+    setForm({urgencia:"normal",notes:"",items:[blank(),blank(),blank()]});
+    setMsg("ok:Solicitação enviada com sucesso!");
     setTimeout(()=>setMsg(""),5000);
   };
 
   const confirmar=(sol)=>{
     let ok=true;
-    sol.items.forEach(it=>{const s=stock.find(x=>x.id===it.sid);if(!s||s.qty<it.qty){ok=false;alert(`Estoque insuficiente: ${s?.name||it.sid}`);}});
+    sol.items.forEach(it=>{const s=stock.find(x=>x.id===it.sid);if(!s||s.qty<it.qty){ok=false;alert("Estoque insuficiente: "+(s?.name||it.sid));}});
     if(!ok)return;
     setStock(p=>p.map(s=>{const it=sol.items.find(i=>i.sid===s.id);return it?{...s,qty:s.qty-it.qty}:s;}));
     setTstock(p=>{let n=[...p];sol.items.forEach(it=>{const ex=n.find(t=>t.uid===sol.uid&&t.sid===it.sid);if(ex)n=n.map(t=>t.id===ex.id?{...t,qty:t.qty+it.qty}:t);else n.push({id:uid(),uid:sol.uid,sid:it.sid,qty:it.qty});});return n;});
     setSolicitacoes(p=>p.map(s=>s.id===sol.id?{...s,status:"confirmed",rDate:now(),rBy:currentUser.name}:s));
-    const tech=users.find(u=>u.id===sol.uid);
-    addLog(currentUser.name,"Saída",`Solicitação confirmada · ${tech?.name} · ${sol.items.length} item(s)`);
+    addLog(currentUser.name,"Saída","Solicitação confirmada · "+(users.find(u=>u.id===sol.uid)?.name));
   };
 
   const rejeitar=(sol)=>{
     setSolicitacoes(p=>p.map(s=>s.id===sol.id?{...s,status:"rejected",rDate:now(),rBy:currentUser.name}:s));
-    addLog(currentUser.name,"Solicitação Rejeitada",`Técnico: ${users.find(u=>u.id===sol.uid)?.name}`);
+    addLog(currentUser.name,"Solicitação Rejeitada","Técnico: "+(users.find(u=>u.id===sol.uid)?.name));
   };
 
   const sc={pending:"ylw",confirmed:"grn",rejected:"red"};
   const sl={pending:"⏳ Aguardando",confirmed:"✅ Confirmada",rejected:"❌ Rejeitada"};
-  const urg={normal:{label:"Normal",color:C.muted},urgente:{label:"🔴 Urgente",color:C.red},alta:{label:"🟡 Alta",color:C.ylw}};
+  const urg={normal:{label:"Normal",color:C.muted},alta:{label:"🟡 Alta",color:C.ylw},urgente:{label:"🔴 Urgente",color:C.red}};
 
   return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
@@ -1834,36 +1841,42 @@ function SolicitacaoPage({solicitacoes,setSolicitacoes,stock,setStock,tstock,set
 
     {viewSol.length===0&&<Card style={{padding:40,textAlign:"center"}}>
       <div style={{fontSize:32,marginBottom:10}}>📋</div>
-      <div style={{fontSize:14,color:C.muted}}>{isTec?"Você não tem solicitações. Clique em Nova Solicitação!":"Nenhuma solicitação recebida ainda."}</div>
+      <div style={{fontSize:14,color:C.muted}}>{isTec?"Nenhuma solicitação feita ainda. Clique em Nova Solicitação!":"Nenhuma solicitação recebida."}</div>
     </Card>}
 
     <div style={{display:"flex",flexDirection:"column",gap:10}}>
       {viewSol.map(sol=>{
         const tech=users.find(u=>u.id===sol.uid);
-        const isUrgente=sol.urgencia==="urgente";
-        return <Card key={sol.id} style={{padding:16,borderLeft:`3px solid ${sol.status==="pending"?isUrgente?C.red:C.ylw:sol.status==="confirmed"?C.grn:C.red}`}}>
+        const isUrg=sol.urgencia==="urgente";
+        return <Card key={sol.id} style={{padding:16,borderLeft:`3px solid ${sol.status==="pending"?isUrg?C.red:C.ylw:sol.status==="confirmed"?C.grn:C.red}`}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:8}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:10}}>
                 <Bdg color={sc[sol.status]}>{sl[sol.status]}</Bdg>
                 {sol.urgencia!=="normal"&&<span style={{fontSize:11,fontWeight:700,color:urg[sol.urgencia]?.color}}>{urg[sol.urgencia]?.label}</span>}
                 <span style={{fontSize:13,fontWeight:700,color:C.txt}}>👷 {tech?.name||"?"}</span>
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:C.muted}}>{sol.date}</span>
               </div>
-              {sol.notes&&<div style={{fontSize:12,color:C.muted,marginBottom:8,fontStyle:"italic"}}>"{sol.notes}"</div>}
-              <div style={{display:"flex",flexDirection:"column",gap:4}}>
+              {sol.notes&&<div style={{fontSize:12,color:C.muted,marginBottom:10,fontStyle:"italic"}}>"{sol.notes}"</div>}
+
+              {/* Materiais em grade 3 colunas */}
+              <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:6}}>
                 {sol.items.map((it,i)=>{const s=stock.find(x=>x.id===it.sid);return(
-                  <div key={i} style={{display:"flex",alignItems:"center",gap:8,background:C.surf,borderRadius:6,padding:"6px 10px"}}>
-                    <span style={{fontSize:12,color:C.txt,flex:1}}>{s?.name||it.sid}</span>
-                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:C.gold,fontSize:14}}>×{it.qty} {s?.unit||""}</span>
-                    {it.obs&&<span style={{fontSize:10,color:C.muted}}>· {it.obs}</span>}
+                  <div key={i} style={{background:C.surf,borderRadius:8,padding:"8px 10px",border:`1px solid ${C.bdr}`}}>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:C.muted}}>{s?.code||"—"}</div>
+                    <div style={{fontSize:12,fontWeight:600,color:C.txt,lineHeight:1.3,marginTop:2}}>{s?.name||"?"}</div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:4}}>
+                      <span style={{fontSize:10,color:C.muted}}>{s?.unit||""}</span>
+                      <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:16}}>{fmt(it.qty)}</span>
+                    </div>
                   </div>
                 );})}
               </div>
-              {sol.rBy&&<div style={{fontSize:11,color:C.muted,marginTop:8}}>{sl[sol.status].replace(/[^a-zA-Záéíóúàèìòùâêîôûãõ ]/g,"")} por <strong style={{color:C.txt2}}>{sol.rBy}</strong> em {sol.rDate}</div>}
+
+              {sol.rBy&&<div style={{fontSize:11,color:C.muted,marginTop:8}}>{sl[sol.status].replace(/[^\w\s]/g,"")} por <strong style={{color:C.txt2}}>{sol.rBy}</strong> em {sol.rDate}</div>}
             </div>
             {!isTec&&sol.status==="pending"&&<div style={{display:"flex",flexDirection:isMobile?"row":"column",gap:8,flexShrink:0}}>
-              <Btn size="sm" color="grn" onClick={()=>confirmar(sol)} style={{whiteSpace:"nowrap"}}>✓ Confirmar Entrega</Btn>
+              <Btn size="sm" color="grn" onClick={()=>confirmar(sol)}>✓ Confirmar</Btn>
               <Btn size="sm" color="red" outline onClick={()=>rejeitar(sol)}>✕ Rejeitar</Btn>
             </div>}
           </div>
@@ -1871,35 +1884,114 @@ function SolicitacaoPage({solicitacoes,setSolicitacoes,stock,setStock,tstock,set
       })}
     </div>
 
-    {modal&&<Modal title="Nova Solicitação de Material" onClose={()=>setModal(false)} isMobile={isMobile}>
-      <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
-          <Sel label="Urgência" value={form.urgencia} onChange={v=>setForm(f=>({...f,urgencia:v}))} options={[{value:"normal",label:"Normal"},{value:"alta",label:"🟡 Alta Prioridade"},{value:"urgente",label:"🔴 Urgente"}]}/>
-          <Inp label="Observação Geral" value={form.notes} onChange={v=>setForm(f=>({...f,notes:v}))} placeholder="Ex: Para instalação amanhã"/>
-        </div>
-        <div style={{fontSize:12,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:".06em"}}>Materiais Solicitados</div>
-        {form.items.map((it,i)=>(
-          <div key={i} style={{background:C.surf,borderRadius:8,padding:"12px",border:`1px solid ${C.bdr}`}}>
-            <div style={{display:"flex",gap:8,alignItems:"flex-end",marginBottom:8,flexWrap:isMobile?"wrap":"nowrap"}}>
-              <div style={{flex:2,minWidth:isMobile?"100%":"auto"}}><Sel value={it.sid} onChange={v=>updRow(i,"sid",v)} options={[{value:"",label:"Selecionar material..."},...stock.map(s=>({value:s.id,label:`[${s.code}] ${s.name} — Disponível: ${s.qty} ${s.unit}`}))]}/></div>
-              <div style={{width:isMobile?"100%":90,minWidth:isMobile?"100%":90}}><Inp value={it.qty} onChange={v=>updRow(i,"qty",v)} placeholder="Qtd" type="number" label={isMobile?"Quantidade":""}/></div>
-              {!isMobile&&<Btn size="sm" color="red" outline onClick={()=>setForm(f=>({...f,items:f.items.filter((_,j)=>j!==i)}))}>✕</Btn>}
-            </div>
-            <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              <div style={{flex:1}}><Inp value={it.obs} onChange={v=>updRow(i,"obs",v)} placeholder="Observação do item (opcional)"/></div>
-              {isMobile&&<Btn size="sm" color="red" outline onClick={()=>setForm(f=>({...f,items:f.items.filter((_,j)=>j!==i)}))}>✕</Btn>}
+    {/* Modal Nova Solicitação — estilo planilha */}
+    {modal&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
+      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,
+        borderRadius:isMobile?"16px 16px 0 0":12,
+        width:"100%",maxWidth:780,
+        height:isMobile?"95vh":"90vh",
+        display:"flex",flexDirection:"column",
+        position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
+
+        {/* Header fixo */}
+        <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+          <div>
+            <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>📋 Nova Solicitação de Material</h2>
+            <div style={{fontSize:11,color:C.muted,marginTop:2}}>
+              {validItems.length} item(s) preenchido(s) ·
+              <span style={{color:C.gold,fontWeight:700,marginLeft:4}}>{form.items.length} linhas</span>
             </div>
           </div>
-        ))}
-        <div style={{display:"flex",gap:10,justifyContent:"space-between",flexWrap:"wrap"}}>
-          <Btn color="ghost" outline size="sm" onClick={()=>setForm(f=>({...f,items:[...f.items,{sid:"",qty:"",obs:""}]}))}>+ Adicionar Material</Btn>
-          <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>setModal(false)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+        </div>
+
+        {/* Body scroll */}
+        <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:14}}>
+
+          {/* Urgência e obs */}
+          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".08em",marginBottom:12}}>⚙️ DETALHES DA SOLICITAÇÃO</div>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
+              <Sel label="Urgência" value={form.urgencia} onChange={v=>setForm(f=>({...f,urgencia:v}))} options={[{value:"normal",label:"Normal"},{value:"alta",label:"🟡 Alta Prioridade"},{value:"urgente",label:"🔴 Urgente"}]}/>
+              <Inp label="Observação" value={form.notes} onChange={v=>setForm(f=>({...f,notes:v}))} placeholder="Ex: Para instalação amanhã, OS-001..."/>
+            </div>
+          </div>
+
+          {/* Tabela de itens */}
+          <div style={{background:C.surf,borderRadius:10,border:`1px solid ${C.bdr}`,overflow:"hidden"}}>
+            <div style={{padding:"12px 14px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".08em"}}>
+                🔩 MATERIAIS SOLICITADOS
+                <span style={{background:`${C.gold}22`,color:C.gold,fontSize:11,fontWeight:800,padding:"2px 8px",borderRadius:4,marginLeft:8}}>{form.items.length} linhas</span>
+                <span style={{background:`${C.grn}22`,color:C.grn,fontSize:11,fontWeight:800,padding:"2px 8px",borderRadius:4,marginLeft:6}}>{validItems.length} preenchidos</span>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <Btn size="xs" color="gold" outline onClick={()=>addLinhas(5)}>+5 linhas</Btn>
+                <Btn size="xs" color="gold" onClick={()=>addLinhas(1)}>+ 1 linha</Btn>
+              </div>
+            </div>
+
+            {/* Cabeçalho */}
+            {!isMobile&&<div style={{display:"grid",gridTemplateColumns:"1fr 100px 36px",gap:8,padding:"8px 14px",background:C.card,borderBottom:`1px solid ${C.bdr}`}}>
+              <span style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:".06em"}}>Material</span>
+              <span style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:".06em"}}>Quantidade</span>
+              <span/>
+            </div>}
+
+            {/* Linhas */}
+            <div style={{padding:"8px 14px",display:"flex",flexDirection:"column",gap:6}}>
+              {form.items.map((it,idx)=>{
+                const s=it.sid?stock.find(x=>x.id===it.sid):null;
+                return <div key={it.id} style={{
+                  display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 100px 36px",
+                  gap:isMobile?8:6,alignItems:"center",
+                  padding:isMobile?"10px":"6px 8px",
+                  background:it.sid?`${C.gold}08`:C.card,
+                  borderRadius:8,border:`1px solid ${it.sid?`${C.gold}33`:C.bdr2}`}}>
+
+                  {isMobile&&<div style={{fontSize:10,fontWeight:700,color:C.muted}}>ITEM {idx+1}</div>}
+
+                  <div>
+                    <select value={it.sid} onChange={e=>updItem(it.id,"sid",e.target.value)}
+                      style={{width:"100%",background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:6,padding:"9px 10px",color:it.sid?C.txt:C.muted,fontSize:13}}>
+                      <option value="">— Selecionar material —</option>
+                      {stock.map(s=><option key={s.id} value={s.id}>[{s.code||"—"}] {s.name} | Estoque: {s.qty} {s.unit}</option>)}
+                    </select>
+                    {s&&<div style={{fontSize:10,color:C.grn,marginTop:3}}>✓ {s.name} · Estoque disponível: <strong>{s.qty}</strong> {s.unit}</div>}
+                  </div>
+
+                  <input type="number" value={it.qty} onChange={e=>updItem(it.id,"qty",e.target.value)}
+                    placeholder="0" min="0"
+                    style={{background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:6,padding:"9px 10px",color:C.txt,fontSize:14,fontWeight:700,width:"100%",textAlign:"center"}}/>
+
+                  <button onClick={()=>remItem(it.id)}
+                    style={{background:"transparent",color:C.muted2,border:"none",cursor:"pointer",fontSize:16,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:6}}>✕</button>
+                </div>;
+              })}
+            </div>
+
+            {/* Botões adicionar */}
+            <div style={{padding:"10px 14px",borderTop:`1px solid ${C.bdr}`,display:"flex",gap:8,flexWrap:"wrap"}}>
+              <button onClick={()=>addLinhas(1)} style={{background:"transparent",border:`1.5px dashed ${C.bdr2}`,borderRadius:7,padding:"7px 16px",color:C.muted,cursor:"pointer",fontSize:12,fontWeight:600}}>+ 1 linha</button>
+              <button onClick={()=>addLinhas(5)} style={{background:"transparent",border:`1.5px dashed ${C.bdr2}`,borderRadius:7,padding:"7px 16px",color:C.muted,cursor:"pointer",fontSize:12,fontWeight:600}}>+ 5 linhas</button>
+              <button onClick={()=>addLinhas(10)} style={{background:"transparent",border:`1.5px dashed ${C.bdr2}`,borderRadius:7,padding:"7px 16px",color:C.muted,cursor:"pointer",fontSize:12,fontWeight:600}}>+ 10 linhas</button>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Footer fixo */}
+        <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+          <div style={{fontSize:12,color:C.muted}}>
+            <span style={{color:C.gold,fontWeight:700,fontSize:16}}>{validItems.length}</span> item(s) preenchido(s)
+          </div>
+          <div style={{display:"flex",gap:10}}>
             <Btn color="ghost" outline onClick={()=>setModal(false)}>Cancelar</Btn>
-            <Btn color="gold" onClick={enviar}>📤 Enviar Solicitação</Btn>
+            <Btn color="gold" onClick={enviar} style={{minWidth:180}}>📤 Enviar Solicitação</Btn>
           </div>
         </div>
       </div>
-    </Modal>}
+    </div>}
   </div>;
 }
 
