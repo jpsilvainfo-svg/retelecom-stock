@@ -228,15 +228,15 @@ function Sidebar({user,page,setPage,onLogout}){
       ))}
     </nav>
     <div style={{padding:"10px",borderTop:`1px solid ${C.bdr}`}}>
-      <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px",background:C.card,borderRadius:8,marginBottom:6}}>
-        <div style={{width:32,height:32,borderRadius:"50%",background:`${C.gold}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0,overflow:"hidden"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px",background:C.card,borderRadius:8,marginBottom:6}}>
+        <div style={{width:28,height:28,borderRadius:"50%",background:`${C.gold}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0,overflow:"hidden"}}>
           {user.photo?<img src={user.photo} alt={user.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span>👤</span>}
         </div>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:12,fontWeight:600,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</div>
-          <div style={{fontSize:10,color:C.muted}}>{user.email}</div>
+          <div style={{fontSize:11,fontWeight:600,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</div>
+          <div style={{fontSize:9,color:C.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.email}</div>
         </div>
-        <span style={{background:C.gold,color:"#000",fontSize:9,fontWeight:800,padding:"2px 5px",borderRadius:3,flexShrink:0}}>{user.role==="admin"?"ADM":user.role==="estoque"?"EST":"TEC"}</span>
+        <span style={{background:C.gold,color:"#000",fontSize:8,fontWeight:800,padding:"1px 4px",borderRadius:3,flexShrink:0,letterSpacing:".03em"}}>{user.role==="admin"?"ADM":user.role==="estoque"?"EST":"TEC"}</span>
       </div>
       <div onClick={onLogout} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",cursor:"pointer",color:C.muted,fontSize:12,borderRadius:6}}>
         <span>🚪</span>Sair
