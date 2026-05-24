@@ -1392,7 +1392,7 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
       <Card style={{padding:0,overflow:"hidden"}}>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
-            <thead><THead cols={["FOTO","USUÁRIO","LOGIN","E-MAIL","TELEFONE","PERFIL","AÇÕES"]}/></thead>
+            <thead><THead cols={["FOTO","USUÁRIO","LOGIN","E-MAIL","TELEFONE","MATRÍCULA","PERFIL","AÇÕES"]}/></thead>
             <tbody>{users.map(u=>(
               <TRow key={u.id} cells={[
                 <Avatar user={u} size={36}/>,
@@ -1400,6 +1400,7 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:C.gold}}>{u.login}</span>,
                 <span style={{fontSize:12,color:C.muted}}>{u.email}</span>,
                 <span style={{fontSize:12,color:C.muted}}>{u.phone}</span>,
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted}}>{u.cpf||"—"}</span>,
                 <span style={{background:rc[u.role],color:"#000",fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:4}}>{rl[u.role]}</span>,
                 <div style={{display:"flex",gap:6}}>
                   <Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf||"",login:u.login,pass:u.pass,role:u.role,photo:u.photo||""});setModal(u.id);}}>Editar</Btn>
@@ -1434,7 +1435,7 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
         </div>
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
           <Inp label="Telefone" value={form.phone} onChange={v=>setForm(f=>({...f,phone:v}))} placeholder="(00) 00000-0000"/>
-          <Inp label="CPF" value={form.cpf||""} onChange={v=>setForm(f=>({...f,cpf:v}))} placeholder="000.000.000-00"/>
+          <Inp label="Matrícula" value={form.cpf||""} onChange={v=>setForm(f=>({...f,cpf:v}))} placeholder="Ex: MAT-001"/>
         </div>
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:12}}>
           <Inp label="Login *" value={form.login} onChange={v=>setForm(f=>({...f,login:v}))}/>
