@@ -209,6 +209,7 @@ function Sidebar({user,page,setPage,onLogout}){
     isAdm&&{k:"produtos",icon:"🔩",label:"Produtos"},
     isAdm&&{k:"usr",icon:"👥",label:"Usuários"},
     isAdm&&{k:"log",icon:"📋",label:"Logs do Sistema"},
+    (isAdm||user.role==="tecnico")&&{k:"frota",icon:"🚗",label:"Frota"},
   ].filter(Boolean);
   return <div style={{width:220,minWidth:220,background:C.surf,borderRight:`1px solid ${C.bdr}`,display:"flex",flexDirection:"column",height:"100vh",flexShrink:0}}>
     <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.bdr}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -265,6 +266,7 @@ function MobileDrawer({user,page,setPage,onLogout,onClose}){
     isAdm&&{k:"produtos",icon:"🔩",label:"Produtos"},
     isAdm&&{k:"usr",icon:"👥",label:"Usuários"},
     isAdm&&{k:"log",icon:"📋",label:"Logs do Sistema"},
+    (isAdm||user.role==="tecnico")&&{k:"frota",icon:"🚗",label:"Frota"},
   ].filter(Boolean);
   const go=(k)=>{setPage(k);onClose();};
   return <>
@@ -329,7 +331,7 @@ function TopBar({user,pendRet,pendSol,setPage,isMobile,onMenuOpen}){
 function BottomNav({page,setPage,user,onMenuOpen}){
   const isTec=user.role==="tecnico";
   const items=isTec
-    ?[{k:"dash",icon:"🏠",label:"Início"},{k:"os",icon:"🔧",label:"OS"},{k:"dev",icon:"↩️",label:"Devoluções"},{k:"kit",icon:"🎒",label:"Meu Kit"},{k:"__menu",icon:"☰",label:"Menu"}]
+    ?[{k:"dash",icon:"🏠",label:"Início"},{k:"os",icon:"🔧",label:"OS"},{k:"frota",icon:"🚗",label:"Frota"},{k:"kit",icon:"🎒",label:"Meu Kit"},{k:"__menu",icon:"☰",label:"Menu"}]
     :[{k:"dash",icon:"🏠",label:"Início"},{k:"estoque",icon:"📦",label:"Estoque"},{k:"dist",icon:"🚀",label:"Saída"},{k:"dev",icon:"↩️",label:"Dev."},{k:"__menu",icon:"☰",label:"Menu"}];
   return <div style={{position:"fixed",bottom:0,left:0,right:0,background:C.surf,borderTop:`1px solid ${C.bdr}`,display:"flex",zIndex:100,paddingBottom:"env(safe-area-inset-bottom)"}}>
     {items.map(it=>(
@@ -2804,6 +2806,333 @@ function SolicitacaoPage({solicitacoes,setSolicitacoes,stock,setStock,tstock,set
 
 
 
+/* ── FROTA ── */
+function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,users,currentUser,addLog,isMobile}){
+  const isTec=currentUser.role==="tecnico";
+  const isAdm=currentUser.role==="admin";
+  const[tab,setTab]=useState(isTec?"abast":"veic");
+  const[modalVeic,setModalVeic]=useState(null);
+  const[modalAbast,setModalAbast]=useState(false);
+  const techs=users.filter(u=>u.role==="tecnico");
+
+  const blankVeic=()=>({id:uid(),placa:"",modelo:"",ano:"",cor:"",tecnicoId:"",dtAquisicao:"",status:"ativo",obs:""});
+  const blankAbast=()=>({id:uid(),veiculoId:"",tecnicoId:currentUser.id,dtAbast:new Date().toISOString().slice(0,10),odometro:"",litros:"",valor:"",combustivel:"gasolina",posto:"",foto:"",obs:""});
+
+  const[formVeic,setFormVeic]=useState(blankVeic());
+  const[formAbast,setFormAbast]=useState(blankAbast());
+  const[errVeic,setErrVeic]=useState("");
+  const[errAbast,setErrAbast]=useState("");
+
+  const meuVeic=veiculos.find(v=>v.tecnicoId===currentUser.id);
+  const meuAbast=abastecimentos.filter(a=>a.tecnicoId===currentUser.id);
+  const viewAbast=isTec?meuAbast:abastecimentos;
+
+  const STATUS_OPTS=["ativo","manutenção","inativo"];
+  const STATUS_COLOR={ativo:C.grn,manutenção:C.ylw,inativo:C.red};
+  const COMB_OPTS=["gasolina","etanol","diesel","flex","gnv"];
+
+  const handleFotoAbast=(e)=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    if(file.size>3*1024*1024){alert("Foto muito grande! Máximo 3MB.");return;}
+    const reader=new FileReader();
+    reader.onload=(ev)=>setFormAbast(f=>({...f,foto:ev.target.result}));
+    reader.readAsDataURL(file);
+  };
+
+  const salvarVeic=()=>{
+    if(!formVeic.placa.trim()){setErrVeic("Informe a placa.");return;}
+    if(!formVeic.modelo.trim()){setErrVeic("Informe o modelo.");return;}
+    if(modalVeic==="new"){
+      setVeiculos(p=>[{...formVeic,id:uid(),placa:formVeic.placa.toUpperCase().trim()},...p]);
+      addLog(currentUser.name,"Frota","Veículo cadastrado: "+formVeic.placa.toUpperCase());
+    } else {
+      setVeiculos(p=>p.map(v=>v.id===modalVeic?{...formVeic,placa:formVeic.placa.toUpperCase().trim()}:v));
+      addLog(currentUser.name,"Frota","Veículo editado: "+formVeic.placa.toUpperCase());
+    }
+    setModalVeic(null);setErrVeic("");
+  };
+
+  const salvarAbast=()=>{
+    if(!formAbast.veiculoId){setErrAbast("Selecione o veículo.");return;}
+    if(!formAbast.odometro){setErrAbast("Informe o odômetro.");return;}
+    if(!formAbast.litros){setErrAbast("Informe os litros.");return;}
+    if(!formAbast.valor){setErrAbast("Informe o valor.");return;}
+    setAbastecimentos(p=>[{...formAbast,id:uid(),tecnicoId:currentUser.id,registradoEm:now()},...p]);
+    addLog(currentUser.name,"Abastecimento",`${veiculos.find(v=>v.id===formAbast.veiculoId)?.placa||"?"} · ${formAbast.litros}L · R$${formAbast.valor}`);
+    setModalAbast(false);setErrAbast("");setFormAbast(blankAbast());
+  };
+
+  const excluirVeic=(id)=>{
+    const v=veiculos.find(x=>x.id===id);
+    if(window.confirm(`Excluir veículo ${v?.placa}?`)){
+      setVeiculos(p=>p.filter(x=>x.id!==id));
+      addLog(currentUser.name,"Frota","Veículo excluído: "+v?.placa);
+    }
+  };
+
+  const totalAbastPeriodo=viewAbast.reduce((a,x)=>a+(parseFloat(x.valor)||0),0);
+  const totalLitros=viewAbast.reduce((a,x)=>a+(parseFloat(x.litros)||0),0);
+
+  const tabs=isAdm
+    ?[{k:"veic",l:"🚗 Veículos"},{k:"abast",l:"⛽ Abastecimento"}]
+    :[{k:"abast",l:"⛽ Meus Abastecimentos"}];
+
+  return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+      <div>
+        <h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>🚗 Frota</h1>
+        <p style={{fontSize:12,color:C.muted,marginTop:2}}>Gestão de veículos e controle de abastecimento</p>
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        {isAdm&&tab==="veic"&&<Btn color="gold" size="sm" onClick={()=>{setFormVeic(blankVeic());setModalVeic("new");setErrVeic("");}}>+ Cadastrar Veículo</Btn>}
+        {(isAdm||isTec)&&tab==="abast"&&<Btn color="gold" size="sm" onClick={()=>{setFormAbast(blankAbast());setModalAbast(true);setErrAbast("");}}>⛽ Registrar Abastecimento</Btn>}
+      </div>
+    </div>
+
+    {/* Resumo rápido */}
+    {tab==="abast"&&<div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)",gap:10}}>
+      {[
+        {label:"ABASTECIMENTOS",value:fmt(viewAbast.length),sub:isTec?"seus registros":"total",icon:"⛽",color:C.gold},
+        {label:"LITROS TOTAL",value:fmt(Math.round(totalLitros)),sub:"litros abastecidos",icon:"🛢️",color:C.blue},
+        {label:"GASTO TOTAL",value:`R$ ${fmt(Math.round(totalAbastPeriodo))}`,sub:"valor total",icon:"💰",color:C.grn},
+      ].map((s,i)=>(
+        <Card key={i} style={{padding:isMobile?12:16,display:"flex",gap:10,alignItems:"center"}}>
+          <div style={{width:40,height:40,borderRadius:10,background:`${s.color}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{s.icon}</div>
+          <div>
+            <div style={{fontSize:9,fontWeight:700,color:C.muted,letterSpacing:".06em"}}>{s.label}</div>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:isMobile?16:20,fontWeight:800,color:s.color}}>{s.value}</div>
+            <div style={{fontSize:10,color:C.muted}}>{s.sub}</div>
+          </div>
+        </Card>
+      ))}
+    </div>}
+
+    {/* Tabs */}
+    <div style={{display:"flex",borderBottom:`1px solid ${C.bdr}`}}>
+      {tabs.map(t=><div key={t.k} onClick={()=>setTab(t.k)} style={{padding:"9px 18px",cursor:"pointer",fontSize:13,fontWeight:600,
+        borderBottom:`2px solid ${tab===t.k?C.gold:"transparent"}`,color:tab===t.k?C.gold:C.muted,whiteSpace:"nowrap"}}>{t.l}</div>)}
+    </div>
+
+    {/* ── TAB VEÍCULOS ── */}
+    {tab==="veic"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {veiculos.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted}}>Nenhum veículo cadastrado ainda.</span></Card>}
+      {isMobile?(
+        veiculos.map(v=>{
+          const tech=users.find(u=>u.id===v.tecnicoId);
+          return <Card key={v.id} style={{padding:14,borderLeft:`3px solid ${STATUS_COLOR[v.status]||C.gold}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:16}}>{v.placa}</span>
+                  <Bdg color={v.status==="ativo"?"grn":v.status==="manutenção"?"ylw":"red"}>{v.status}</Bdg>
+                </div>
+                <div style={{fontSize:13,fontWeight:600,color:C.txt}}>{v.modelo} {v.ano}</div>
+                <div style={{fontSize:11,color:C.muted,marginTop:2}}>Cor: {v.cor} · Técnico: {tech?.name||"—"}</div>
+                {v.obs&&<div style={{fontSize:11,color:C.muted,marginTop:4,fontStyle:"italic"}}>"{v.obs}"</div>}
+              </div>
+              {isAdm&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
+                <Btn size="xs" color="gold" outline onClick={()=>{setFormVeic({...v});setModalVeic(v.id);setErrVeic("");}}>Editar</Btn>
+                <Btn size="xs" color="red" outline onClick={()=>excluirVeic(v.id)}>✕</Btn>
+              </div>}
+            </div>
+          </Card>;
+        })
+      ):(
+        <Card style={{padding:0,overflow:"hidden"}}>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead><THead cols={["PLACA","MODELO","ANO","COR","TÉCNICO","AQUISIÇÃO","STATUS","AÇÕES"]}/></thead>
+              <tbody>
+                {veiculos.length===0?<tr><td colSpan={8} style={{padding:24,textAlign:"center",color:C.muted}}>Nenhum veículo cadastrado.</td></tr>
+                :veiculos.map(v=>{
+                  const tech=users.find(u=>u.id===v.tecnicoId);
+                  return <TRow key={v.id} cells={[
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold}}>{v.placa}</span>,
+                    <span style={{fontWeight:600,color:C.txt}}>{v.modelo}</span>,
+                    <span style={{color:C.muted}}>{v.ano}</span>,
+                    <span style={{color:C.muted}}>{v.cor}</span>,
+                    <span style={{fontSize:12}}>{tech?.name||"—"}</span>,
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted}}>{v.dtAquisicao||"—"}</span>,
+                    <Bdg color={v.status==="ativo"?"grn":v.status==="manutenção"?"ylw":"red"}>{v.status}</Bdg>,
+                    <div style={{display:"flex",gap:6}}>
+                      <Btn size="xs" color="gold" outline onClick={()=>{setFormVeic({...v});setModalVeic(v.id);setErrVeic("");}}>Editar</Btn>
+                      <Btn size="xs" color="red" outline onClick={()=>excluirVeic(v.id)}>✕</Btn>
+                    </div>
+                  ]}/>;
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>}
+
+    {/* ── TAB ABASTECIMENTO ── */}
+    {tab==="abast"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {viewAbast.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted}}>Nenhum abastecimento registrado.</span></Card>}
+      {isMobile?(
+        viewAbast.map(a=>{
+          const v=veiculos.find(x=>x.id===a.veiculoId);
+          const tech=users.find(u=>u.id===a.tecnicoId);
+          return <Card key={a.id} style={{padding:14,borderLeft:`3px solid ${C.gold}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:14}}>{v?.placa||"?"}</span>
+                  <span style={{fontSize:12,color:C.txt}}>{v?.modelo||"?"}</span>
+                  <Bdg color="gold">{a.combustivel}</Bdg>
+                </div>
+                <div style={{display:"flex",gap:14,flexWrap:"wrap",marginBottom:4}}>
+                  <span style={{fontSize:12,color:C.txt}}><strong style={{color:C.grn}}>R$ {fmt(parseFloat(a.valor)||0)}</strong></span>
+                  <span style={{fontSize:12,color:C.muted}}>{a.litros}L</span>
+                  <span style={{fontSize:12,color:C.muted}}>Km: {fmt(parseInt(a.odometro)||0)}</span>
+                </div>
+                <div style={{fontSize:11,color:C.muted}}>{a.dtAbast} · {tech?.name||"?"}</div>
+                {a.posto&&<div style={{fontSize:11,color:C.muted}}>📍 {a.posto}</div>}
+                {a.obs&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>"{a.obs}"</div>}
+              </div>
+              {a.foto&&<img src={a.foto} alt="nota" style={{width:60,height:60,objectFit:"cover",borderRadius:8,border:`1px solid ${C.bdr2}`,flexShrink:0}}/>}
+            </div>
+          </Card>;
+        })
+      ):(
+        <Card style={{padding:0,overflow:"hidden"}}>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead><THead cols={["DATA","VEÍCULO","TÉCNICO","COMBUSTÍVEL","LITROS","VALOR","KM","POSTO","NOTA"]}/></thead>
+              <tbody>
+                {viewAbast.length===0?<tr><td colSpan={9} style={{padding:24,textAlign:"center",color:C.muted}}>Nenhum abastecimento registrado.</td></tr>
+                :viewAbast.map(a=>{
+                  const v=veiculos.find(x=>x.id===a.veiculoId);
+                  const tech=users.find(u=>u.id===a.tecnicoId);
+                  return <TRow key={a.id} cells={[
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted}}>{a.dtAbast}</span>,
+                    <div>
+                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:12}}>{v?.placa||"?"}</div>
+                      <div style={{fontSize:10,color:C.muted}}>{v?.modelo||""}</div>
+                    </div>,
+                    <span style={{fontSize:12}}>{tech?.name||"?"}</span>,
+                    <Bdg color="gold">{a.combustivel}</Bdg>,
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:C.blue}}>{a.litros}L</span>,
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.grn,fontSize:14}}>R$ {fmt(parseFloat(a.valor)||0)}</span>,
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:C.muted}}>{fmt(parseInt(a.odometro)||0)}</span>,
+                    <span style={{fontSize:11,color:C.muted}}>{a.posto||"—"}</span>,
+                    a.foto?<img src={a.foto} alt="nota" style={{width:40,height:40,objectFit:"cover",borderRadius:6,border:`1px solid ${C.bdr2}`,cursor:"pointer"}} onClick={()=>window.open(a.foto,"_blank")}/>:<span style={{color:C.muted,fontSize:11}}>—</span>
+                  ]}/>;
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>}
+
+    {/* ── MODAL CADASTRO VEÍCULO ── */}
+    {modalVeic&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
+      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,width:"100%",maxWidth:600,maxHeight:isMobile?"92vh":"88vh",display:"flex",flexDirection:"column",position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
+        <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+          <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>🚗 {modalVeic==="new"?"Cadastrar Veículo":"Editar Veículo"}</h2>
+          <button onClick={()=>setModalVeic(null)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+        </div>
+        <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:12}}>
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
+            <Inp label="Placa *" value={formVeic.placa} onChange={v=>setFormVeic(f=>({...f,placa:v.toUpperCase()}))} placeholder="ABC-1234"/>
+            <Inp label="Modelo *" value={formVeic.modelo} onChange={v=>setFormVeic(f=>({...f,modelo:v}))} placeholder="Ex: Fiat Toro"/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:12}}>
+            <Inp label="Ano" value={formVeic.ano} onChange={v=>setFormVeic(f=>({...f,ano:v}))} placeholder="2023" type="number"/>
+            <Inp label="Cor" value={formVeic.cor} onChange={v=>setFormVeic(f=>({...f,cor:v}))} placeholder="Ex: Branco"/>
+            <Inp label="Data de Aquisição" value={formVeic.dtAquisicao} onChange={v=>setFormVeic(f=>({...f,dtAquisicao:v}))} type="date"/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
+            <Sel label="Técnico Responsável" value={formVeic.tecnicoId} onChange={v=>setFormVeic(f=>({...f,tecnicoId:v}))} options={[{value:"",label:"— Sem responsável —"},...techs.map(t=>({value:t.id,label:t.name}))]}/>
+            <Sel label="Status" value={formVeic.status} onChange={v=>setFormVeic(f=>({...f,status:v}))} options={STATUS_OPTS.map(s=>({value:s,label:s.charAt(0).toUpperCase()+s.slice(1)}))}/>
+          </div>
+          <Inp label="Observações" value={formVeic.obs} onChange={v=>setFormVeic(f=>({...f,obs:v}))} placeholder="Ex: Veículo para instalações zona norte"/>
+          {errVeic&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",color:C.red,fontSize:13}}>⚠️ {errVeic}</div>}
+        </div>
+        <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,flexShrink:0,display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <Btn color="ghost" outline onClick={()=>setModalVeic(null)}>Cancelar</Btn>
+          <Btn color="gold" onClick={salvarVeic}>✅ Salvar Veículo</Btn>
+        </div>
+      </div>
+    </div>}
+
+    {/* ── MODAL ABASTECIMENTO ── */}
+    {modalAbast&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
+      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,width:"100%",maxWidth:580,maxHeight:isMobile?"95vh":"90vh",display:"flex",flexDirection:"column",position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
+        <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+          <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>⛽ Registrar Abastecimento</h2>
+          <button onClick={()=>setModalAbast(false)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+        </div>
+        <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:12}}>
+
+          {/* Veículo e data */}
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
+            <Sel label="Veículo *" value={formAbast.veiculoId} onChange={v=>setFormAbast(f=>({...f,veiculoId:v}))}
+              options={[{value:"",label:"— Selecionar veículo —"},
+                ...(isTec?veiculos.filter(v=>v.tecnicoId===currentUser.id||true):veiculos).map(v=>({value:v.id,label:`${v.placa} — ${v.modelo}`}))]}/>
+            <Inp label="Data *" value={formAbast.dtAbast} onChange={v=>setFormAbast(f=>({...f,dtAbast:v}))} type="date"/>
+          </div>
+
+          {/* Combustível e dados */}
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:12}}>
+            <Sel label="Combustível" value={formAbast.combustivel} onChange={v=>setFormAbast(f=>({...f,combustivel:v}))} options={COMB_OPTS.map(c=>({value:c,label:c.charAt(0).toUpperCase()+c.slice(1)}))}/>
+            <Inp label="Litros *" value={formAbast.litros} onChange={v=>setFormAbast(f=>({...f,litros:v}))} type="number" placeholder="0,00"/>
+            <Inp label="Valor R$ *" value={formAbast.valor} onChange={v=>setFormAbast(f=>({...f,valor:v}))} type="number" placeholder="0,00"/>
+          </div>
+
+          {/* Odômetro e posto */}
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
+            <Inp label="Odômetro (Km) *" value={formAbast.odometro} onChange={v=>setFormAbast(f=>({...f,odometro:v}))} type="number" placeholder="Ex: 45320"/>
+            <Inp label="Posto / Local" value={formAbast.posto} onChange={v=>setFormAbast(f=>({...f,posto:v}))} placeholder="Nome do posto"/>
+          </div>
+
+          <Inp label="Observação" value={formAbast.obs} onChange={v=>setFormAbast(f=>({...f,obs:v}))} placeholder="Observações opcionais"/>
+
+          {/* Foto da nota */}
+          <div style={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:10,padding:14}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:10}}>📸 Foto da Nota Fiscal</div>
+            {formAbast.foto?(
+              <div style={{display:"flex",alignItems:"center",gap:12}}>
+                <img src={formAbast.foto} alt="nota" style={{width:80,height:80,objectFit:"cover",borderRadius:8,border:`2px solid ${C.gold}55`}}/>
+                <div>
+                  <div style={{fontSize:12,color:C.grn,fontWeight:600,marginBottom:6}}>✓ Foto anexada</div>
+                  <button onClick={()=>setFormAbast(f=>({...f,foto:""}))} style={{background:C.redD,color:C.red,border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:12,fontWeight:600}}>✕ Remover</button>
+                </div>
+              </div>
+            ):(
+              <label style={{display:"flex",alignItems:"center",gap:12,cursor:"pointer",background:C.card,border:`2px dashed ${C.bdr2}`,borderRadius:8,padding:"14px 18px"}}>
+                <span style={{fontSize:28}}>📷</span>
+                <div>
+                  <div style={{fontSize:13,fontWeight:600,color:C.txt}}>Tirar foto ou escolher da galeria</div>
+                  <div style={{fontSize:11,color:C.muted,marginTop:2}}>JPG, PNG · Máx. 3MB</div>
+                </div>
+                <input type="file" accept="image/*" capture="environment" onChange={handleFotoAbast} style={{display:"none"}}/>
+              </label>
+            )}
+          </div>
+
+          {/* Preview valor por litro */}
+          {formAbast.litros&&formAbast.valor&&<div style={{background:`${C.gold}15`,border:`1px solid ${C.gold}44`,borderRadius:8,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{fontSize:12,color:C.muted}}>Preço por litro:</span>
+            <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:16}}>
+              R$ {(parseFloat(formAbast.valor)/parseFloat(formAbast.litros)).toFixed(2)}/L
+            </span>
+          </div>}
+
+          {errAbast&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",color:C.red,fontSize:13}}>⚠️ {errAbast}</div>}
+        </div>
+        <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,flexShrink:0,display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <Btn color="ghost" outline onClick={()=>setModalAbast(false)}>Cancelar</Btn>
+          <Btn color="gold" onClick={salvarAbast}>✅ Registrar Abastecimento</Btn>
+        </div>
+      </div>
+    </div>}
+  </div>;
+}
+
 /* ── APP ── */
 export default function App(){
   const[user,setUser]=useState(()=>{
@@ -2820,6 +3149,8 @@ export default function App(){
   const[nf,setNf]=useLS("re_nf",NF0);
   const[logs,setLogs]=useLS("re_logs",LOGS0);
   const[solicitacoes,setSolicitacoes]=useLS("re_sol",[]);
+  const[veiculos,setVeiculos]=useLS("re_veiculos",[]);
+  const[abastecimentos,setAbastecimentos]=useLS("re_abast",[]);
   const[cats,setCats]=useLS("re_cats",[
     {id:"c1",name:"Equipamentos",icon:"📡"},{id:"c2",name:"Cabos e Fios",icon:"🔌"},
     {id:"c3",name:"Conectores",icon:"🔗"},{id:"c4",name:"Caixas e Acessórios",icon:"🗃️"},
@@ -2859,6 +3190,7 @@ export default function App(){
     produtos:<ProdutosPage produtos={produtos} setProdutos={setProdutos} cats={cats} isMobile={isMobile}/>,
     usr:<UsrPage users={users} setUsers={setUsers} addLog={addLog} currentUser={user} isMobile={isMobile}/>,
     log:<LogPage logs={logs} isMobile={isMobile}/>,
+    frota:<FrotaPage veiculos={veiculos} setVeiculos={setVeiculos} abastecimentos={abastecimentos} setAbastecimentos={setAbastecimentos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
   };
   return <div style={{height:"100dvh",background:C.bg,color:C.txt,display:"flex",overflow:"hidden"}}>
     <style>{CSS}</style>
