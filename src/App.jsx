@@ -1669,7 +1669,10 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
             </div>
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6,flexShrink:0}}>
               <span style={{background:rc[u.role],color:"#000",fontSize:9,fontWeight:800,padding:"2px 6px",borderRadius:3}}>{rl[u.role]}</span>
-              <Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf||"",login:u.login,pass:u.pass,role:u.role,photo:u.photo||""});setModal(u.id);}}>Editar</Btn>
+              <div style={{display:"flex",gap:6}}>
+                <Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf||"",login:u.login,pass:u.pass,role:u.role,photo:u.photo||""});setModal(u.id);}}>Editar</Btn>
+                {u.id!==currentUser.id&&<Btn size="xs" color="red" outline onClick={()=>{if(window.confirm("Remover "+u.name+"?")){setUsers(p=>p.filter(x=>x.id!==u.id));addLog(currentUser.name,"Usuário Removido",u.name);}}}>✕</Btn>}
+              </div>
             </div>
           </Card>
         ))}
@@ -1931,10 +1934,35 @@ function AdminRelPage({nf,stock,os,returns,tstock,users,solicitacoes,isMobile,ad
 
   const LOGO_URL=window.location.origin+"/logo-stocktel.png";
 
+  // ── Filtro de período ──
+  const hoje=new Date().toISOString().slice(0,10);
+  const primeiroDiaMes=new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().slice(0,10);
+  const[dtInicio,setDtInicio]=useState(primeiroDiaMes);
+  const[dtFim,setDtFim]=useState(hoje);
+  const[periodoRapido,setPeriodoRapido]=useState("mes");
+
+  const aplicarPeriodo=(p)=>{
+    setPeriodoRapido(p);
+    const h=new Date();
+    if(p==="hoje"){const d=h.toISOString().slice(0,10);setDtInicio(d);setDtFim(d);}
+    else if(p==="semana"){const i=new Date(h);i.setDate(h.getDate()-7);setDtInicio(i.toISOString().slice(0,10));setDtFim(h.toISOString().slice(0,10));}
+    else if(p==="mes"){setDtInicio(new Date(h.getFullYear(),h.getMonth(),1).toISOString().slice(0,10));setDtFim(h.toISOString().slice(0,10));}
+    else if(p==="trimestre"){const i=new Date(h);i.setMonth(h.getMonth()-3);setDtInicio(i.toISOString().slice(0,10));setDtFim(h.toISOString().slice(0,10));}
+    else if(p==="tudo"){setDtInicio("2020-01-01");setDtFim("2099-12-31");}
+  };
+
+  const parseDateBR=(s)=>{if(!s)return null;const p=s.split(" ")[0].split("/");if(p.length===3)return new Date(`${p[2]}-${p[1]}-${p[0]}`);return new Date(s);};
+  const inRange=(s)=>{const d=parseDateBR(s);if(!d)return true;return d>=new Date(dtInicio+"T00:00:00")&&d<=new Date(dtFim+"T23:59:59");};
+  const periodoLabel=dtInicio===dtFim?dtInicio.split("-").reverse().join("/"):`${dtInicio.split("-").reverse().join("/")} a ${dtFim.split("-").reverse().join("/")}`;
+
   // ── Cálculos financeiros ──
+  const viewNFAdmin=useMemo(()=>nf.filter(n=>inRange(n.date)),[nf,dtInicio,dtFim]);
+  const viewOsAdmin=useMemo(()=>os.filter(o=>inRange(o.date)),[os,dtInicio,dtFim]);
+  const viewRetAdmin=useMemo(()=>returns.filter(r=>inRange(r.date)),[returns,dtInicio,dtFim]);
+
   const gastoPorMes=useMemo(()=>{
     const m={};
-    nf.forEach(n=>{
+    viewNFAdmin.forEach(n=>{
       const mes=n.date?n.date.substring(0,7):"Sem data";
       if(!m[mes])m[mes]={mes,total:0,qtdNF:0,itens:0};
       m[mes].total+=n.total||0;
@@ -1942,11 +1970,11 @@ function AdminRelPage({nf,stock,os,returns,tstock,users,solicitacoes,isMobile,ad
       m[mes].itens+=n.items?.length||0;
     });
     return Object.values(m).sort((a,b)=>a.mes.localeCompare(b.mes));
-  },[nf]);
+  },[viewNFAdmin]);
 
   const alertasPreco=useMemo(()=>{
     const hist={};
-    const sorted=[...nf].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+    const sorted=[...viewNFAdmin].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
     sorted.forEach(n=>{
       n.items?.forEach(it=>{
         const s=stock.find(x=>x.id===it.sid);
@@ -1972,22 +2000,22 @@ function AdminRelPage({nf,stock,os,returns,tstock,users,solicitacoes,isMobile,ad
       }
     });
     return alerts.sort((a,b)=>Math.abs(b.pct)-Math.abs(a.pct));
-  },[nf,stock]);
+  },[viewNFAdmin,stock]);
 
   const rankingTec=useMemo(()=>{
     return users.filter(u=>u.role==="tecnico").map(u=>{
-      const myOs=os.filter(o=>o.uid===u.id);
+      const myOs=viewOsAdmin.filter(o=>o.uid===u.id);
       const myKit=tstock.filter(t=>t.uid===u.id);
-      const myDev=returns.filter(r=>r.uid===u.id);
+      const myDev=viewRetAdmin.filter(r=>r.uid===u.id);
       const mySol=solicitacoes?.filter(s=>s.uid===u.id)||[];
       const totalMat=myKit.reduce((a,t)=>a+t.qty,0);
       const totalOsMat=myOs.reduce((a,o)=>a+o.items.reduce((b,i)=>b+i.qty,0),0);
       return{...u,qtdOS:myOs.length,matEmPosse:totalMat,matUsado:totalOsMat,devs:myDev.length,sols:mySol.length};
     }).sort((a,b)=>b.qtdOS-a.qtdOS);
-  },[users,os,tstock,returns,solicitacoes]);
+  },[users,viewOsAdmin,tstock,viewRetAdmin,solicitacoes,dtInicio,dtFim]);
 
-  const totalGasto=nf.reduce((a,n)=>a+(n.total||0),0);
-  const totalNFs=nf.length;
+  const totalGasto=viewNFAdmin.reduce((a,n)=>a+(n.total||0),0);
+  const totalNFs=viewNFAdmin.length;
   const mediaGastoPorNF=totalNFs>0?totalGasto/totalNFs:0;
   const maxMes=gastoPorMes.length>0?Math.max(...gastoPorMes.map(m=>m.total)):1;
   const alertasAlta=alertasPreco.filter(a=>a.up);
@@ -2393,6 +2421,44 @@ function AdminRelPage({nf,stock,os,returns,tstock,users,solicitacoes,isMobile,ad
       ))}
     </div>
 
+    {/* Filtro de Período */}
+    <Card style={{padding:16}}>
+      <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:12}}>📅 Filtrar por Período</div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+        {[{k:"hoje",l:"Hoje"},{k:"semana",l:"Última Semana"},{k:"mes",l:"Este Mês"},{k:"trimestre",l:"3 Meses"},{k:"tudo",l:"Tudo"}].map(p=>(
+          <button key={p.k} onClick={()=>aplicarPeriodo(p.k)}
+            style={{padding:"6px 14px",borderRadius:20,border:`1.5px solid ${periodoRapido===p.k?C.gold:C.bdr2}`,
+              background:periodoRapido===p.k?`${C.gold}22`:"transparent",
+              color:periodoRapido===p.k?C.gold:C.muted,fontSize:12,
+              fontWeight:periodoRapido===p.k?700:400,cursor:"pointer"}}>
+            {p.l}
+          </button>
+        ))}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"200px 200px auto",gap:10,alignItems:"end"}}>
+        <Inp label="Data Início" value={dtInicio} onChange={v=>{setDtInicio(v);setPeriodoRapido("custom");}} type="date"/>
+        <Inp label="Data Fim" value={dtFim} onChange={v=>{setDtFim(v);setPeriodoRapido("custom");}} type="date"/>
+        <div style={{paddingBottom:2}}>
+          <div style={{fontSize:11,color:C.muted,marginBottom:4}}>PERÍODO</div>
+          <div style={{background:`${C.gold}22`,border:`1px solid ${C.gold}44`,borderRadius:8,padding:"9px 14px",fontSize:12,fontWeight:700,color:C.gold,whiteSpace:"nowrap"}}>
+            📅 {periodoLabel}
+          </div>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:12,marginTop:12,flexWrap:"wrap"}}>
+        {[
+          {label:"NFs",value:viewNFAdmin.length,color:C.grn},
+          {label:"OS",value:viewOsAdmin.length,color:C.red},
+          {label:"Devoluções",value:viewRetAdmin.length,color:C.ylw},
+        ].map((c,i)=>(
+          <div key={i} style={{background:C.surf,borderRadius:8,padding:"7px 12px",display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:c.color,fontSize:16}}>{c.value}</span>
+            <span style={{fontSize:11,color:C.muted}}>{c.label} no período</span>
+          </div>
+        ))}
+      </div>
+    </Card>
+
     {/* Tabs */}
     <div style={{display:"flex",borderBottom:`1px solid ${C.bdr}`,overflowX:"auto"}}>
       {tabs2.map(t=><div key={t.k} onClick={()=>setTab(t.k)} style={{padding:"9px 16px",cursor:"pointer",fontSize:13,fontWeight:600,borderBottom:`2px solid ${tab===t.k?C.gold:"transparent"}`,color:tab===t.k?C.gold:C.muted,whiteSpace:"nowrap"}}>{t.l}</div>)}
@@ -2401,8 +2467,8 @@ function AdminRelPage({nf,stock,os,returns,tstock,users,solicitacoes,isMobile,ad
     {/* FINANCEIRO */}
     {tab==="financeiro"&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
       <Card style={{padding:18}}>
-        <div style={{fontSize:14,fontWeight:700,color:C.txt,marginBottom:16}}>📊 Gastos Mensais</div>
-        {gastoPorMes.length===0?<div style={{color:C.muted,fontSize:13}}>Nenhuma nota fiscal registrada ainda.</div>
+        <div style={{fontSize:14,fontWeight:700,color:C.txt,marginBottom:16}}>📊 Gastos Mensais — {periodoLabel}</div>
+        {gastoPorMes.length===0?<div style={{color:C.muted,fontSize:13}}>Nenhuma nota fiscal no período selecionado.</div>
         :<div style={{display:"flex",flexDirection:"column",gap:10}}>
           {gastoPorMes.map(m=>(
             <div key={m.mes}>
@@ -2430,7 +2496,7 @@ function AdminRelPage({nf,stock,os,returns,tstock,users,solicitacoes,isMobile,ad
             <thead><THead cols={["Nº NF","FORNECEDOR","DATA","ITENS","VALOR TOTAL"]}/></thead>
             <tbody>
               {nf.length===0?<tr><td colSpan={5} style={{padding:20,textAlign:"center",color:C.muted}}>Nenhuma NF registrada.</td></tr>
-              :nf.map(n=><TRow key={n.id} cells={[
+              :viewNFAdmin.map(n=><TRow key={n.id} cells={[
                 <span style={{fontFamily:"'JetBrains Mono',monospace",color:C.gold,fontWeight:700}}>{n.num}</span>,
                 <span style={{fontWeight:600,color:C.txt}}>{n.supplier}</span>,
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted}}>{n.date}</span>,
