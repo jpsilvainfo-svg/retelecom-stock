@@ -1,3 +1,4 @@
+// StockTel v1.1 build 20260525_193511 - filtro periodo relatorio admin
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
 import * as XLSX from "xlsx";
@@ -1475,43 +1476,7 @@ function RelPage({stock,os,returns,users,nf,isMobile,currentUser}){
       </div>
     </div>
 
-    {/* Filtro de Período */}
-    <Card style={{padding:16}}>
-      <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:12}}>📅 Filtrar por Período</div>
-      {/* Botões rápidos */}
-      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
-        {[{k:"hoje",l:"Hoje"},{k:"semana",l:"Última Semana"},{k:"mes",l:"Este Mês"},{k:"trimestre",l:"3 Meses"},{k:"tudo",l:"Tudo"}].map(p=>(
-          <button key={p.k} onClick={()=>aplicarPeriodo(p.k)}
-            style={{padding:"6px 14px",borderRadius:20,border:`1.5px solid ${periodoRapido===p.k?C.gold:C.bdr2}`,background:periodoRapido===p.k?`${C.gold}22`:"transparent",color:periodoRapido===p.k?C.gold:C.muted,fontSize:12,fontWeight:periodoRapido===p.k?700:400,cursor:"pointer"}}>
-            {p.l}
-          </button>
-        ))}
-      </div>
-      {/* Datas personalizadas */}
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"200px 200px auto",gap:10,alignItems:"end"}}>
-        <Inp label="Data Início" value={dtInicio} onChange={v=>{setDtInicio(v);setPeriodoRapido("custom");}} type="date"/>
-        <Inp label="Data Fim" value={dtFim} onChange={v=>{setDtFim(v);setPeriodoRapido("custom");}} type="date"/>
-        <div style={{paddingBottom:2}}>
-          <div style={{fontSize:11,color:C.muted,marginBottom:4}}>PERÍODO SELECIONADO</div>
-          <div style={{background:`${C.gold}22`,border:`1px solid ${C.gold}44`,borderRadius:8,padding:"9px 14px",fontSize:12,fontWeight:700,color:C.gold,whiteSpace:"nowrap"}}>
-            📅 {periodoLabel}
-          </div>
-        </div>
-      </div>
-      {/* Contadores do período */}
-      <div style={{display:"flex",gap:12,marginTop:12,flexWrap:"wrap"}}>
-        {[
-          {label:"OS",value:viewOs.length,color:C.red},
-          {label:"Devoluções",value:viewRet.length,color:C.ylw},
-          {label:"NFs",value:viewNF.length,color:C.grn},
-        ].map((c,i)=>(
-          <div key={i} style={{background:C.surf,borderRadius:8,padding:"8px 14px",display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:c.color,fontSize:18}}>{c.value}</span>
-            <span style={{fontSize:12,color:C.muted}}>{c.label} no período</span>
-          </div>
-        ))}
-      </div>
-    </Card>
+
 
     {/* Tabs */}
     <div style={{display:"flex",borderBottom:`1px solid ${C.bdr}`,overflowX:"auto"}}>
@@ -2278,7 +2243,7 @@ function AdminRelPage({nf,stock,os,returns,tstock,users,solicitacoes,isMobile,ad
 
       <!-- FOOTER -->
       <div class="footer">
-        <div class="footer-logo">StockTel — Soluções em Telecomunicações</div>
+        <div class="footer-logo">StockTel — Soluções em Telecomunicações · v1.1</div>
         <div>Relatório gerado em ${new Date().toLocaleString("pt-BR")} · v1.0.0</div>
         <div>© ${new Date().getFullYear()} StockTel — Todos os direitos reservados</div>
       </div>
@@ -2401,6 +2366,35 @@ function AdminRelPage({nf,stock,os,returns,tstock,users,solicitacoes,isMobile,ad
     </div>
 
     {msg&&<div style={{background:msg.startsWith("ok:")?C.grnD:C.redD,border:`1px solid ${msg.startsWith("ok:")?C.grn:C.red}44`,borderRadius:8,padding:"12px 14px",color:msg.startsWith("ok:")?C.grn:C.red,fontSize:13}}>{msg.replace(/^(ok|err):/,"")}</div>}
+
+    {/* FILTRO DE PERÍODO — destaque */}
+    <Card style={{padding:16,border:`2px solid ${C.gold}55`}}>
+      <div style={{fontSize:12,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:12}}>📅 Filtrar Período do Relatório</div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+        {[{k:"hoje",l:"Hoje"},{k:"semana",l:"Última Semana"},{k:"mes",l:"Este Mês"},{k:"trimestre",l:"3 Meses"},{k:"tudo",l:"Tudo"}].map(p=>(
+          <button key={p.k} onClick={()=>aplicarPeriodo(p.k)} style={{
+            padding:"7px 16px",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:periodoRapido===p.k?700:400,
+            border:`1.5px solid ${periodoRapido===p.k?C.gold:C.bdr2}`,
+            background:periodoRapido===p.k?C.gold:"transparent",
+            color:periodoRapido===p.k?"#000":C.muted}}>
+            {p.l}
+          </button>
+        ))}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:10,alignItems:"end"}}>
+        <Inp label="Data Início" value={dtInicio} onChange={v=>{setDtInicio(v);setPeriodoRapido("custom");}} type="date"/>
+        <Inp label="Data Fim" value={dtFim} onChange={v=>{setDtFim(v);setPeriodoRapido("custom");}} type="date"/>
+        <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}55`,borderRadius:8,padding:"10px 14px"}}>
+          <div style={{fontSize:10,color:C.muted,marginBottom:3}}>PERÍODO SELECIONADO</div>
+          <div style={{fontSize:13,fontWeight:800,color:C.gold}}>📅 {periodoLabel}</div>
+          <div style={{display:"flex",gap:10,marginTop:6}}>
+            <span style={{fontSize:10,color:C.grn,fontWeight:700}}>{viewNFAdmin.length} NFs</span>
+            <span style={{fontSize:10,color:C.red,fontWeight:700}}>{viewOsAdmin.length} OS</span>
+            <span style={{fontSize:10,color:C.ylw,fontWeight:700}}>{viewRetAdmin.length} Dev.</span>
+          </div>
+        </div>
+      </div>
+    </Card>
 
     {/* Cards resumo */}
     <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:12}}>
