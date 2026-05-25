@@ -22,11 +22,14 @@ const ALL_MODULES=[
   {k:"produtos",l:"Produtos",icon:"🔩",group:"admin"},
   {k:"usr",l:"Usuários",icon:"👥",group:"admin"},
   {k:"log",l:"Logs do Sistema",icon:"📋",group:"admin"},
+  {k:"manut",l:"Manutenção",icon:"🔩",group:"mecanico"},
 ];
 const DEFAULT_PERMS={
   admin:ALL_MODULES.map(m=>m.k),
   estoque:["dash","os","estoque","kit","dist","dev","sol","rel"],
   tecnico:["dash","os","frota","kit","dev","sol","rel"],
+  financeiro:["dash","nf","rel","email","os","dev","log"],
+  mecanico:["dash","manut","frota"],
 };
 let _id=300;
 const uid=()=>`${++_id}_${Date.now()}`;
@@ -1635,9 +1638,9 @@ function RelPage({stock,os,returns,users,nf,isMobile,currentUser}){
 function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
   const[modal,setModal]=useState(null);
   const[form,setForm]=useState({name:"",email:"",phone:"",cpf:"",login:"",pass:"",role:"tecnico",photo:"",perms:DEFAULT_PERMS["tecnico"],mustChangePassword:true});
-  const roles=[{value:"admin",label:"Administrador"},{value:"estoque",label:"Estoque"},{value:"tecnico",label:"Técnico"}];
-  const rl={admin:"ADM",estoque:"EST",tecnico:"TEC"};
-  const rc={admin:C.gold,estoque:C.blue,tecnico:C.grn};
+  const roles=[{value:"admin",label:"Administrador"},{value:"estoque",label:"Estoque"},{value:"tecnico",label:"Técnico"},{value:"financeiro",label:"Financeiro"},{value:"mecanico",label:"Mecânico"}];
+  const rl={admin:"ADM",estoque:"EST",tecnico:"TEC",financeiro:"FIN",mecanico:"MEC"};
+  const rc={admin:C.gold,estoque:C.blue,tecnico:C.grn,financeiro:C.ylw,mecanico:"#888888"};
 
   const handlePhoto=(e)=>{
     const file=e.target.files[0];
@@ -3228,6 +3231,323 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,users,
   </div>;
 }
 
+/* ── MANUTENÇÃO (MECÂNICO) ── */
+function ManutencaoPage({manutSols,setManutSols,manutOS,setManutOS,veiculos,users,currentUser,addLog,isMobile}){
+  const isMec=currentUser.role==="mecanico";
+  const isAdm=currentUser.role==="admin";
+  const[tab,setTab]=useState("sols");
+  const[modalSol,setModalSol]=useState(false);
+  const[modalOS,setModalOS]=useState(null);
+  const[modalExec,setModalExec]=useState(null);
+
+  const blankSol=()=>({id:uid(),veiculoId:"",solicitanteId:currentUser.id,tipo:"corretiva",urgencia:"normal",descricao:"",status:"aberta",dtSol:now(),obs:""});
+  const blankOS=()=>({id:uid(),solicitacaoId:"",veiculoId:"",mecanicoId:currentUser.id,tipo:"corretiva",descricao:"",kmEntrada:"",kmSaida:"",dtEntrada:new Date().toISOString().slice(0,10),dtSaida:"",pecas:[],servicos:"",status:"aberta",obs:""});
+  const blankPeca=()=>({id:uid(),nome:"",qtd:"",valor:""});
+
+  const[formSol,setFormSol]=useState(blankSol());
+  const[formOS,setFormOS]=useState(blankOS());
+  const[errSol,setErrSol]=useState("");
+  const[errOS,setErrOS]=useState("");
+
+  const TYPE_OPTS=["corretiva","preventiva","revisão","elétrica","pneus","outros"];
+  const URG_OPTS=["normal","alta","urgente"];
+  const URG_COLOR={normal:C.muted,alta:C.ylw,urgente:C.red};
+  const STATUS_SOL={aberta:"ylw",em_andamento:"blue",concluida:"grn",cancelada:"red"};
+  const STATUS_SOL_LABEL={aberta:"⏳ Aberta",em_andamento:"🔧 Em Andamento",concluida:"✅ Concluída",cancelada:"❌ Cancelada"};
+  const STATUS_OS={aberta:"ylw",em_andamento:"blue",concluida:"grn"};
+  const STATUS_OS_LABEL={aberta:"⏳ Aberta",em_andamento:"🔧 Em Andamento",concluida:"✅ Concluída"};
+
+  const getVeic=(id)=>veiculos.find(v=>v.id===id);
+  const getUser=(id)=>users.find(u=>u.id===id);
+
+  const salvarSol=()=>{
+    if(!formSol.veiculoId){setErrSol("Selecione o veículo.");return;}
+    if(!formSol.descricao.trim()){setErrSol("Descreva o problema.");return;}
+    setManutSols(p=>[{...formSol,id:uid()},...p]);
+    addLog(currentUser.name,"Manutenção","Solicitação: "+formSol.tipo+" · "+getVeic(formSol.veiculoId)?.placa);
+    setModalSol(false);setErrSol("");setFormSol(blankSol());
+  };
+
+  const salvarOS=()=>{
+    if(!formOS.veiculoId){setErrOS("Selecione o veículo.");return;}
+    if(!formOS.descricao.trim()){setErrOS("Descreva o serviço.");return;}
+    const isNew=modalOS==="new";
+    if(isNew){
+      setManutOS(p=>[{...formOS,id:uid()},...p]);
+      addLog(currentUser.name,"OS Mecânica","Aberta: "+getVeic(formOS.veiculoId)?.placa+" · "+formOS.tipo);
+    } else {
+      setManutOS(p=>p.map(o=>o.id===modalOS?{...formOS}:o));
+      addLog(currentUser.name,"OS Mecânica","Atualizada: "+getVeic(formOS.veiculoId)?.placa);
+    }
+    setModalOS(null);setErrOS("");
+  };
+
+  const concluirOS=(os)=>{
+    if(!os.kmSaida){alert("Informe o KM de saída antes de concluir.");return;}
+    setManutOS(p=>p.map(o=>o.id===os.id?{...o,status:"concluida",dtSaida:new Date().toISOString().slice(0,10)}:o));
+    // Atualiza solicitação vinculada
+    if(os.solicitacaoId){setManutSols(p=>p.map(s=>s.id===os.solicitacaoId?{...s,status:"concluida"}:s));}
+    addLog(currentUser.name,"OS Mecânica","Concluída: "+getVeic(os.veiculoId)?.placa);
+  };
+
+  const totalPecas=(os)=>os.pecas?.reduce((a,p)=>a+(parseFloat(p.valor)||0)*(parseInt(p.qtd)||1),0)||0;
+
+  return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+      <div>
+        <h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>🔩 Manutenção</h1>
+        <p style={{fontSize:12,color:C.muted,marginTop:2}}>Solicitações, ordens de serviço e execução</p>
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <Btn color="gold" size="sm" onClick={()=>{setFormSol(blankSol());setModalSol(true);setErrSol("");}}>+ Solicitação</Btn>
+        {(isAdm||isMec)&&<Btn color="red" size="sm" onClick={()=>{setFormOS(blankOS());setModalOS("new");setErrOS("");}}>🔧 Nova OS</Btn>}
+      </div>
+    </div>
+
+    {/* Cards resumo */}
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
+      {[
+        {label:"SOLICITAÇÕES",value:fmt(manutSols.length),sub:"total",icon:"📋",color:C.gold},
+        {label:"EM ABERTO",value:fmt(manutSols.filter(s=>s.status==="aberta").length),sub:"aguardando",icon:"⏳",color:C.ylw},
+        {label:"OS ABERTAS",value:fmt(manutOS.filter(o=>o.status!=="concluida").length),sub:"em andamento",icon:"🔧",color:C.red},
+        {label:"CONCLUÍDAS",value:fmt(manutOS.filter(o=>o.status==="concluida").length),sub:"finalizadas",icon:"✅",color:C.grn},
+      ].map((s,i)=>(
+        <Card key={i} style={{padding:isMobile?12:14,display:"flex",gap:10,alignItems:"center"}}>
+          <div style={{width:36,height:36,borderRadius:10,background:`${s.color}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{s.icon}</div>
+          <div><div style={{fontSize:9,fontWeight:700,color:C.muted}}>{s.label}</div><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:isMobile?16:20,fontWeight:800,color:s.color}}>{s.value}</div><div style={{fontSize:10,color:C.muted}}>{s.sub}</div></div>
+        </Card>
+      ))}
+    </div>
+
+    {/* Tabs */}
+    <div style={{display:"flex",borderBottom:`1px solid ${C.bdr}`}}>
+      {[{k:"sols",l:"📋 Solicitações"},{k:"os",l:"🔧 Ordens de Serviço"},{k:"hist",l:"📊 Histórico por Veículo"}].map(t=>(
+        <div key={t.k} onClick={()=>setTab(t.k)} style={{padding:"9px 16px",cursor:"pointer",fontSize:13,fontWeight:600,borderBottom:`2px solid ${tab===t.k?C.gold:"transparent"}`,color:tab===t.k?C.gold:C.muted,whiteSpace:"nowrap"}}>{t.l}</div>
+      ))}
+    </div>
+
+    {/* ── SOLICITAÇÕES ── */}
+    {tab==="sols"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {manutSols.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted}}>Nenhuma solicitação ainda.</span></Card>}
+      {manutSols.map(s=>{
+        const v=getVeic(s.veiculoId);
+        const sol=getUser(s.solicitanteId);
+        const osVinc=manutOS.find(o=>o.solicitacaoId===s.id);
+        return <Card key={s.id} style={{padding:16,borderLeft:`3px solid ${C[STATUS_SOL[s.status]]||C.gold}`}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+            <div style={{flex:1}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6}}>
+                <Bdg color={STATUS_SOL[s.status]||"gold"}>{STATUS_SOL_LABEL[s.status]||s.status}</Bdg>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:14}}>{v?.placa||"?"}</span>
+                <span style={{fontSize:13,fontWeight:600,color:C.txt}}>{v?.modelo||""}</span>
+                <span style={{fontSize:11,color:URG_COLOR[s.urgencia],fontWeight:700}}>{s.urgencia==="urgente"?"🔴 URGENTE":s.urgencia==="alta"?"🟡 Alta":""}</span>
+              </div>
+              <div style={{fontSize:12,color:C.muted,marginBottom:4}}>🔧 {s.tipo.toUpperCase()} · Solicitado por: {sol?.name||"?"} · {s.dtSol}</div>
+              <div style={{fontSize:13,color:C.txt2,marginBottom:6}}>{s.descricao}</div>
+              {s.obs&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>"{s.obs}"</div>}
+              {osVinc&&<div style={{marginTop:8,background:C.surf,borderRadius:6,padding:"6px 10px",fontSize:11,color:C.muted}}>OS vinculada: <strong style={{color:C.gold}}>#{osVinc.id.slice(-4)}</strong> — {STATUS_OS_LABEL[osVinc.status]}</div>}
+            </div>
+            {(isAdm||isMec)&&s.status==="aberta"&&<div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0}}>
+              <Btn size="xs" color="gold" onClick={()=>{setFormOS({...blankOS(),solicitacaoId:s.id,veiculoId:s.veiculoId,tipo:s.tipo,descricao:s.descricao});setModalOS("new");setTab("os");}}>🔧 Criar OS</Btn>
+              <Btn size="xs" color="red" outline onClick={()=>setManutSols(p=>p.map(x=>x.id===s.id?{...x,status:"cancelada"}:x))}>Cancelar</Btn>
+            </div>}
+          </div>
+        </Card>;
+      })}
+    </div>}
+
+    {/* ── ORDENS DE SERVIÇO ── */}
+    {tab==="os"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {manutOS.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted}}>Nenhuma OS aberta.</span></Card>}
+      {manutOS.map(os=>{
+        const v=getVeic(os.veiculoId);
+        const mec=getUser(os.mecanicoId);
+        const totalP=totalPecas(os);
+        return <Card key={os.id} style={{padding:16,borderLeft:`3px solid ${C[STATUS_OS[os.status]]||C.gold}`}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+            <div style={{flex:1,minWidth:0}}>
+              {/* Header */}
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6}}>
+                <Bdg color={STATUS_OS[os.status]||"gold"}>{STATUS_OS_LABEL[os.status]||os.status}</Bdg>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:14}}>{v?.placa||"?"}</span>
+                <span style={{fontSize:13,fontWeight:600,color:C.txt}}>{v?.modelo||""}</span>
+                <span style={{fontSize:11,color:C.muted}}>🔧 {os.tipo}</span>
+              </div>
+              {/* Info */}
+              <div style={{fontSize:12,color:C.muted,marginBottom:6}}>
+                👨‍🔧 {mec?.name||"?"} · Entrada: {os.dtEntrada} {os.dtSaida&&`· Saída: ${os.dtSaida}`}
+              </div>
+              <div style={{fontSize:13,color:C.txt2,marginBottom:6}}>{os.descricao}</div>
+              {/* KM */}
+              <div style={{display:"flex",gap:16,fontSize:12,color:C.muted,marginBottom:6,flexWrap:"wrap"}}>
+                <span style={{fontFamily:"'JetBrains Mono',monospace"}}>KM Entrada: <strong style={{color:C.txt}}>{fmt(parseInt(os.kmEntrada)||0)}</strong></span>
+                {os.kmSaida&&<span style={{fontFamily:"'JetBrains Mono',monospace"}}>KM Saída: <strong style={{color:C.txt}}>{fmt(parseInt(os.kmSaida)||0)}</strong></span>}
+                {os.kmEntrada&&os.kmSaida&&<span style={{color:C.blue}}>🛣️ {fmt(Math.abs(parseInt(os.kmSaida)-parseInt(os.kmEntrada)))} km rodados</span>}
+              </div>
+              {/* Serviços */}
+              {os.servicos&&<div style={{fontSize:12,color:C.txt2,marginBottom:6}}><strong>Serviços:</strong> {os.servicos}</div>}
+              {/* Peças */}
+              {os.pecas?.length>0&&<div style={{marginTop:6}}>
+                <div style={{fontSize:11,fontWeight:700,color:C.muted,marginBottom:4}}>PEÇAS UTILIZADAS:</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {os.pecas.map((p,i)=>(
+                    <div key={i} style={{background:C.surf,borderRadius:6,padding:"4px 10px",fontSize:11,color:C.txt2,border:`1px solid ${C.bdr}`}}>
+                      {p.nome} <span style={{color:C.gold,fontWeight:700}}>×{p.qtd}</span>
+                      {p.valor&&<span style={{color:C.muted}}> · R${(parseFloat(p.valor)*parseInt(p.qtd)).toFixed(2)}</span>}
+                    </div>
+                  ))}
+                </div>
+                {totalP>0&&<div style={{fontSize:12,color:C.grn,fontWeight:700,marginTop:6}}>Total em peças: R$ {totalP.toFixed(2)}</div>}
+              </div>}
+              {os.obs&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic",marginTop:4}}>{os.obs}</div>}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0}}>
+              {os.status!=="concluida"&&(isAdm||isMec)&&<>
+                <Btn size="xs" color="gold" outline onClick={()=>{setFormOS({...os,pecas:os.pecas||[]});setModalOS(os.id);}}>Editar</Btn>
+                <Btn size="xs" color="grn" onClick={()=>{
+                  const km=prompt("Informe o KM de saída:");
+                  if(km)concluirOS({...os,kmSaida:km});
+                }}>✅ Concluir</Btn>
+              </>}
+            </div>
+          </div>
+        </Card>;
+      })}
+    </div>}
+
+    {/* ── HISTÓRICO POR VEÍCULO ── */}
+    {tab==="hist"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {veiculos.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted}}>Nenhum veículo cadastrado.</span></Card>}
+      {veiculos.map(v=>{
+        const osVeic=manutOS.filter(o=>o.veiculoId===v.id);
+        const solVeic=manutSols.filter(s=>s.veiculoId===v.id);
+        if(osVeic.length===0&&solVeic.length===0)return null;
+        return <Card key={v.id} style={{padding:0,overflow:"hidden"}}>
+          <div style={{padding:"12px 16px",background:C.surf,borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:14}}>{v.placa}</span>
+              <span style={{fontSize:13,color:C.txt}}>{v.modelo} {v.ano}</span>
+            </div>
+            <div style={{display:"flex",gap:12,fontSize:12,color:C.muted}}>
+              <span>{fmt(osVeic.length)} OS</span>
+              <span>{fmt(solVeic.length)} Solicitações</span>
+            </div>
+          </div>
+          {osVeic.map(os=>(
+            <div key={os.id} style={{padding:"10px 16px",borderBottom:`1px solid ${C.bdr}18`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:2}}>
+                  <Bdg color={STATUS_OS[os.status]||"gold"}>{STATUS_OS_LABEL[os.status]}</Bdg>
+                  <span style={{fontSize:12,color:C.txt}}>{os.tipo} — {os.descricao.slice(0,60)}{os.descricao.length>60?"...":""}</span>
+                </div>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:C.muted}}>KM {fmt(parseInt(os.kmEntrada)||0)} → {os.kmSaida?fmt(parseInt(os.kmSaida)):"-"} · {os.dtEntrada}</span>
+              </div>
+              {totalPecas(os)>0&&<span style={{fontSize:12,color:C.grn,fontWeight:700,flexShrink:0}}>R$ {totalPecas(os).toFixed(2)}</span>}
+            </div>
+          ))}
+        </Card>;
+      }).filter(Boolean)}
+    </div>}
+
+    {/* ── MODAL SOLICITAÇÃO ── */}
+    {modalSol&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
+      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,width:"100%",maxWidth:560,maxHeight:isMobile?"92vh":"85vh",display:"flex",flexDirection:"column",position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
+        <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+          <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>📋 Nova Solicitação de Manutenção</h2>
+          <button onClick={()=>setModalSol(false)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+        </div>
+        <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:12}}>
+          <Sel label="Veículo *" value={formSol.veiculoId} onChange={v=>setFormSol(f=>({...f,veiculoId:v}))} options={[{value:"",label:"— Selecionar veículo —"},...veiculos.map(v=>({value:v.id,label:`${v.placa} — ${v.modelo}`}))]}/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <Sel label="Tipo de Manutenção" value={formSol.tipo} onChange={v=>setFormSol(f=>({...f,tipo:v}))} options={TYPE_OPTS.map(t=>({value:t,label:t.charAt(0).toUpperCase()+t.slice(1)}))}/>
+            <Sel label="Urgência" value={formSol.urgencia} onChange={v=>setFormSol(f=>({...f,urgencia:v}))} options={URG_OPTS.map(u=>({value:u,label:u==="urgente"?"🔴 Urgente":u==="alta"?"🟡 Alta":"Normal"}))}/>
+          </div>
+          <div>
+            <label style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:".06em",textTransform:"uppercase",display:"block",marginBottom:6}}>DESCRIÇÃO DO PROBLEMA *</label>
+            <textarea value={formSol.descricao} onChange={e=>setFormSol(f=>({...f,descricao:e.target.value}))} rows={4} placeholder="Descreva detalhadamente o problema ou serviço necessário..."
+              style={{width:"100%",background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"11px 14px",color:C.txt,fontSize:13,resize:"vertical",fontFamily:"'Inter',sans-serif"}}/>
+          </div>
+          <Inp label="Observações" value={formSol.obs} onChange={v=>setFormSol(f=>({...f,obs:v}))} placeholder="Informações adicionais"/>
+          {errSol&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",color:C.red,fontSize:13}}>⚠️ {errSol}</div>}
+        </div>
+        <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,flexShrink:0,display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <Btn color="ghost" outline onClick={()=>setModalSol(false)}>Cancelar</Btn>
+          <Btn color="gold" onClick={salvarSol}>✅ Enviar Solicitação</Btn>
+        </div>
+      </div>
+    </div>}
+
+    {/* ── MODAL OS MECÂNICA ── */}
+    {modalOS&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
+      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,width:"100%",maxWidth:640,height:isMobile?"95vh":"92vh",display:"flex",flexDirection:"column",position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
+        <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+          <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>🔧 {modalOS==="new"?"Nova OS":"Editar OS"} de Manutenção</h2>
+          <button onClick={()=>setModalOS(null)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+        </div>
+        <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:12}}>
+          {/* Veículo e tipo */}
+          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:12}}>🚗 VEÍCULO E SERVIÇO</div>
+            <Sel label="Veículo *" value={formOS.veiculoId} onChange={v=>setFormOS(f=>({...f,veiculoId:v}))} options={[{value:"",label:"— Selecionar veículo —"},...veiculos.map(v=>({value:v.id,label:`${v.placa} — ${v.modelo} (${v.cor||""})`}))]}/>
+            {formOS.veiculoId&&(()=>{const v=getVeic(formOS.veiculoId);return v?.fotos?.[0]?<img src={v.fotos[0]} alt={v.placa} style={{width:"100%",height:80,objectFit:"cover",borderRadius:8,marginTop:8,border:`1px solid ${C.bdr2}`}}/>:null;})()}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
+              <Sel label="Tipo de Serviço" value={formOS.tipo} onChange={v=>setFormOS(f=>({...f,tipo:v}))} options={TYPE_OPTS.map(t=>({value:t,label:t.charAt(0).toUpperCase()+t.slice(1)}))}/>
+              <Sel label="Status" value={formOS.status} onChange={v=>setFormOS(f=>({...f,status:v}))} options={Object.entries(STATUS_OS_LABEL).map(([k,l])=>({value:k,label:l}))}/>
+            </div>
+          </div>
+          {/* Descrição e serviços */}
+          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:12}}>📝 DETALHES DO SERVIÇO</div>
+            <div>
+              <label style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:".06em",textTransform:"uppercase",display:"block",marginBottom:6}}>PROBLEMA / DESCRIÇÃO *</label>
+              <textarea value={formOS.descricao} onChange={e=>setFormOS(f=>({...f,descricao:e.target.value}))} rows={3} placeholder="Descreva o problema ou serviço..."
+                style={{width:"100%",background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"10px 14px",color:C.txt,fontSize:13,resize:"vertical",fontFamily:"'Inter',sans-serif",marginBottom:10}}/>
+            </div>
+            <div>
+              <label style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:".06em",textTransform:"uppercase",display:"block",marginBottom:6}}>SERVIÇOS EXECUTADOS</label>
+              <textarea value={formOS.servicos} onChange={e=>setFormOS(f=>({...f,servicos:e.target.value}))} rows={2} placeholder="Ex: Troca de óleo, filtro, balanceamento..."
+                style={{width:"100%",background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"10px 14px",color:C.txt,fontSize:13,resize:"vertical",fontFamily:"'Inter',sans-serif"}}/>
+            </div>
+          </div>
+          {/* KM e datas */}
+          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:12}}>🛣️ QUILOMETRAGEM E DATAS</div>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr 1fr",gap:10}}>
+              <Inp label="KM Entrada" value={formOS.kmEntrada} onChange={v=>setFormOS(f=>({...f,kmEntrada:v}))} type="number" placeholder="Ex: 45000"/>
+              <Inp label="KM Saída" value={formOS.kmSaida} onChange={v=>setFormOS(f=>({...f,kmSaida:v}))} type="number" placeholder="Ex: 45050"/>
+              <Inp label="Data Entrada" value={formOS.dtEntrada} onChange={v=>setFormOS(f=>({...f,dtEntrada:v}))} type="date"/>
+              <Inp label="Data Saída" value={formOS.dtSaida} onChange={v=>setFormOS(f=>({...f,dtSaida:v}))} type="date"/>
+            </div>
+          </div>
+          {/* Peças utilizadas */}
+          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase"}}>🔩 PEÇAS UTILIZADAS</div>
+              <Btn size="xs" color="gold" onClick={()=>setFormOS(f=>({...f,pecas:[...f.pecas,blankPeca()]}))}>+ Peça</Btn>
+            </div>
+            {formOS.pecas?.length===0&&<div style={{textAlign:"center",color:C.muted,fontSize:12,padding:"10px 0"}}>Nenhuma peça adicionada</div>}
+            {formOS.pecas?.map((p,i)=>(
+              <div key={p.id} style={{display:"grid",gridTemplateColumns:"2fr 80px 100px 30px",gap:8,alignItems:"end",marginBottom:8}}>
+                <Inp label={i===0?"Nome da Peça":""} value={p.nome} onChange={v=>setFormOS(f=>({...f,pecas:f.pecas.map((x,j)=>j===i?{...x,nome:v}:x)}))} placeholder="Ex: Filtro de óleo"/>
+                <Inp label={i===0?"Qtd":""} value={p.qtd} onChange={v=>setFormOS(f=>({...f,pecas:f.pecas.map((x,j)=>j===i?{...x,qtd:v}:x)}))} type="number" placeholder="0"/>
+                <Inp label={i===0?"Valor unit. R$":""} value={p.valor} onChange={v=>setFormOS(f=>({...f,pecas:f.pecas.map((x,j)=>j===i?{...x,valor:v}:x)}))} type="number" placeholder="0,00"/>
+                <button onClick={()=>setFormOS(f=>({...f,pecas:f.pecas.filter((_,j)=>j!==i)}))} style={{background:C.redD,color:C.red,border:"none",borderRadius:6,height:36,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:2}}>✕</button>
+              </div>
+            ))}
+            {formOS.pecas?.length>0&&<div style={{fontSize:12,color:C.grn,fontWeight:700,textAlign:"right",marginTop:4}}>Total: R$ {totalPecas(formOS).toFixed(2)}</div>}
+          </div>
+          <Inp label="Observações" value={formOS.obs} onChange={v=>setFormOS(f=>({...f,obs:v}))} placeholder="Observações adicionais"/>
+          {errOS&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",color:C.red,fontSize:13}}>⚠️ {errOS}</div>}
+        </div>
+        <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,flexShrink:0,display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <Btn color="ghost" outline onClick={()=>setModalOS(null)}>Cancelar</Btn>
+          <Btn color="gold" onClick={salvarOS}>✅ Salvar OS</Btn>
+        </div>
+      </div>
+    </div>}
+  </div>;
+}
+
 /* ── APP ── */
 export default function App(){
   const[user,setUser]=useState(()=>{
@@ -3246,6 +3566,8 @@ export default function App(){
   const[solicitacoes,setSolicitacoes]=useLS("re_sol",[]);
   const[veiculos,setVeiculos]=useLS("re_veiculos",[]);
   const[abastecimentos,setAbastecimentos]=useLS("re_abast",[]);
+  const[manutSols,setManutSols]=useLS("re_manut_sols",[]);
+  const[manutOS,setManutOS]=useLS("re_manut_os",[]);
   const[cats,setCats]=useLS("re_cats",[
     {id:"c1",name:"Equipamentos",icon:"📡"},{id:"c2",name:"Cabos e Fios",icon:"🔌"},
     {id:"c3",name:"Conectores",icon:"🔗"},{id:"c4",name:"Caixas e Acessórios",icon:"🗃️"},
@@ -3354,6 +3676,7 @@ export default function App(){
     produtos:<ProdutosPage produtos={produtos} setProdutos={setProdutos} cats={cats} isMobile={isMobile}/>,
     usr:<UsrPage users={users} setUsers={setUsers} addLog={addLog} currentUser={user} isMobile={isMobile}/>,
     log:<LogPage logs={logs} isMobile={isMobile}/>,
+    manut:<ManutencaoPage manutSols={manutSols} setManutSols={setManutSols} manutOS={manutOS} setManutOS={setManutOS} veiculos={veiculos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
     frota:<FrotaPage veiculos={veiculos} setVeiculos={setVeiculos} abastecimentos={abastecimentos} setAbastecimentos={setAbastecimentos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
   };
   // Listen for openPerfil event from Sidebar
