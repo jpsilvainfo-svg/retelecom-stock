@@ -2932,13 +2932,15 @@ function SolicitacaoPage({solicitacoes,setSolicitacoes,stock,setStock,tstock,set
 
 
 /* ── FROTA ── */
-function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,users,currentUser,addLog,isMobile}){
+function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checkouts,setCheckouts,users,currentUser,addLog,isMobile}){
   const isTec=currentUser.role==="tecnico";
   const isAdm=currentUser.role==="admin";
-  const[tab,setTab]=useState(isTec?"abast":"veic");
+  const[tab,setTab]=useState(isTec?"check":"veic");
   const[modalVeic,setModalVeic]=useState(null);
   const[modalAbast,setModalAbast]=useState(false);
+  const[modalCheck,setModalCheck]=useState(null);
   const[modalFotos,setModalFotos]=useState(null);
+  const[modalDoc,setModalDoc]=useState(null);
   const techs=users.filter(u=>u.role==="tecnico");
 
   const FOTOS_LABELS=["Frente","Lado Esquerdo","Lado Direito","Traseira"];
@@ -2946,46 +2948,55 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,users,
   const STATUS_OPTS=["ativo","manutenção","inativo"];
   const STATUS_COLOR={ativo:C.grn,manutenção:C.ylw,inativo:C.red};
   const COMB_OPTS=["gasolina","etanol","diesel","flex","gnv"];
+  const COMB_NÍVEL=["reserva","1/4","1/2","3/4","cheio"];
+  const COMB_COLOR={reserva:C.red,"1/4":C.ylw,"1/2":C.ylw,"3/4":C.grn,cheio:C.grn};
+  const PNEU_OPTS=["ok","baixo","problema"];
+  const PNEU_COLOR={ok:C.grn,baixo:C.ylw,problema:C.red};
+  const PNEU_ICON={ok:"✅","baixo":"⚠️",problema:"❌"};
 
-  const blankVeic=()=>({id:uid(),placa:"",modelo:"",ano:"",cor:"",tecnicoId:"",dtAquisicao:"",kmCadastro:"",status:"ativo",obs:"",fotos:["","","",""]});
+  const blankVeic=()=>({id:uid(),placa:"",modelo:"",ano:"",cor:"",tecnicoId:"",dtAquisicao:"",kmCadastro:"",status:"ativo",obs:"",fotos:["","","",""],docPDF:""});
   const blankAbast=()=>({id:uid(),veiculoId:"",tecnicoId:currentUser.id,dtAbast:new Date().toISOString().slice(0,10),odometro:"",litros:"",valor:"",combustivel:"gasolina",posto:"",foto:"",obs:""});
+  const blankCheck=(tipo)=>({
+    id:uid(),veiculoId:"",tecnicoId:currentUser.id,tipo:tipo||"retirada",
+    dtCheck:new Date().toISOString().slice(0,10),km:"",
+    combustivel:"cheio",
+    pneus:{diant_esq:"ok",diant_dir:"ok",tras_esq:"ok",tras_dir:"ok"},
+    avarias:false,descAvarias:"",
+    fotoOdometro:"",fotosAvarias:["","",""],
+    obs:"",registradoEm:now()
+  });
 
   const[formVeic,setFormVeic]=useState(blankVeic());
   const[formAbast,setFormAbast]=useState(blankAbast());
+  const[formCheck,setFormCheck]=useState(blankCheck("retirada"));
   const[errVeic,setErrVeic]=useState("");
   const[errAbast,setErrAbast]=useState("");
+  const[errCheck,setErrCheck]=useState("");
 
   const viewAbast=isTec?abastecimentos.filter(a=>a.tecnicoId===currentUser.id):abastecimentos;
+  const viewCheck=isTec?checkouts.filter(c=>c.tecnicoId===currentUser.id):checkouts;
 
   const getKmAtual=(veicId)=>{
     const regs=abastecimentos.filter(a=>a.veiculoId===veicId&&parseInt(a.odometro)>0);
-    if(!regs.length){const v=veiculos.find(x=>x.id===veicId);return parseInt(v?.kmCadastro)||0;}
-    return Math.max(...regs.map(a=>parseInt(a.odometro)||0));
+    const regsCheck=checkouts.filter(c=>c.veiculoId===veicId&&parseInt(c.km)>0);
+    const allKms=[...regs.map(a=>parseInt(a.odometro)||0),...regsCheck.map(c=>parseInt(c.km)||0)];
+    if(!allKms.length){const v=veiculos.find(x=>x.id===veicId);return parseInt(v?.kmCadastro)||0;}
+    return Math.max(...allKms);
   };
 
   const getAlertaOleo=(veic)=>{
     const kmAtual=getKmAtual(veic.id);
     const kmBase=parseInt(veic.kmCadastro)||0;
-    const proximaTroca=Math.ceil((kmAtual-kmBase+1)/10000)*10000+kmBase;
-    const faltam=proximaTroca-kmAtual;
+    const proxima=Math.ceil((kmAtual-kmBase+1)/10000)*10000+kmBase;
+    const faltam=proxima-kmAtual;
     return{kmAtual,faltam,urgente:faltam<=500,alerta:faltam<=2000};
   };
 
-  const handleFotoVeic=(idx,e)=>{
-    const file=e.target.files[0];if(!file)return;
-    if(file.size>3*1024*1024){alert("Máx 3MB.");return;}
-    const r=new FileReader();
-    r.onload=(ev)=>setFormVeic(f=>({...f,fotos:f.fotos.map((ft,i)=>i===idx?ev.target.result:ft)}));
-    r.readAsDataURL(file);
-  };
-
-  const handleFotoAbast=(e)=>{
-    const file=e.target.files[0];if(!file)return;
-    if(file.size>3*1024*1024){alert("Máx 3MB.");return;}
-    const r=new FileReader();
-    r.onload=(ev)=>setFormAbast(f=>({...f,foto:ev.target.result}));
-    r.readAsDataURL(file);
-  };
+  const handleFotoVeic=(idx,e)=>{const file=e.target.files[0];if(!file)return;if(file.size>3*1024*1024){alert("Máx 3MB.");return;}const r=new FileReader();r.onload=(ev)=>setFormVeic(f=>({...f,fotos:f.fotos.map((ft,i)=>i===idx?ev.target.result:ft)}));r.readAsDataURL(file);};
+  const handleDocPDF=(e)=>{const file=e.target.files[0];if(!file)return;if(file.size>5*1024*1024){alert("Máx 5MB.");return;}const r=new FileReader();r.onload=(ev)=>setFormVeic(f=>({...f,docPDF:ev.target.result}));r.readAsDataURL(file);};
+  const handleFotoAbast=(e)=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=(ev)=>setFormAbast(f=>({...f,foto:ev.target.result}));r.readAsDataURL(file);};
+  const handleFotoOdo=(e)=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=(ev)=>setFormCheck(f=>({...f,fotoOdometro:ev.target.result}));r.readAsDataURL(file);};
+  const handleFotoAvaria=(idx,e)=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=(ev)=>setFormCheck(f=>({...f,fotosAvarias:f.fotosAvarias.map((ft,i)=>i===idx?ev.target.result:ft)}));r.readAsDataURL(file);};
 
   const salvarVeic=()=>{
     if(!formVeic.placa.trim()){setErrVeic("Informe a placa.");return;}
@@ -3007,19 +3018,40 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,users,
     setModalAbast(false);setErrAbast("");setFormAbast(blankAbast());
   };
 
+  const salvarCheck=()=>{
+    if(!formCheck.veiculoId){setErrCheck("Selecione o veículo.");return;}
+    if(!formCheck.km){setErrCheck("Informe a quilometragem.");return;}
+    const veic=veiculos.find(v=>v.id===formCheck.veiculoId);
+    setCheckouts(p=>[{...formCheck,id:uid(),registradoEm:now()},...p]);
+    addLog(currentUser.name,formCheck.tipo==="retirada"?"Retirada de Veículo":"Devolução de Veículo",`${veic?.placa||"?"} · ${formCheck.km} km · ${currentUser.name}`);
+    setModalCheck(null);setErrCheck("");
+  };
+
   const totalGasto=viewAbast.reduce((a,x)=>a+(parseFloat(x.valor)||0),0);
   const totalLitros=viewAbast.reduce((a,x)=>a+(parseFloat(x.litros)||0),0);
-  const tabs=isAdm?[{k:"veic",l:"🚗 Veículos"},{k:"abast",l:"⛽ Abastecimento"}]:[{k:"abast",l:"⛽ Meus Abastecimentos"}];
+
+  const tabList=isAdm
+    ?[{k:"veic",l:"🚗 Veículos"},{k:"abast",l:"⛽ Abastecimento"},{k:"check",l:"📋 Checklist Retirada"}]
+    :[{k:"check",l:"📋 Meu Checklist"},{k:"abast",l:"⛽ Meus Abastecimentos"}];
+
+  // ── Botão para preencher checklist
+  const renderCheckBtn=(veic)=>(
+    <Btn size="xs" color="gold" onClick={()=>{setFormCheck({...blankCheck("retirada"),veiculoId:veic.id,km:String(getKmAtual(veic.id))});setModalCheck("new");}}>📋 Checklist</Btn>
+  );
 
   return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
       <div>
         <h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>🚗 Frota</h1>
-        <p style={{fontSize:12,color:C.muted,marginTop:2}}>Veículos e controle de abastecimento</p>
+        <p style={{fontSize:12,color:C.muted,marginTop:2}}>Veículos, abastecimento e checklist de retirada</p>
       </div>
-      <div style={{display:"flex",gap:8}}>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
         {isAdm&&tab==="veic"&&<Btn color="gold" size="sm" onClick={()=>{setFormVeic(blankVeic());setModalVeic("new");setErrVeic("");}}>+ Cadastrar Veículo</Btn>}
-        {tab==="abast"&&<Btn color="gold" size="sm" onClick={()=>{setFormAbast(blankAbast());setModalAbast(true);setErrAbast("");}}>⛽ Registrar Abastecimento</Btn>}
+        {tab==="abast"&&<Btn color="gold" size="sm" onClick={()=>{setFormAbast(blankAbast());setModalAbast(true);setErrAbast("");}}>⛽ Abastecimento</Btn>}
+        {tab==="check"&&<div style={{display:"flex",gap:8}}>
+          <Btn color="gold" size="sm" onClick={()=>{setFormCheck(blankCheck("retirada"));setModalCheck("new");}}>📋 Retirada</Btn>
+          <Btn color="ghost" outline size="sm" onClick={()=>{setFormCheck(blankCheck("devolucao"));setModalCheck("new");}}>↩️ Devolução</Btn>
+        </div>}
       </div>
     </div>
 
@@ -3033,7 +3065,7 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,users,
     </div>}
 
     <div style={{display:"flex",borderBottom:`1px solid ${C.bdr}`}}>
-      {tabs.map(t=><div key={t.k} onClick={()=>setTab(t.k)} style={{padding:"9px 18px",cursor:"pointer",fontSize:13,fontWeight:600,borderBottom:`2px solid ${tab===t.k?C.gold:"transparent"}`,color:tab===t.k?C.gold:C.muted,whiteSpace:"nowrap"}}>{t.l}</div>)}
+      {tabList.map(t=><div key={t.k} onClick={()=>setTab(t.k)} style={{padding:"9px 18px",cursor:"pointer",fontSize:13,fontWeight:600,borderBottom:`2px solid ${tab===t.k?C.gold:"transparent"}`,color:tab===t.k?C.gold:C.muted,whiteSpace:"nowrap"}}>{t.l}</div>)}
     </div>
 
     {/* ── VEÍCULOS ── */}
@@ -3050,15 +3082,16 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,users,
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:16}}>{v.placa}</span>
                 <span style={{fontSize:14,fontWeight:700,color:C.txt}}>{v.modelo} {v.ano}</span>
                 <Bdg color={v.status==="ativo"?"grn":v.status==="manutenção"?"ylw":"red"}>{v.status}</Bdg>
-                {oleo.urgente&&<Bdg color="red">🔴 Troca de Óleo URGENTE!</Bdg>}
-                {!oleo.urgente&&oleo.alerta&&<Bdg color="ylw">🟡 Troca de Óleo em breve</Bdg>}
+                {oleo.urgente&&<Bdg color="red">🔴 Óleo URGENTE!</Bdg>}
+                {!oleo.urgente&&oleo.alerta&&<Bdg color="ylw">🟡 Óleo em breve</Bdg>}
+                {v.docPDF&&<Bdg color="muted">📄 Doc. Anexado</Bdg>}
               </div>
               <div style={{display:"flex",gap:14,flexWrap:"wrap",fontSize:12,color:C.muted,marginBottom:8}}>
                 {v.cor&&<span>🎨 {v.cor}</span>}
                 <span>👷 {tech?.name||"—"}</span>
                 {v.dtAquisicao&&<span>📅 {v.dtAquisicao}</span>}
                 <span style={{fontFamily:"'JetBrains Mono',monospace",color:C.blue}}>🛣️ {fmt(oleo.kmAtual)} km</span>
-                {oleo.alerta&&<span style={{color:oleo.urgente?C.red:C.ylw,fontWeight:700}}>⚙️ Óleo: faltam {fmt(oleo.faltam)} km</span>}
+                {oleo.alerta&&<span style={{color:oleo.urgente?C.red:C.ylw,fontWeight:700}}>⚙️ Faltam {fmt(oleo.faltam)} km</span>}
               </div>
               {v.obs&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic",marginBottom:8}}>{v.obs}</div>}
               {temFoto&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -3070,11 +3103,15 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,users,
                 ):null)}
               </div>}
             </div>
-            {isAdm&&<div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0}}>
-              {temFoto&&<Btn size="xs" color="ghost" outline onClick={()=>setModalFotos(v)}>🖼️</Btn>}
-              <Btn size="xs" color="gold" outline onClick={()=>{setFormVeic({...v,fotos:v.fotos||["","","",""]});setModalVeic(v.id);setErrVeic("");}}>Editar</Btn>
-              <Btn size="xs" color="red" outline onClick={()=>{if(window.confirm(`Excluir ${v.placa}?`)){setVeiculos(p=>p.filter(x=>x.id!==v.id));addLog(currentUser.name,"Frota","Excluído: "+v.placa);}}}>✕</Btn>
-            </div>}
+            <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0}}>
+              {renderCheckBtn(v)}
+              {v.docPDF&&<Btn size="xs" color="ghost" outline onClick={()=>setModalDoc(v)}>📄 Documento</Btn>}
+              {isAdm&&<>
+                {temFoto&&<Btn size="xs" color="ghost" outline onClick={()=>setModalFotos(v)}>🖼️</Btn>}
+                <Btn size="xs" color="gold" outline onClick={()=>{setFormVeic({...v,fotos:v.fotos||["","","",""],docPDF:v.docPDF||""});setModalVeic(v.id);setErrVeic("");}}>Editar</Btn>
+                <Btn size="xs" color="red" outline onClick={()=>{if(window.confirm(`Excluir ${v.placa}?`)){setVeiculos(p=>p.filter(x=>x.id!==v.id));addLog(currentUser.name,"Frota","Excluído: "+v.placa);}}}>✕</Btn>
+              </>}
+            </div>
           </div>
         </Card>;
       })}
@@ -3103,12 +3140,75 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,users,
                 {a.posto&&<span style={{color:C.muted}}>📍 {a.posto}</span>}
               </div>
               {!isTec&&<div style={{fontSize:10,color:C.muted,marginTop:3}}>👷 {tech?.name||"?"}</div>}
-              {a.obs&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic",marginTop:2}}>{a.obs}</div>}
             </div>
             {a.foto&&<img src={a.foto} alt="nota" style={{width:56,height:56,objectFit:"cover",borderRadius:8,border:`1px solid ${C.bdr2}`,cursor:"pointer",flexShrink:0}} onClick={()=>window.open(a.foto,"_blank")}/>}
           </div>
         </Card>;
       })}
+    </div>}
+
+    {/* ── CHECKLIST ── */}
+    {tab==="check"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {viewCheck.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted}}>Nenhum checklist registrado. Clique em "📋 Retirada" para iniciar.</span></Card>}
+      {viewCheck.map(c=>{
+        const v=veiculos.find(x=>x.id===c.veiculoId);
+        const tech=users.find(u=>u.id===c.tecnicoId);
+        const pneuProb=Object.values(c.pneus||{}).some(p=>p==="problema");
+        const pneuBaixo=Object.values(c.pneus||{}).some(p=>p==="baixo");
+        return <Card key={c.id} style={{padding:16,borderLeft:`3px solid ${c.tipo==="retirada"?C.gold:C.grn}`}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:8}}>
+                <Bdg color={c.tipo==="retirada"?"gold":"grn"}>{c.tipo==="retirada"?"🚗 Retirada":"↩️ Devolução"}</Bdg>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:14}}>{v?.placa||"?"}</span>
+                <span style={{fontSize:13,color:C.txt}}>{v?.modelo||""}</span>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted}}>{c.dtCheck}</span>
+                {!isTec&&<span style={{fontSize:11,color:C.muted}}>· {tech?.name||"?"}</span>}
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:8,marginBottom:8}}>
+                <div style={{background:C.surf,borderRadius:8,padding:"8px 10px",border:`1px solid ${C.bdr}`}}>
+                  <div style={{fontSize:10,color:C.muted,marginBottom:2}}>QUILOMETRAGEM</div>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.blue,fontSize:14}}>{fmt(parseInt(c.km)||0)} km</div>
+                </div>
+                <div style={{background:C.surf,borderRadius:8,padding:"8px 10px",border:`1px solid ${C.bdr}`}}>
+                  <div style={{fontSize:10,color:C.muted,marginBottom:2}}>COMBUSTÍVEL</div>
+                  <div style={{fontWeight:700,color:COMB_COLOR[c.combustivel]||C.gold,fontSize:13}}>⛽ {c.combustivel}</div>
+                </div>
+                <div style={{background:C.surf,borderRadius:8,padding:"8px 10px",border:`1px solid ${C.bdr}`}}>
+                  <div style={{fontSize:10,color:C.muted,marginBottom:2}}>PNEUS</div>
+                  <div style={{fontWeight:700,color:pneuProb?C.red:pneuBaixo?C.ylw:C.grn,fontSize:13}}>{pneuProb?"❌ Problema":pneuBaixo?"⚠️ Baixo":"✅ OK"}</div>
+                </div>
+                <div style={{background:C.surf,borderRadius:8,padding:"8px 10px",border:`1px solid ${C.bdr}`}}>
+                  <div style={{fontSize:10,color:C.muted,marginBottom:2}}>AVARIAS</div>
+                  <div style={{fontWeight:700,color:c.avarias?C.red:C.grn,fontSize:13}}>{c.avarias?"⚠️ Sim":"✅ Não"}</div>
+                </div>
+              </div>
+              {c.avarias&&c.descAvarias&&<div style={{fontSize:12,color:C.ylw,marginBottom:6}}>⚠️ {c.descAvarias}</div>}
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {c.fotoOdometro&&<img src={c.fotoOdometro} alt="odômetro" style={{width:60,height:50,objectFit:"cover",borderRadius:6,border:`1px solid ${C.bdr2}`,cursor:"pointer"}} onClick={()=>window.open(c.fotoOdometro,"_blank")}/>}
+                {c.fotosAvarias?.filter(f=>f).map((foto,i)=><img key={i} src={foto} alt={`avaria ${i+1}`} style={{width:60,height:50,objectFit:"cover",borderRadius:6,border:`1px solid ${C.red}44`,cursor:"pointer"}} onClick={()=>window.open(foto,"_blank")}/>)}
+              </div>
+              {c.obs&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic",marginTop:6}}>{c.obs}</div>}
+            </div>
+          </div>
+        </Card>;
+      })}
+    </div>}
+
+    {/* ── MODAL DOCUMENTO ── */}
+    {modalDoc&&<div style={{position:"fixed",inset:0,background:"#000000ee",zIndex:1100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:12,width:"100%",maxWidth:700,maxHeight:"90vh",display:"flex",flexDirection:"column"}}>
+        <div style={{padding:"14px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+          <span style={{fontSize:15,fontWeight:700,color:C.txt}}>📄 Documento — {modalDoc.placa} {modalDoc.modelo}</span>
+          <div style={{display:"flex",gap:8}}>
+            <Btn size="sm" color="gold" onClick={()=>window.open(modalDoc.docPDF,"_blank")}>⬇️ Abrir PDF</Btn>
+            <button onClick={()=>setModalDoc(null)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+          </div>
+        </div>
+        <div style={{flex:1,padding:20,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <iframe src={modalDoc.docPDF} title="Documento" style={{width:"100%",height:"60vh",border:"none",borderRadius:8,background:"#fff"}}/>
+        </div>
+      </div>
     </div>}
 
     {/* ── MODAL FOTOS ── */}
@@ -3123,9 +3223,7 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,users,
             {FOTOS_LABELS.map((label,i)=>(
               <div key={i} style={{borderRadius:10,overflow:"hidden",border:`1px solid ${C.bdr2}`}}>
                 <div style={{background:C.surf,padding:"7px 12px",fontSize:11,fontWeight:700,color:C.gold}}>{FOTOS_ICONS[i]} {label}</div>
-                {modalFotos.fotos?.[i]
-                  ?<img src={modalFotos.fotos[i]} alt={label} style={{width:"100%",height:180,objectFit:"cover",cursor:"pointer"}} onClick={()=>window.open(modalFotos.fotos[i],"_blank")}/>
-                  :<div style={{height:180,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontSize:13}}>Sem foto</div>}
+                {modalFotos.fotos?.[i]?<img src={modalFotos.fotos[i]} alt={label} style={{width:"100%",height:180,objectFit:"cover",cursor:"pointer"}} onClick={()=>window.open(modalFotos.fotos[i],"_blank")}/>:<div style={{height:180,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontSize:13}}>Sem foto</div>}
               </div>
             ))}
           </div>
@@ -3137,10 +3235,11 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,users,
     {modalVeic&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
       <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,width:"100%",maxWidth:660,height:isMobile?"95vh":"92vh",display:"flex",flexDirection:"column",position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
         <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
-          <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>🚗 {modalVeic==="new"?"Cadastrar Veículo":"Editar Veículo"}</h2>
+          <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>🚗 {modalVeic==="new"?"Cadastrar":"Editar"} Veículo</h2>
           <button onClick={()=>setModalVeic(null)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
         </div>
         <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:12}}>
+          {/* Dados */}
           <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
             <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:12}}>📋 DADOS DO VEÍCULO</div>
             <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10}}>
@@ -3150,7 +3249,7 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,users,
             <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:10,marginTop:10}}>
               <Inp label="Ano" value={formVeic.ano} onChange={v=>setFormVeic(f=>({...f,ano:v}))} type="number" placeholder="2024"/>
               <Inp label="Cor" value={formVeic.cor} onChange={v=>setFormVeic(f=>({...f,cor:v}))} placeholder="Branco"/>
-              <Inp label="KM no Cadastro *" value={formVeic.kmCadastro} onChange={v=>setFormVeic(f=>({...f,kmCadastro:v}))} type="number" placeholder="Ex: 45000"/>
+              <Inp label="KM no Cadastro" value={formVeic.kmCadastro} onChange={v=>setFormVeic(f=>({...f,kmCadastro:v}))} type="number" placeholder="45000"/>
             </div>
             <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10,marginTop:10}}>
               <Inp label="Data de Aquisição" value={formVeic.dtAquisicao} onChange={v=>setFormVeic(f=>({...f,dtAquisicao:v}))} type="date"/>
@@ -3161,10 +3260,35 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,users,
               <Inp label="Observações" value={formVeic.obs} onChange={v=>setFormVeic(f=>({...f,obs:v}))} placeholder="Obs opcionais"/>
             </div>
           </div>
-
+          {/* Documento PDF */}
+          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:10}}>📄 DOCUMENTO DO VEÍCULO (PDF)</div>
+            {formVeic.docPDF?(
+              <div style={{display:"flex",alignItems:"center",gap:12,background:C.card,borderRadius:8,padding:"12px 14px",border:`1px solid ${C.bdr2}`}}>
+                <span style={{fontSize:28}}>📄</span>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13,fontWeight:600,color:C.grn}}>✓ Documento anexado</div>
+                  <div style={{fontSize:11,color:C.muted,marginTop:2}}>Clique para visualizar</div>
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  <Btn size="xs" color="gold" onClick={()=>window.open(formVeic.docPDF,"_blank")}>Ver PDF</Btn>
+                  <button onClick={()=>setFormVeic(f=>({...f,docPDF:""}))} style={{background:C.redD,color:C.red,border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12,fontWeight:600}}>✕</button>
+                </div>
+              </div>
+            ):(
+              <label style={{display:"flex",alignItems:"center",gap:12,cursor:"pointer",background:C.card,border:`2px dashed ${C.bdr2}`,borderRadius:8,padding:"14px 18px"}}>
+                <span style={{fontSize:28}}>📄</span>
+                <div>
+                  <div style={{fontSize:13,fontWeight:600,color:C.txt}}>Anexar documento do veículo</div>
+                  <div style={{fontSize:11,color:C.muted,marginTop:2}}>PDF · Máx 5MB (CRVL, licenciamento, seguro...)</div>
+                </div>
+                <input type="file" accept=".pdf,application/pdf" onChange={handleDocPDF} style={{display:"none"}}/>
+              </label>
+            )}
+          </div>
           {/* Upload 4 fotos */}
           <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:12}}>📸 FOTOS DO VEÍCULO (4 ângulos)</div>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:12}}>📸 FOTOS DO VEÍCULO</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
               {FOTOS_LABELS.map((label,i)=>(
                 <div key={i} style={{borderRadius:8,overflow:"hidden",border:`1px solid ${C.bdr2}`}}>
@@ -3172,13 +3296,12 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,users,
                   {formVeic.fotos?.[i]?(
                     <div style={{position:"relative"}}>
                       <img src={formVeic.fotos[i]} alt={label} style={{width:"100%",height:110,objectFit:"cover"}}/>
-                      <button onClick={()=>setFormVeic(f=>({...f,fotos:f.fotos.map((ft,j)=>j===i?"":ft)}))}
-                        style={{position:"absolute",top:4,right:4,background:"#000000bb",color:"#fff",border:"none",borderRadius:4,width:22,height:22,cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+                      <button onClick={()=>setFormVeic(f=>({...f,fotos:f.fotos.map((ft,j)=>j===i?"":ft)}))} style={{position:"absolute",top:4,right:4,background:"#000000bb",color:"#fff",border:"none",borderRadius:4,width:22,height:22,cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
                     </div>
                   ):(
                     <label style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:110,cursor:"pointer",background:C.bg,gap:4}}>
                       <span style={{fontSize:22}}>📷</span>
-                      <span style={{fontSize:10,color:C.muted,textAlign:"center"}}>Adicionar foto</span>
+                      <span style={{fontSize:10,color:C.muted}}>Adicionar foto</span>
                       <input type="file" accept="image/*" capture="environment" onChange={e=>handleFotoVeic(i,e)} style={{display:"none"}}/>
                     </label>
                   )}
@@ -3186,7 +3309,6 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,users,
               ))}
             </div>
           </div>
-
           {errVeic&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",color:C.red,fontSize:13}}>⚠️ {errVeic}</div>}
         </div>
         <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,flexShrink:0,display:"flex",gap:10,justifyContent:"flex-end"}}>
@@ -3217,28 +3339,14 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,users,
             <Inp label="Odômetro (Km) *" value={formAbast.odometro} onChange={v=>setFormAbast(f=>({...f,odometro:v}))} type="number" placeholder="Ex: 45320"/>
             <Inp label="Posto / Local" value={formAbast.posto} onChange={v=>setFormAbast(f=>({...f,posto:v}))} placeholder="Nome do posto"/>
           </div>
-          <Inp label="Observação" value={formAbast.obs} onChange={v=>setFormAbast(f=>({...f,obs:v}))} placeholder="Opcional"/>
           {formAbast.litros&&formAbast.valor&&parseFloat(formAbast.litros)>0&&<div style={{background:`${C.gold}15`,border:`1px solid ${C.gold}44`,borderRadius:8,padding:"10px 14px",display:"flex",justifyContent:"space-between"}}>
             <span style={{fontSize:12,color:C.muted}}>Preço por litro:</span>
             <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:16}}>R$ {(parseFloat(formAbast.valor)/parseFloat(formAbast.litros)).toFixed(2)}/L</span>
           </div>}
           <div style={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:10,padding:14}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:10}}>📸 Foto da Nota Fiscal</div>
-            {formAbast.foto?(
-              <div style={{display:"flex",alignItems:"center",gap:12}}>
-                <img src={formAbast.foto} alt="nota" style={{width:80,height:80,objectFit:"cover",borderRadius:8,border:`2px solid ${C.gold}55`}}/>
-                <div>
-                  <div style={{fontSize:12,color:C.grn,fontWeight:600,marginBottom:8}}>✓ Foto anexada</div>
-                  <button onClick={()=>setFormAbast(f=>({...f,foto:""}))} style={{background:C.redD,color:C.red,border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:12,fontWeight:600}}>✕ Remover</button>
-                </div>
-              </div>
-            ):(
-              <label style={{display:"flex",alignItems:"center",gap:12,cursor:"pointer",background:C.card,border:`2px dashed ${C.bdr2}`,borderRadius:8,padding:"14px 18px"}}>
-                <span style={{fontSize:28}}>📷</span>
-                <div><div style={{fontSize:13,fontWeight:600,color:C.txt}}>Tirar foto ou escolher da galeria</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>JPG, PNG · Máx 3MB</div></div>
-                <input type="file" accept="image/*" capture="environment" onChange={handleFotoAbast} style={{display:"none"}}/>
-              </label>
-            )}
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:"uppercase",marginBottom:10}}>📸 Foto da Nota Fiscal</div>
+            {formAbast.foto?(<div style={{display:"flex",alignItems:"center",gap:12}}><img src={formAbast.foto} alt="nota" style={{width:80,height:80,objectFit:"cover",borderRadius:8,border:`2px solid ${C.gold}55`}}/><button onClick={()=>setFormAbast(f=>({...f,foto:""}))} style={{background:C.redD,color:C.red,border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:12}}>✕ Remover</button></div>
+            ):(<label style={{display:"flex",alignItems:"center",gap:12,cursor:"pointer",background:C.card,border:`2px dashed ${C.bdr2}`,borderRadius:8,padding:"12px 16px"}}><span style={{fontSize:24}}>📷</span><div><div style={{fontSize:13,fontWeight:600,color:C.txt}}>Tirar foto da nota</div><div style={{fontSize:11,color:C.muted}}>JPG, PNG · Máx 3MB</div></div><input type="file" accept="image/*" capture="environment" onChange={handleFotoAbast} style={{display:"none"}}/></label>)}
           </div>
           {errAbast&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",color:C.red,fontSize:13}}>⚠️ {errAbast}</div>}
         </div>
@@ -3248,320 +3356,138 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,users,
         </div>
       </div>
     </div>}
-  </div>;
-}
 
-/* ── MANUTENÇÃO (MECÂNICO) ── */
-function ManutencaoPage({manutSols,setManutSols,manutOS,setManutOS,veiculos,users,currentUser,addLog,isMobile}){
-  const isMec=currentUser.role==="mecanico";
-  const isAdm=currentUser.role==="admin";
-  const[tab,setTab]=useState("sols");
-  const[modalSol,setModalSol]=useState(false);
-  const[modalOS,setModalOS]=useState(null);
-  const[modalExec,setModalExec]=useState(null);
-
-  const blankSol=()=>({id:uid(),veiculoId:"",solicitanteId:currentUser.id,tipo:"corretiva",urgencia:"normal",descricao:"",status:"aberta",dtSol:now(),obs:""});
-  const blankOS=()=>({id:uid(),solicitacaoId:"",veiculoId:"",mecanicoId:currentUser.id,tipo:"corretiva",descricao:"",kmEntrada:"",kmSaida:"",dtEntrada:new Date().toISOString().slice(0,10),dtSaida:"",pecas:[],servicos:"",status:"aberta",obs:""});
-  const blankPeca=()=>({id:uid(),nome:"",qtd:"",valor:""});
-
-  const[formSol,setFormSol]=useState(blankSol());
-  const[formOS,setFormOS]=useState(blankOS());
-  const[errSol,setErrSol]=useState("");
-  const[errOS,setErrOS]=useState("");
-
-  const TYPE_OPTS=["corretiva","preventiva","revisão","elétrica","pneus","outros"];
-  const URG_OPTS=["normal","alta","urgente"];
-  const URG_COLOR={normal:C.muted,alta:C.ylw,urgente:C.red};
-  const STATUS_SOL={aberta:"ylw",em_andamento:"blue",concluida:"grn",cancelada:"red"};
-  const STATUS_SOL_LABEL={aberta:"⏳ Aberta",em_andamento:"🔧 Em Andamento",concluida:"✅ Concluída",cancelada:"❌ Cancelada"};
-  const STATUS_OS={aberta:"ylw",em_andamento:"blue",concluida:"grn"};
-  const STATUS_OS_LABEL={aberta:"⏳ Aberta",em_andamento:"🔧 Em Andamento",concluida:"✅ Concluída"};
-
-  const getVeic=(id)=>veiculos.find(v=>v.id===id);
-  const getUser=(id)=>users.find(u=>u.id===id);
-
-  const salvarSol=()=>{
-    if(!formSol.veiculoId){setErrSol("Selecione o veículo.");return;}
-    if(!formSol.descricao.trim()){setErrSol("Descreva o problema.");return;}
-    setManutSols(p=>[{...formSol,id:uid()},...p]);
-    addLog(currentUser.name,"Manutenção","Solicitação: "+formSol.tipo+" · "+getVeic(formSol.veiculoId)?.placa);
-    setModalSol(false);setErrSol("");setFormSol(blankSol());
-  };
-
-  const salvarOS=()=>{
-    if(!formOS.veiculoId){setErrOS("Selecione o veículo.");return;}
-    if(!formOS.descricao.trim()){setErrOS("Descreva o serviço.");return;}
-    const isNew=modalOS==="new";
-    if(isNew){
-      setManutOS(p=>[{...formOS,id:uid()},...p]);
-      addLog(currentUser.name,"OS Mecânica","Aberta: "+getVeic(formOS.veiculoId)?.placa+" · "+formOS.tipo);
-    } else {
-      setManutOS(p=>p.map(o=>o.id===modalOS?{...formOS}:o));
-      addLog(currentUser.name,"OS Mecânica","Atualizada: "+getVeic(formOS.veiculoId)?.placa);
-    }
-    setModalOS(null);setErrOS("");
-  };
-
-  const concluirOS=(os)=>{
-    if(!os.kmSaida){alert("Informe o KM de saída antes de concluir.");return;}
-    setManutOS(p=>p.map(o=>o.id===os.id?{...o,status:"concluida",dtSaida:new Date().toISOString().slice(0,10)}:o));
-    // Atualiza solicitação vinculada
-    if(os.solicitacaoId){setManutSols(p=>p.map(s=>s.id===os.solicitacaoId?{...s,status:"concluida"}:s));}
-    addLog(currentUser.name,"OS Mecânica","Concluída: "+getVeic(os.veiculoId)?.placa);
-  };
-
-  const totalPecas=(os)=>os.pecas?.reduce((a,p)=>a+(parseFloat(p.valor)||0)*(parseInt(p.qtd)||1),0)||0;
-
-  return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-      <div>
-        <h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>🔩 Manutenção</h1>
-        <p style={{fontSize:12,color:C.muted,marginTop:2}}>Solicitações, ordens de serviço e execução</p>
-      </div>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <Btn color="gold" size="sm" onClick={()=>{setFormSol(blankSol());setModalSol(true);setErrSol("");}}>+ Solicitação</Btn>
-        {(isAdm||isMec)&&<Btn color="red" size="sm" onClick={()=>{setFormOS(blankOS());setModalOS("new");setErrOS("");}}>🔧 Nova OS</Btn>}
-      </div>
-    </div>
-
-    {/* Cards resumo */}
-    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
-      {[
-        {label:"SOLICITAÇÕES",value:fmt(manutSols.length),sub:"total",icon:"📋",color:C.gold},
-        {label:"EM ABERTO",value:fmt(manutSols.filter(s=>s.status==="aberta").length),sub:"aguardando",icon:"⏳",color:C.ylw},
-        {label:"OS ABERTAS",value:fmt(manutOS.filter(o=>o.status!=="concluida").length),sub:"em andamento",icon:"🔧",color:C.red},
-        {label:"CONCLUÍDAS",value:fmt(manutOS.filter(o=>o.status==="concluida").length),sub:"finalizadas",icon:"✅",color:C.grn},
-      ].map((s,i)=>(
-        <Card key={i} style={{padding:isMobile?12:14,display:"flex",gap:10,alignItems:"center"}}>
-          <div style={{width:36,height:36,borderRadius:10,background:`${s.color}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{s.icon}</div>
-          <div><div style={{fontSize:9,fontWeight:700,color:C.muted}}>{s.label}</div><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:isMobile?16:20,fontWeight:800,color:s.color}}>{s.value}</div><div style={{fontSize:10,color:C.muted}}>{s.sub}</div></div>
-        </Card>
-      ))}
-    </div>
-
-    {/* Tabs */}
-    <div style={{display:"flex",borderBottom:`1px solid ${C.bdr}`}}>
-      {[{k:"sols",l:"📋 Solicitações"},{k:"os",l:"🔧 Ordens de Serviço"},{k:"hist",l:"📊 Histórico por Veículo"}].map(t=>(
-        <div key={t.k} onClick={()=>setTab(t.k)} style={{padding:"9px 16px",cursor:"pointer",fontSize:13,fontWeight:600,borderBottom:`2px solid ${tab===t.k?C.gold:"transparent"}`,color:tab===t.k?C.gold:C.muted,whiteSpace:"nowrap"}}>{t.l}</div>
-      ))}
-    </div>
-
-    {/* ── SOLICITAÇÕES ── */}
-    {tab==="sols"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
-      {manutSols.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted}}>Nenhuma solicitação ainda.</span></Card>}
-      {manutSols.map(s=>{
-        const v=getVeic(s.veiculoId);
-        const sol=getUser(s.solicitanteId);
-        const osVinc=manutOS.find(o=>o.solicitacaoId===s.id);
-        return <Card key={s.id} style={{padding:16,borderLeft:`3px solid ${C[STATUS_SOL[s.status]]||C.gold}`}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
-            <div style={{flex:1}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6}}>
-                <Bdg color={STATUS_SOL[s.status]||"gold"}>{STATUS_SOL_LABEL[s.status]||s.status}</Bdg>
-                <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:14}}>{v?.placa||"?"}</span>
-                <span style={{fontSize:13,fontWeight:600,color:C.txt}}>{v?.modelo||""}</span>
-                <span style={{fontSize:11,color:URG_COLOR[s.urgencia],fontWeight:700}}>{s.urgencia==="urgente"?"🔴 URGENTE":s.urgencia==="alta"?"🟡 Alta":""}</span>
-              </div>
-              <div style={{fontSize:12,color:C.muted,marginBottom:4}}>🔧 {s.tipo.toUpperCase()} · Solicitado por: {sol?.name||"?"} · {s.dtSol}</div>
-              <div style={{fontSize:13,color:C.txt2,marginBottom:6}}>{s.descricao}</div>
-              {s.obs&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>"{s.obs}"</div>}
-              {osVinc&&<div style={{marginTop:8,background:C.surf,borderRadius:6,padding:"6px 10px",fontSize:11,color:C.muted}}>OS vinculada: <strong style={{color:C.gold}}>#{osVinc.id.slice(-4)}</strong> — {STATUS_OS_LABEL[osVinc.status]}</div>}
-            </div>
-            {(isAdm||isMec)&&s.status==="aberta"&&<div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0}}>
-              <Btn size="xs" color="gold" onClick={()=>{setFormOS({...blankOS(),solicitacaoId:s.id,veiculoId:s.veiculoId,tipo:s.tipo,descricao:s.descricao});setModalOS("new");setTab("os");}}>🔧 Criar OS</Btn>
-              <Btn size="xs" color="red" outline onClick={()=>setManutSols(p=>p.map(x=>x.id===s.id?{...x,status:"cancelada"}:x))}>Cancelar</Btn>
-            </div>}
-          </div>
-        </Card>;
-      })}
-    </div>}
-
-    {/* ── ORDENS DE SERVIÇO ── */}
-    {tab==="os"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
-      {manutOS.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted}}>Nenhuma OS aberta.</span></Card>}
-      {manutOS.map(os=>{
-        const v=getVeic(os.veiculoId);
-        const mec=getUser(os.mecanicoId);
-        const totalP=totalPecas(os);
-        return <Card key={os.id} style={{padding:16,borderLeft:`3px solid ${C[STATUS_OS[os.status]]||C.gold}`}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
-            <div style={{flex:1,minWidth:0}}>
-              {/* Header */}
-              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6}}>
-                <Bdg color={STATUS_OS[os.status]||"gold"}>{STATUS_OS_LABEL[os.status]||os.status}</Bdg>
-                <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:14}}>{v?.placa||"?"}</span>
-                <span style={{fontSize:13,fontWeight:600,color:C.txt}}>{v?.modelo||""}</span>
-                <span style={{fontSize:11,color:C.muted}}>🔧 {os.tipo}</span>
-              </div>
-              {/* Info */}
-              <div style={{fontSize:12,color:C.muted,marginBottom:6}}>
-                👨‍🔧 {mec?.name||"?"} · Entrada: {os.dtEntrada} {os.dtSaida&&`· Saída: ${os.dtSaida}`}
-              </div>
-              <div style={{fontSize:13,color:C.txt2,marginBottom:6}}>{os.descricao}</div>
-              {/* KM */}
-              <div style={{display:"flex",gap:16,fontSize:12,color:C.muted,marginBottom:6,flexWrap:"wrap"}}>
-                <span style={{fontFamily:"'JetBrains Mono',monospace"}}>KM Entrada: <strong style={{color:C.txt}}>{fmt(parseInt(os.kmEntrada)||0)}</strong></span>
-                {os.kmSaida&&<span style={{fontFamily:"'JetBrains Mono',monospace"}}>KM Saída: <strong style={{color:C.txt}}>{fmt(parseInt(os.kmSaida)||0)}</strong></span>}
-                {os.kmEntrada&&os.kmSaida&&<span style={{color:C.blue}}>🛣️ {fmt(Math.abs(parseInt(os.kmSaida)-parseInt(os.kmEntrada)))} km rodados</span>}
-              </div>
-              {/* Serviços */}
-              {os.servicos&&<div style={{fontSize:12,color:C.txt2,marginBottom:6}}><strong>Serviços:</strong> {os.servicos}</div>}
-              {/* Peças */}
-              {os.pecas?.length>0&&<div style={{marginTop:6}}>
-                <div style={{fontSize:11,fontWeight:700,color:C.muted,marginBottom:4}}>PEÇAS UTILIZADAS:</div>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                  {os.pecas.map((p,i)=>(
-                    <div key={i} style={{background:C.surf,borderRadius:6,padding:"4px 10px",fontSize:11,color:C.txt2,border:`1px solid ${C.bdr}`}}>
-                      {p.nome} <span style={{color:C.gold,fontWeight:700}}>×{p.qtd}</span>
-                      {p.valor&&<span style={{color:C.muted}}> · R${(parseFloat(p.valor)*parseInt(p.qtd)).toFixed(2)}</span>}
-                    </div>
-                  ))}
-                </div>
-                {totalP>0&&<div style={{fontSize:12,color:C.grn,fontWeight:700,marginTop:6}}>Total em peças: R$ {totalP.toFixed(2)}</div>}
-              </div>}
-              {os.obs&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic",marginTop:4}}>{os.obs}</div>}
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0}}>
-              {os.status!=="concluida"&&(isAdm||isMec)&&<>
-                <Btn size="xs" color="gold" outline onClick={()=>{setFormOS({...os,pecas:os.pecas||[]});setModalOS(os.id);}}>Editar</Btn>
-                <Btn size="xs" color="grn" onClick={()=>{
-                  const km=prompt("Informe o KM de saída:");
-                  if(km)concluirOS({...os,kmSaida:km});
-                }}>✅ Concluir</Btn>
-              </>}
-            </div>
-          </div>
-        </Card>;
-      })}
-    </div>}
-
-    {/* ── HISTÓRICO POR VEÍCULO ── */}
-    {tab==="hist"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
-      {veiculos.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted}}>Nenhum veículo cadastrado.</span></Card>}
-      {veiculos.map(v=>{
-        const osVeic=manutOS.filter(o=>o.veiculoId===v.id);
-        const solVeic=manutSols.filter(s=>s.veiculoId===v.id);
-        if(osVeic.length===0&&solVeic.length===0)return null;
-        return <Card key={v.id} style={{padding:0,overflow:"hidden"}}>
-          <div style={{padding:"12px 16px",background:C.surf,borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:14}}>{v.placa}</span>
-              <span style={{fontSize:13,color:C.txt}}>{v.modelo} {v.ano}</span>
-            </div>
-            <div style={{display:"flex",gap:12,fontSize:12,color:C.muted}}>
-              <span>{fmt(osVeic.length)} OS</span>
-              <span>{fmt(solVeic.length)} Solicitações</span>
-            </div>
-          </div>
-          {osVeic.map(os=>(
-            <div key={os.id} style={{padding:"10px 16px",borderBottom:`1px solid ${C.bdr}18`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div>
-                <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:2}}>
-                  <Bdg color={STATUS_OS[os.status]||"gold"}>{STATUS_OS_LABEL[os.status]}</Bdg>
-                  <span style={{fontSize:12,color:C.txt}}>{os.tipo} — {os.descricao.slice(0,60)}{os.descricao.length>60?"...":""}</span>
-                </div>
-                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:C.muted}}>KM {fmt(parseInt(os.kmEntrada)||0)} → {os.kmSaida?fmt(parseInt(os.kmSaida)):"-"} · {os.dtEntrada}</span>
-              </div>
-              {totalPecas(os)>0&&<span style={{fontSize:12,color:C.grn,fontWeight:700,flexShrink:0}}>R$ {totalPecas(os).toFixed(2)}</span>}
-            </div>
-          ))}
-        </Card>;
-      }).filter(Boolean)}
-    </div>}
-
-    {/* ── MODAL SOLICITAÇÃO ── */}
-    {modalSol&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
-      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,width:"100%",maxWidth:560,maxHeight:isMobile?"92vh":"85vh",display:"flex",flexDirection:"column",position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
-        <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
-          <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>📋 Nova Solicitação de Manutenção</h2>
-          <button onClick={()=>setModalSol(false)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
-        </div>
-        <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:12}}>
-          <Sel label="Veículo *" value={formSol.veiculoId} onChange={v=>setFormSol(f=>({...f,veiculoId:v}))} options={[{value:"",label:"— Selecionar veículo —"},...veiculos.map(v=>({value:v.id,label:`${v.placa} — ${v.modelo}`}))]}/>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <Sel label="Tipo de Manutenção" value={formSol.tipo} onChange={v=>setFormSol(f=>({...f,tipo:v}))} options={TYPE_OPTS.map(t=>({value:t,label:t.charAt(0).toUpperCase()+t.slice(1)}))}/>
-            <Sel label="Urgência" value={formSol.urgencia} onChange={v=>setFormSol(f=>({...f,urgencia:v}))} options={URG_OPTS.map(u=>({value:u,label:u==="urgente"?"🔴 Urgente":u==="alta"?"🟡 Alta":"Normal"}))}/>
-          </div>
-          <div>
-            <label style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:".06em",textTransform:"uppercase",display:"block",marginBottom:6}}>DESCRIÇÃO DO PROBLEMA *</label>
-            <textarea value={formSol.descricao} onChange={e=>setFormSol(f=>({...f,descricao:e.target.value}))} rows={4} placeholder="Descreva detalhadamente o problema ou serviço necessário..."
-              style={{width:"100%",background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"11px 14px",color:C.txt,fontSize:13,resize:"vertical",fontFamily:"'Inter',sans-serif"}}/>
-          </div>
-          <Inp label="Observações" value={formSol.obs} onChange={v=>setFormSol(f=>({...f,obs:v}))} placeholder="Informações adicionais"/>
-          {errSol&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",color:C.red,fontSize:13}}>⚠️ {errSol}</div>}
-        </div>
-        <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,flexShrink:0,display:"flex",gap:10,justifyContent:"flex-end"}}>
-          <Btn color="ghost" outline onClick={()=>setModalSol(false)}>Cancelar</Btn>
-          <Btn color="gold" onClick={salvarSol}>✅ Enviar Solicitação</Btn>
-        </div>
-      </div>
-    </div>}
-
-    {/* ── MODAL OS MECÂNICA ── */}
-    {modalOS&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
+    {/* ── MODAL CHECKLIST RETIRADA/DEVOLUÇÃO ── */}
+    {modalCheck&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
       <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,width:"100%",maxWidth:640,height:isMobile?"95vh":"92vh",display:"flex",flexDirection:"column",position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
         <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
-          <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>🔧 {modalOS==="new"?"Nova OS":"Editar OS"} de Manutenção</h2>
-          <button onClick={()=>setModalOS(null)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+          <div>
+            <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>{formCheck.tipo==="retirada"?"🚗 Checklist de Retirada":"↩️ Checklist de Devolução"}</h2>
+            <div style={{fontSize:11,color:C.muted,marginTop:2}}>Registre as condições do veículo</div>
+          </div>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <div style={{display:"flex",borderRadius:8,overflow:"hidden",border:`1px solid ${C.bdr2}`}}>
+              {["retirada","devolucao"].map(t=>(
+                <div key={t} onClick={()=>setFormCheck(f=>({...f,tipo:t}))} style={{padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:600,background:formCheck.tipo===t?C.gold:"transparent",color:formCheck.tipo===t?"#000":C.muted}}>
+                  {t==="retirada"?"🚗 Retirada":"↩️ Devolução"}
+                </div>
+              ))}
+            </div>
+            <button onClick={()=>setModalCheck(null)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+          </div>
         </div>
-        <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:12}}>
-          {/* Veículo e tipo */}
+        <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:14}}>
+          {/* Veículo e data */}
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10}}>
+            <Sel label="Veículo *" value={formCheck.veiculoId} onChange={v=>setFormCheck(f=>({...f,veiculoId:v}))} options={[{value:"",label:"— Selecionar veículo —"},...veiculos.map(v=>({value:v.id,label:`${v.placa} — ${v.modelo}`}))]}/>
+            <Inp label="Data" value={formCheck.dtCheck} onChange={v=>setFormCheck(f=>({...f,dtCheck:v}))} type="date"/>
+          </div>
+
+          {/* Quilometragem */}
           <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:12}}>🚗 VEÍCULO E SERVIÇO</div>
-            <Sel label="Veículo *" value={formOS.veiculoId} onChange={v=>setFormOS(f=>({...f,veiculoId:v}))} options={[{value:"",label:"— Selecionar veículo —"},...veiculos.map(v=>({value:v.id,label:`${v.placa} — ${v.modelo} (${v.cor||""})`}))]}/>
-            {formOS.veiculoId&&(()=>{const v=getVeic(formOS.veiculoId);return v?.fotos?.[0]?<img src={v.fotos[0]} alt={v.placa} style={{width:"100%",height:80,objectFit:"cover",borderRadius:8,marginTop:8,border:`1px solid ${C.bdr2}`}}/>:null;})()}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
-              <Sel label="Tipo de Serviço" value={formOS.tipo} onChange={v=>setFormOS(f=>({...f,tipo:v}))} options={TYPE_OPTS.map(t=>({value:t,label:t.charAt(0).toUpperCase()+t.slice(1)}))}/>
-              <Sel label="Status" value={formOS.status} onChange={v=>setFormOS(f=>({...f,status:v}))} options={Object.entries(STATUS_OS_LABEL).map(([k,l])=>({value:k,label:l}))}/>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:"uppercase",letterSpacing:".06em",marginBottom:10}}>🛣️ QUILOMETRAGEM *</div>
+            <Inp label="KM Atual" value={formCheck.km} onChange={v=>setFormCheck(f=>({...f,km:v}))} type="number" placeholder="Ex: 45320"/>
+          </div>
+
+          {/* Nível de combustível */}
+          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:"uppercase",letterSpacing:".06em",marginBottom:12}}>⛽ NÍVEL DE COMBUSTÍVEL</div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {COMB_NÍVEL.map(n=>(
+                <div key={n} onClick={()=>setFormCheck(f=>({...f,combustivel:n}))}
+                  style={{padding:"10px 16px",borderRadius:8,cursor:"pointer",border:`2px solid ${formCheck.combustivel===n?COMB_COLOR[n]:C.bdr2}`,background:formCheck.combustivel===n?`${COMB_COLOR[n]}22`:"transparent",flex:1,textAlign:"center"}}>
+                  <div style={{fontSize:16,marginBottom:4}}>⛽</div>
+                  <div style={{fontSize:12,fontWeight:700,color:formCheck.combustivel===n?COMB_COLOR[n]:C.muted}}>{n.toUpperCase()}</div>
+                </div>
+              ))}
             </div>
           </div>
-          {/* Descrição e serviços */}
+
+          {/* Pneus */}
           <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:12}}>📝 DETALHES DO SERVIÇO</div>
-            <div>
-              <label style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:".06em",textTransform:"uppercase",display:"block",marginBottom:6}}>PROBLEMA / DESCRIÇÃO *</label>
-              <textarea value={formOS.descricao} onChange={e=>setFormOS(f=>({...f,descricao:e.target.value}))} rows={3} placeholder="Descreva o problema ou serviço..."
-                style={{width:"100%",background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"10px 14px",color:C.txt,fontSize:13,resize:"vertical",fontFamily:"'Inter',sans-serif",marginBottom:10}}/>
-            </div>
-            <div>
-              <label style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:".06em",textTransform:"uppercase",display:"block",marginBottom:6}}>SERVIÇOS EXECUTADOS</label>
-              <textarea value={formOS.servicos} onChange={e=>setFormOS(f=>({...f,servicos:e.target.value}))} rows={2} placeholder="Ex: Troca de óleo, filtro, balanceamento..."
-                style={{width:"100%",background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"10px 14px",color:C.txt,fontSize:13,resize:"vertical",fontFamily:"'Inter',sans-serif"}}/>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:"uppercase",letterSpacing:".06em",marginBottom:12}}>🔄 CONDIÇÃO DOS PNEUS</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              {[["diant_esq","Diant. Esquerdo","↙️"],["diant_dir","Diant. Direito","↘️"],["tras_esq","Tras. Esquerdo","↖️"],["tras_dir","Tras. Direito","↗️"]].map(([key,label,icon])=>(
+                <div key={key} style={{background:C.card,borderRadius:8,padding:"10px 12px",border:`1px solid ${C.bdr2}`}}>
+                  <div style={{fontSize:11,color:C.muted,marginBottom:8}}>{icon} {label}</div>
+                  <div style={{display:"flex",gap:6}}>
+                    {PNEU_OPTS.map(p=>(
+                      <div key={p} onClick={()=>setFormCheck(f=>({...f,pneus:{...f.pneus,[key]:p}}))}
+                        style={{flex:1,textAlign:"center",padding:"6px 4px",borderRadius:6,cursor:"pointer",border:`2px solid ${formCheck.pneus?.[key]===p?PNEU_COLOR[p]:C.bdr2}`,background:formCheck.pneus?.[key]===p?`${PNEU_COLOR[p]}22`:"transparent",fontSize:10,fontWeight:700,color:formCheck.pneus?.[key]===p?PNEU_COLOR[p]:C.muted}}>
+                        {PNEU_ICON[p]}<br/>{p}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-          {/* KM e datas */}
-          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:12}}>🛣️ QUILOMETRAGEM E DATAS</div>
-            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr 1fr",gap:10}}>
-              <Inp label="KM Entrada" value={formOS.kmEntrada} onChange={v=>setFormOS(f=>({...f,kmEntrada:v}))} type="number" placeholder="Ex: 45000"/>
-              <Inp label="KM Saída" value={formOS.kmSaida} onChange={v=>setFormOS(f=>({...f,kmSaida:v}))} type="number" placeholder="Ex: 45050"/>
-              <Inp label="Data Entrada" value={formOS.dtEntrada} onChange={v=>setFormOS(f=>({...f,dtEntrada:v}))} type="date"/>
-              <Inp label="Data Saída" value={formOS.dtSaida} onChange={v=>setFormOS(f=>({...f,dtSaida:v}))} type="date"/>
-            </div>
-          </div>
-          {/* Peças utilizadas */}
-          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase"}}>🔩 PEÇAS UTILIZADAS</div>
-              <Btn size="xs" color="gold" onClick={()=>setFormOS(f=>({...f,pecas:[...f.pecas,blankPeca()]}))}>+ Peça</Btn>
-            </div>
-            {formOS.pecas?.length===0&&<div style={{textAlign:"center",color:C.muted,fontSize:12,padding:"10px 0"}}>Nenhuma peça adicionada</div>}
-            {formOS.pecas?.map((p,i)=>(
-              <div key={p.id} style={{display:"grid",gridTemplateColumns:"2fr 80px 100px 30px",gap:8,alignItems:"end",marginBottom:8}}>
-                <Inp label={i===0?"Nome da Peça":""} value={p.nome} onChange={v=>setFormOS(f=>({...f,pecas:f.pecas.map((x,j)=>j===i?{...x,nome:v}:x)}))} placeholder="Ex: Filtro de óleo"/>
-                <Inp label={i===0?"Qtd":""} value={p.qtd} onChange={v=>setFormOS(f=>({...f,pecas:f.pecas.map((x,j)=>j===i?{...x,qtd:v}:x)}))} type="number" placeholder="0"/>
-                <Inp label={i===0?"Valor unit. R$":""} value={p.valor} onChange={v=>setFormOS(f=>({...f,pecas:f.pecas.map((x,j)=>j===i?{...x,valor:v}:x)}))} type="number" placeholder="0,00"/>
-                <button onClick={()=>setFormOS(f=>({...f,pecas:f.pecas.filter((_,j)=>j!==i)}))} style={{background:C.redD,color:C.red,border:"none",borderRadius:6,height:36,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:2}}>✕</button>
+
+          {/* Avarias */}
+          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${formCheck.avarias?`${C.ylw}55`:C.bdr}`}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:formCheck.avarias?12:0}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:"uppercase",letterSpacing:".06em",flex:1}}>⚠️ AVARIAS VISÍVEIS</div>
+              <div style={{display:"flex",gap:8}}>
+                {[{v:false,l:"✅ Sem avarias"},{v:true,l:"⚠️ Com avarias"}].map(opt=>(
+                  <div key={String(opt.v)} onClick={()=>setFormCheck(f=>({...f,avarias:opt.v}))}
+                    style={{padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,border:`2px solid ${formCheck.avarias===opt.v?(opt.v?C.ylw:C.grn):C.bdr2}`,background:formCheck.avarias===opt.v?`${opt.v?C.ylw:C.grn}22`:"transparent",color:formCheck.avarias===opt.v?(opt.v?C.ylw:C.grn):C.muted}}>
+                    {opt.l}
+                  </div>
+                ))}
               </div>
-            ))}
-            {formOS.pecas?.length>0&&<div style={{fontSize:12,color:C.grn,fontWeight:700,textAlign:"right",marginTop:4}}>Total: R$ {totalPecas(formOS).toFixed(2)}</div>}
+            </div>
+            {formCheck.avarias&&<div>
+              <label style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",display:"block",marginBottom:6}}>Descrição das avarias</label>
+              <textarea value={formCheck.descAvarias} onChange={e=>setFormCheck(f=>({...f,descAvarias:e.target.value}))} rows={3} placeholder="Descreva as avarias encontradas..."
+                style={{width:"100%",background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"10px 14px",color:C.txt,fontSize:13,resize:"vertical",fontFamily:"'Inter',sans-serif"}}/>
+            </div>}
           </div>
-          <Inp label="Observações" value={formOS.obs} onChange={v=>setFormOS(f=>({...f,obs:v}))} placeholder="Observações adicionais"/>
-          {errOS&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",color:C.red,fontSize:13}}>⚠️ {errOS}</div>}
+
+          {/* Fotos */}
+          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:"uppercase",letterSpacing:".06em",marginBottom:12}}>📸 FOTOS</div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {/* Foto odômetro */}
+              <div>
+                <div style={{fontSize:11,color:C.muted,marginBottom:6,fontWeight:600}}>📟 Foto do Odômetro</div>
+                {formCheck.fotoOdometro?(
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <img src={formCheck.fotoOdometro} alt="odômetro" style={{width:80,height:70,objectFit:"cover",borderRadius:8,border:`2px solid ${C.gold}55`}}/>
+                    <button onClick={()=>setFormCheck(f=>({...f,fotoOdometro:""}))} style={{background:C.redD,color:C.red,border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:12}}>✕ Remover</button>
+                  </div>
+                ):(
+                  <label style={{display:"inline-flex",alignItems:"center",gap:8,cursor:"pointer",background:C.card,border:`1.5px dashed ${C.bdr2}`,borderRadius:8,padding:"10px 16px"}}>
+                    <span style={{fontSize:20}}>📷</span><span style={{fontSize:12,color:C.muted}}>Fotografar odômetro</span>
+                    <input type="file" accept="image/*" capture="environment" onChange={handleFotoOdo} style={{display:"none"}}/>
+                  </label>
+                )}
+              </div>
+              {/* Fotos avarias */}
+              {formCheck.avarias&&<div>
+                <div style={{fontSize:11,color:C.muted,marginBottom:6,fontWeight:600}}>⚠️ Fotos das Avarias (até 3)</div>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  {formCheck.fotosAvarias.map((foto,i)=>foto?(
+                    <div key={i} style={{position:"relative"}}>
+                      <img src={foto} alt={`avaria ${i+1}`} style={{width:80,height:70,objectFit:"cover",borderRadius:8,border:`2px solid ${C.ylw}55`}}/>
+                      <button onClick={()=>setFormCheck(f=>({...f,fotosAvarias:f.fotosAvarias.map((ft,j)=>j===i?"":ft)}))} style={{position:"absolute",top:2,right:2,background:"#000000bb",color:"#fff",border:"none",borderRadius:4,width:18,height:18,cursor:"pointer",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+                    </div>
+                  ):(
+                    <label key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",width:80,height:70,cursor:"pointer",background:C.card,border:`1.5px dashed ${C.bdr2}`,borderRadius:8,gap:3}}>
+                      <span style={{fontSize:18}}>📷</span><span style={{fontSize:9,color:C.muted}}>Avaria {i+1}</span>
+                      <input type="file" accept="image/*" capture="environment" onChange={e=>handleFotoAvaria(i,e)} style={{display:"none"}}/>
+                    </label>
+                  ))}
+                </div>
+              </div>}
+            </div>
+          </div>
+
+          <Inp label="Observações" value={formCheck.obs} onChange={v=>setFormCheck(f=>({...f,obs:v}))} placeholder="Observações adicionais"/>
+          {errCheck&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",color:C.red,fontSize:13}}>⚠️ {errCheck}</div>}
         </div>
         <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,flexShrink:0,display:"flex",gap:10,justifyContent:"flex-end"}}>
-          <Btn color="ghost" outline onClick={()=>setModalOS(null)}>Cancelar</Btn>
-          <Btn color="gold" onClick={salvarOS}>✅ Salvar OS</Btn>
+          <Btn color="ghost" outline onClick={()=>setModalCheck(null)}>Cancelar</Btn>
+          <Btn color="gold" onClick={salvarCheck}>✅ Registrar {formCheck.tipo==="retirada"?"Retirada":"Devolução"}</Btn>
         </div>
       </div>
     </div>}
@@ -3586,6 +3512,7 @@ export default function App(){
   const[solicitacoes,setSolicitacoes]=useLS("re_sol",[]);
   const[veiculos,setVeiculos]=useLS("re_veiculos",[]);
   const[abastecimentos,setAbastecimentos]=useLS("re_abast",[]);
+  const[checkouts,setCheckouts]=useLS("re_checkouts",[]);
   const[manutSols,setManutSols]=useLS("re_manut_sols",[]);
   const[manutOS,setManutOS]=useLS("re_manut_os",[]);
   const[cats,setCats]=useLS("re_cats",[
@@ -3717,7 +3644,7 @@ export default function App(){
     usr:<UsrPage users={users} setUsers={setUsers} addLog={addLog} currentUser={user} isMobile={isMobile}/>,
     log:<LogPage logs={logs} isMobile={isMobile}/>,
     manut:<ManutencaoPage manutSols={manutSols} setManutSols={setManutSols} manutOS={manutOS} setManutOS={setManutOS} veiculos={veiculos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
-    frota:<FrotaPage veiculos={veiculos} setVeiculos={setVeiculos} abastecimentos={abastecimentos} setAbastecimentos={setAbastecimentos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
+    frota:<FrotaPage veiculos={veiculos} setVeiculos={setVeiculos} abastecimentos={abastecimentos} setAbastecimentos={setAbastecimentos} checkouts={checkouts} setCheckouts={setCheckouts} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
   };
   // Listen for openPerfil event from Sidebar
   useEffect(()=>{
