@@ -8,14 +8,14 @@ const C={bg:"#161616",surf:"#1e1e1e",card:"#252525",bdr:"#2a2a2a",bdr2:"#333333"
 const PIE=["#cc0000","#666666","#999999","#444444","#aaaaaa"];
 const ALL_MODULES=[
   {k:"dash",l:"Dashboard",icon:"🏠",group:"geral"},
+  {k:"os",l:"Ordens de Serviço",icon:"🔧",group:"operacional"},
+  {k:"frota",l:"Frota",icon:"🚗",group:"operacional"},
   {k:"estoque",l:"Estoque Base",icon:"📦",group:"estoque"},
   {k:"kit",l:"Estoque Técnico",icon:"🎒",group:"estoque"},
   {k:"nf",l:"Entrada de Materiais (NF)",icon:"📥",group:"estoque"},
   {k:"dist",l:"Saída / Liberação",icon:"🚀",group:"estoque"},
   {k:"dev",l:"Devoluções",icon:"↩️",group:"operacional"},
-  {k:"os",l:"Ordens de Serviço",icon:"🔧",group:"operacional"},
   {k:"sol",l:"Solicitações",icon:"📋",group:"operacional"},
-  {k:"frota",l:"Frota",icon:"🚗",group:"operacional"},
   {k:"rel",l:"Relatórios",icon:"📊",group:"relatorios"},
   {k:"email",l:"Relatório Administrativo",icon:"📧",group:"relatorios"},
   {k:"cat",l:"Categorias",icon:"🏷️",group:"admin"},
@@ -25,8 +25,8 @@ const ALL_MODULES=[
 ];
 const DEFAULT_PERMS={
   admin:ALL_MODULES.map(m=>m.k),
-  estoque:["dash","estoque","kit","dist","dev","os","sol","rel"],
-  tecnico:["dash","kit","dev","os","sol","frota","rel"],
+  estoque:["dash","os","estoque","kit","dist","dev","sol","rel"],
+  tecnico:["dash","os","frota","kit","dev","sol","rel"],
 };
 let _id=300;
 const uid=()=>`${++_id}_${Date.now()}`;
@@ -323,21 +323,27 @@ function TopBar({user,pendRet,pendSol,setPage,isMobile,onMenuOpen}){
 
 /* ── BOTTOM NAV MOBILE ── */
 function BottomNav({page,setPage,user,onMenuOpen}){
-  const isTec=user.role==="tecnico";
-  const items=isTec
-    ?[{k:"dash",icon:"🏠",label:"Início"},{k:"os",icon:"🔧",label:"OS"},{k:"frota",icon:"🚗",label:"Frota"},{k:"kit",icon:"🎒",label:"Meu Kit"},{k:"__menu",icon:"☰",label:"Menu"}]
-    :[{k:"dash",icon:"🏠",label:"Início"},{k:"estoque",icon:"📦",label:"Estoque"},{k:"dist",icon:"🚀",label:"Saída"},{k:"dev",icon:"↩️",label:"Dev."},{k:"__menu",icon:"☰",label:"Menu"}];
+  // Pega permissões do usuário e monta nav dinâmico
+  const perms=user.perms||DEFAULT_PERMS[user.role]||["dash"];
+  const allItems=ALL_MODULES.filter(m=>perms.includes(m.k)).map(m=>({k:m.k,icon:m.icon,label:m.l.split(" ")[0]}));
+
+  // Mostra os 4 primeiros itens + botão Menu
+  const visible=allItems.slice(0,5);
+  const items=[...visible,{k:"__menu",icon:"☰",label:"Menu"}];
+
   return <div style={{position:"fixed",bottom:0,left:0,right:0,background:C.surf,borderTop:`1px solid ${C.bdr}`,display:"flex",zIndex:100,paddingBottom:"env(safe-area-inset-bottom)"}}>
     {items.map(it=>(
       <div key={it.k} onClick={()=>it.k==="__menu"?onMenuOpen():setPage(it.k)}
-        style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",padding:"8px 4px 6px",cursor:"pointer",
-          color:page===it.k?C.gold:C.muted,borderTop:page===it.k?`2px solid ${C.gold}`:"2px solid transparent"}}>
-        <span style={{fontSize:20,lineHeight:1}}>{it.icon}</span>
-        <span style={{fontSize:10,marginTop:3,fontWeight:page===it.k?700:400}}>{it.label}</span>
+        style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",padding:"8px 2px 6px",cursor:"pointer",
+          color:page===it.k?C.gold:C.muted,
+          borderTop:page===it.k?`2px solid ${C.gold}`:"2px solid transparent"}}>
+        <span style={{fontSize:19,lineHeight:1}}>{it.icon}</span>
+        <span style={{fontSize:8,marginTop:2,fontWeight:page===it.k?700:400,textAlign:"center",maxWidth:46,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.label}</span>
       </div>
     ))}
   </div>;
 }
+
 
 /* ── DASHBOARD ── */
 function Dashboard({stock,tstock,users,os,returns,logs,setPage,isMobile,currentUser,pendSol,veiculos=[],abastecimentos=[]}){
