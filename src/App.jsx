@@ -1749,11 +1749,6 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
           <Inp label="Telefone" value={form.phone} onChange={v=>setForm(f=>({...f,phone:v}))} placeholder="(00) 00000-0000"/>
           <Inp label="Matrícula" value={form.cpf||""} onChange={v=>setForm(f=>({...f,cpf:v}))} placeholder="Ex: MAT-001"/>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:12}}>
-          <Inp label="Login *" value={form.login} onChange={v=>setForm(f=>({...f,login:v}))}/>
-          <Inp label="Senha *" value={form.pass} onChange={v=>setForm(f=>({...f,pass:v}))} type="password"/>
-          <div style={{gridColumn:isMobile?"1 / -1":"auto"}}><Sel label="Perfil" value={form.role} onChange={v=>setForm(f=>({...f,role:v}))} options={roles}/></div>
-        </div>
         {/* Perfil e permissões */}
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:12}}>
           <Inp label="Login *" value={form.login} onChange={v=>setForm(f=>({...f,login:v}))}/>
