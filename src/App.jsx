@@ -6,6 +6,28 @@ import { sbGet, sbSet } from "./supabase.js";
 
 const C={bg:"#161616",surf:"#1e1e1e",card:"#252525",bdr:"#2a2a2a",bdr2:"#333333",gold:"#cc0000",goldD:"#cc000022",goldL:"#e00000",red:"#cc0000",redD:"#cc000022",grn:"#43a047",grnD:"#43a04722",ylw:"#fb8c00",ylwD:"#fb8c0022",blue:"#1e88e5",txt:"#ffffff",txt2:"#cccccc",muted:"#888888",muted2:"#555555"};
 const PIE=["#cc0000","#666666","#999999","#444444","#aaaaaa"];
+const ALL_MODULES=[
+  {k:"dash",l:"Dashboard",icon:"🏠",group:"geral"},
+  {k:"estoque",l:"Estoque Base",icon:"📦",group:"estoque"},
+  {k:"kit",l:"Estoque Técnico",icon:"🎒",group:"estoque"},
+  {k:"nf",l:"Entrada de Materiais (NF)",icon:"📥",group:"estoque"},
+  {k:"dist",l:"Saída / Liberação",icon:"🚀",group:"estoque"},
+  {k:"dev",l:"Devoluções",icon:"↩️",group:"operacional"},
+  {k:"os",l:"Ordens de Serviço",icon:"🔧",group:"operacional"},
+  {k:"sol",l:"Solicitações",icon:"📋",group:"operacional"},
+  {k:"frota",l:"Frota",icon:"🚗",group:"operacional"},
+  {k:"rel",l:"Relatórios",icon:"📊",group:"relatorios"},
+  {k:"email",l:"Relatório Administrativo",icon:"📧",group:"relatorios"},
+  {k:"cat",l:"Categorias",icon:"🏷️",group:"admin"},
+  {k:"produtos",l:"Produtos",icon:"🔩",group:"admin"},
+  {k:"usr",l:"Usuários",icon:"👥",group:"admin"},
+  {k:"log",l:"Logs do Sistema",icon:"📋",group:"admin"},
+];
+const DEFAULT_PERMS={
+  admin:ALL_MODULES.map(m=>m.k),
+  estoque:["dash","estoque","kit","dist","dev","os","sol","rel","frota"],
+  tecnico:["dash","kit","dev","os","sol","frota","rel"],
+};
 let _id=300;
 const uid=()=>`${++_id}_${Date.now()}`;
 const now=()=>new Date().toLocaleString("pt-BR");
@@ -40,13 +62,13 @@ const useLS=(key,initial)=>{
 };
 
 const USERS0=[
-  {id:"u1",name:"Administrador",email:"admin@stocktel.com.br",phone:"(21)99999-0001",cpf:"000.000.000-01",login:"admin",pass:"admin123",role:"admin",photo:""},
-  {id:"u2",name:"Marcos Estoque",email:"estoque@stocktel.com.br",phone:"(21)99999-0002",cpf:"000.000.000-02",login:"estoque",pass:"est123",role:"estoque"},
-  {id:"u3",name:"João Silva",email:"joao@stocktel.com.br",phone:"(21)98888-0001",cpf:"111.111.111-01",login:"joao",pass:"tec123",role:"tecnico"},
-  {id:"u4",name:"Carlos Alberto",email:"carlos@stocktel.com.br",phone:"(21)98888-0002",cpf:"111.111.111-02",login:"carlos",pass:"tec456",role:"tecnico"},
-  {id:"u5",name:"João Paulo",email:"jpaulo@stocktel.com.br",phone:"(21)98888-0003",cpf:"111.111.111-03",login:"jpaulo",pass:"tec789",role:"tecnico"},
-  {id:"u6",name:"Marcos Vinícius",email:"marcos@stocktel.com.br",phone:"(21)98888-0004",cpf:"111.111.111-04",login:"marcos",pass:"tec321",role:"tecnico"},
-  {id:"u7",name:"Pedro Henrique",email:"pedro@stocktel.com.br",phone:"(21)98888-0005",cpf:"111.111.111-05",login:"pedro",pass:"tec654",role:"tecnico"},
+  {id:"u1",name:"Administrador",email:"admin@stocktel.com.br",phone:"(21)99999-0001",cpf:"000.000.000-01",login:"admin",pass:"admin123",role:"admin",photo:"",perms:ALL_MODULES.map(m=>m.k),mustChangePassword:false},
+  {id:"u2",name:"Marcos Estoque",email:"estoque@stocktel.com.br",phone:"(21)99999-0002",cpf:"000.000.000-02",login:"estoque",pass:"est123",role:"estoque",perms:DEFAULT_PERMS["estoque"]||[],mustChangePassword:false},
+  {id:"u3",name:"João Silva",email:"joao@stocktel.com.br",phone:"(21)98888-0001",cpf:"111.111.111-01",login:"joao",pass:"tec123",role:"tecnico",perms:DEFAULT_PERMS["tecnico"]||[],mustChangePassword:false},
+  {id:"u4",name:"Carlos Alberto",email:"carlos@stocktel.com.br",phone:"(21)98888-0002",cpf:"111.111.111-02",login:"carlos",pass:"tec456",role:"tecnico",perms:DEFAULT_PERMS["tecnico"]||[],mustChangePassword:false},
+  {id:"u5",name:"João Paulo",email:"jpaulo@stocktel.com.br",phone:"(21)98888-0003",cpf:"111.111.111-03",login:"jpaulo",pass:"tec789",role:"tecnico",perms:DEFAULT_PERMS["tecnico"]||[],mustChangePassword:false},
+  {id:"u6",name:"Marcos Vinícius",email:"marcos@stocktel.com.br",phone:"(21)98888-0004",cpf:"111.111.111-04",login:"marcos",pass:"tec321",role:"tecnico",perms:DEFAULT_PERMS["tecnico"]||[],mustChangePassword:false},
+  {id:"u7",name:"Pedro Henrique",email:"pedro@stocktel.com.br",phone:"(21)98888-0005",cpf:"111.111.111-05",login:"pedro",pass:"tec654",role:"tecnico",perms:DEFAULT_PERMS["tecnico"]||[],mustChangePassword:false},
 ];
 const STOCK0=[
   {id:"s1",code:"ONU-001",name:"ONU Huawei HG8145V5",cat:"Equipamentos",unit:"un",qty:12,min:20},
@@ -192,25 +214,8 @@ function LoginPage({users,onLogin}){
 
 /* ── SIDEBAR DESKTOP ── */
 function Sidebar({user,page,setPage,onLogout}){
-  const isTec=user.role==="tecnico";
-  const isAdm=user.role==="admin";
-  const nav=[
-    {k:"dash",icon:"🏠",label:"Dashboard"},
-    !isTec&&{k:"estoque",icon:"📦",label:"Estoque Base"},
-    !isTec&&{k:"kit",icon:"🎒",label:"Estoque Técnico"},
-    isAdm&&{k:"nf",icon:"📥",label:"Entrada de Materiais"},
-    !isTec&&{k:"dist",icon:"🚀",label:"Saída / Liberação"},
-    {k:"dev",icon:"↩️",label:"Devoluções"},
-    {k:"os",icon:"🔧",label:"Ordens de Serviço"},
-    {k:"sol",icon:"📋",label:"Solicitações"},
-    {k:"rel",icon:"📊",label:"Relatórios"},
-    isAdm&&{k:"email",icon:"📧",label:"Enviar Relatório"},
-    isAdm&&{k:"cat",icon:"🏷️",label:"Categorias"},
-    isAdm&&{k:"produtos",icon:"🔩",label:"Produtos"},
-    isAdm&&{k:"usr",icon:"👥",label:"Usuários"},
-    isAdm&&{k:"log",icon:"📋",label:"Logs do Sistema"},
-    (isAdm||user.role==="tecnico")&&{k:"frota",icon:"🚗",label:"Frota"},
-  ].filter(Boolean);
+  const perms=user.perms||DEFAULT_PERMS[user.role]||["dash"];
+  const nav=ALL_MODULES.filter(m=>perms.includes(m.k)).map(m=>({k:m.k,icon:m.icon,label:m.l}));
   return <div style={{width:220,minWidth:220,background:C.surf,borderRight:`1px solid ${C.bdr}`,display:"flex",flexDirection:"column",height:"100vh",flexShrink:0}}>
     <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.bdr}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
       <img src="/logo-stocktel.png" alt="StockTel" style={{width:"100%",maxWidth:160,objectFit:"contain"}}/>
@@ -240,6 +245,9 @@ function Sidebar({user,page,setPage,onLogout}){
         </div>
         <span style={{background:C.gold,color:"#000",fontSize:8,fontWeight:800,padding:"1px 4px",borderRadius:3,flexShrink:0,letterSpacing:".03em"}}>{user.role==="admin"?"ADM":user.role==="estoque"?"EST":"TEC"}</span>
       </div>
+      <div onClick={()=>window.dispatchEvent(new CustomEvent("openPerfil"))} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",cursor:"pointer",color:C.muted,fontSize:12,borderRadius:6}}>
+        <span>⚙️</span>Meu Perfil
+      </div>
       <div onClick={onLogout} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",cursor:"pointer",color:C.muted,fontSize:12,borderRadius:6}}>
         <span>🚪</span>Sair
       </div>
@@ -249,25 +257,8 @@ function Sidebar({user,page,setPage,onLogout}){
 
 /* ── DRAWER MOBILE (menu lateral deslizante) ── */
 function MobileDrawer({user,page,setPage,onLogout,onClose}){
-  const isTec=user.role==="tecnico";
-  const isAdm=user.role==="admin";
-  const nav=[
-    {k:"dash",icon:"🏠",label:"Dashboard"},
-    !isTec&&{k:"estoque",icon:"📦",label:"Estoque Base"},
-    !isTec&&{k:"kit",icon:"🎒",label:"Estoque Técnico"},
-    isAdm&&{k:"nf",icon:"📥",label:"Entrada de Materiais"},
-    !isTec&&{k:"dist",icon:"🚀",label:"Saída / Liberação"},
-    {k:"dev",icon:"↩️",label:"Devoluções"},
-    {k:"os",icon:"🔧",label:"Ordens de Serviço"},
-    {k:"sol",icon:"📋",label:"Solicitações"},
-    {k:"rel",icon:"📊",label:"Relatórios"},
-    isAdm&&{k:"email",icon:"📧",label:"Enviar Relatório"},
-    isAdm&&{k:"cat",icon:"🏷️",label:"Categorias"},
-    isAdm&&{k:"produtos",icon:"🔩",label:"Produtos"},
-    isAdm&&{k:"usr",icon:"👥",label:"Usuários"},
-    isAdm&&{k:"log",icon:"📋",label:"Logs do Sistema"},
-    (isAdm||user.role==="tecnico")&&{k:"frota",icon:"🚗",label:"Frota"},
-  ].filter(Boolean);
+  const perms=user.perms||DEFAULT_PERMS[user.role]||["dash"];
+  const nav=ALL_MODULES.filter(m=>perms.includes(m.k)).map(m=>({k:m.k,icon:m.icon,label:m.l}));
   const go=(k)=>{setPage(k);onClose();};
   return <>
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"#000000aa",zIndex:200}}/>
@@ -296,7 +287,10 @@ function MobileDrawer({user,page,setPage,onLogout,onClose}){
           </div>
         ))}
       </nav>
-      <div onClick={()=>{onLogout();onClose();}} style={{display:"flex",alignItems:"center",gap:10,padding:"16px 20px",cursor:"pointer",color:C.red,fontSize:14,borderTop:`1px solid ${C.bdr}`,fontWeight:600}}>
+      <div onClick={()=>{window.dispatchEvent(new CustomEvent("openPerfil"));onClose();}} style={{display:"flex",alignItems:"center",gap:10,padding:"14px 20px",cursor:"pointer",color:C.muted,fontSize:14,borderTop:`1px solid ${C.bdr}`,fontWeight:600}}>
+        <span>⚙️</span>Meu Perfil
+      </div>
+      <div onClick={()=>{onLogout();onClose();}} style={{display:"flex",alignItems:"center",gap:10,padding:"14px 20px",cursor:"pointer",color:C.red,fontSize:14,fontWeight:600}}>
         <span>🚪</span>Sair do sistema
       </div>
     </div>
@@ -1590,7 +1584,7 @@ function RelPage({stock,os,returns,users,nf,isMobile,currentUser}){
 /* ── USUÁRIOS ── */
 function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
   const[modal,setModal]=useState(null);
-  const[form,setForm]=useState({name:"",email:"",phone:"",cpf:"",login:"",pass:"",role:"tecnico",photo:""});
+  const[form,setForm]=useState({name:"",email:"",phone:"",cpf:"",login:"",pass:"",role:"tecnico",photo:"",perms:DEFAULT_PERMS["tecnico"],mustChangePassword:true});
   const roles=[{value:"admin",label:"Administrador"},{value:"estoque",label:"Estoque"},{value:"tecnico",label:"Técnico"}];
   const rl={admin:"ADM",estoque:"EST",tecnico:"TEC"};
   const rc={admin:C.gold,estoque:C.blue,tecnico:C.grn};
@@ -1606,10 +1600,19 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
 
   const save=()=>{
     if(!form.name.trim()||!form.login.trim()||!form.pass.trim())return;
-    if(modal==="new"){setUsers(p=>[...p,{id:uid(),...form}]);addLog(currentUser.name,"Usuário Criado",form.name+" ("+form.role+")");}
-    else{setUsers(p=>p.map(u=>u.id===modal?{...u,...form}:u));addLog(currentUser.name,"Usuário Editado",form.name);}
+    const permsToSave=form.perms.length>0?form.perms:DEFAULT_PERMS[form.role]||["dash"];
+    if(modal==="new"){setUsers(p=>[...p,{id:uid(),...form,perms:permsToSave}]);addLog(currentUser.name,"Usuário Criado",form.name+" ("+form.role+")");}
+    else{setUsers(p=>p.map(u=>u.id===modal?{...u,...form,perms:permsToSave}:u));addLog(currentUser.name,"Usuário Editado",form.name);}
     setModal(null);
   };
+
+  const togglePerm=(k)=>{
+    setForm(f=>({...f,perms:f.perms.includes(k)?f.perms.filter(p=>p!==k):[...f.perms,k]}));
+  };
+  const setRoleAndPerms=(role)=>{
+    setForm(f=>({...f,role,perms:DEFAULT_PERMS[role]||["dash"]}));
+  };
+  const MODULE_GROUPS={geral:"Geral",estoque:"Estoque",operacional:"Operacional",relatorios:"Relatórios",admin:"Administração"};
 
   const Avatar=({user,size=36})=>(
     <div style={{width:size,height:size,borderRadius:"50%",flexShrink:0,overflow:"hidden",
@@ -1623,7 +1626,7 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
   return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
       <div><h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Usuários</h1></div>
-      <Btn color="gold" size={isMobile?"sm":"md"} onClick={()=>{setForm({name:"",email:"",phone:"",cpf:"",login:"",pass:"",role:"tecnico",photo:""});setModal("new");}}>+ Novo</Btn>
+      <Btn color="gold" size={isMobile?"sm":"md"} onClick={()=>{setForm({name:"",email:"",phone:"",cpf:"",login:"",pass:"",role:"tecnico",photo:"",perms:DEFAULT_PERMS["tecnico"],mustChangePassword:true});setModal("new");}}>+ Novo</Btn>
     </div>
     {isMobile?(
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
@@ -1637,7 +1640,7 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6,flexShrink:0}}>
               <span style={{background:rc[u.role],color:"#000",fontSize:9,fontWeight:800,padding:"2px 6px",borderRadius:3}}>{rl[u.role]}</span>
               <div style={{display:"flex",gap:6}}>
-                <Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf||"",login:u.login,pass:u.pass,role:u.role,photo:u.photo||""});setModal(u.id);}}>Editar</Btn>
+                <Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf||"",login:u.login,pass:u.pass,role:u.role,photo:u.photo||"",perms:u.perms||DEFAULT_PERMS[u.role]||["dash"],mustChangePassword:u.mustChangePassword||false});setModal(u.id);}}>Editar</Btn>
                 {u.id!==currentUser.id&&<Btn size="xs" color="red" outline onClick={()=>{if(window.confirm("Remover "+u.name+"?")){setUsers(p=>p.filter(x=>x.id!==u.id));addLog(currentUser.name,"Usuário Removido",u.name);}}}>✕</Btn>}
               </div>
             </div>
@@ -1659,7 +1662,7 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted}}>{u.cpf||"—"}</span>,
                 <span style={{background:rc[u.role],color:"#000",fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:4}}>{rl[u.role]}</span>,
                 <div style={{display:"flex",gap:6}}>
-                  <Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf||"",login:u.login,pass:u.pass,role:u.role,photo:u.photo||""});setModal(u.id);}}>Editar</Btn>
+                  <Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf||"",login:u.login,pass:u.pass,role:u.role,photo:u.photo||"",perms:u.perms||DEFAULT_PERMS[u.role]||["dash"],mustChangePassword:u.mustChangePassword||false});setModal(u.id);}}>Editar</Btn>
                   {u.id!==currentUser.id&&<Btn size="xs" color="red" outline onClick={()=>{if(window.confirm("Remover "+u.name+"?")){setUsers(p=>p.filter(x=>x.id!==u.id));addLog(currentUser.name,"Usuário Removido",u.name);}}}>✕</Btn>}
                 </div>
               ]}/>
@@ -1698,6 +1701,55 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
           <Inp label="Senha *" value={form.pass} onChange={v=>setForm(f=>({...f,pass:v}))} type="password"/>
           <div style={{gridColumn:isMobile?"1 / -1":"auto"}}><Sel label="Perfil" value={form.role} onChange={v=>setForm(f=>({...f,role:v}))} options={roles}/></div>
         </div>
+        {/* Perfil e permissões */}
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:12}}>
+          <Inp label="Login *" value={form.login} onChange={v=>setForm(f=>({...f,login:v}))}/>
+          <Inp label="Senha *" value={form.pass} onChange={v=>setForm(f=>({...f,pass:v}))} type="password"/>
+          <div style={{gridColumn:isMobile?"1 / -1":"auto"}}>
+            <Sel label="Perfil" value={form.role} onChange={setRoleAndPerms} options={roles}/>
+          </div>
+        </div>
+
+        {/* Trocar senha no primeiro acesso */}
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:C.surf,borderRadius:8,border:`1px solid ${C.bdr}`}}>
+          <input type="checkbox" id="mustChange" checked={form.mustChangePassword}
+            onChange={e=>setForm(f=>({...f,mustChangePassword:e.target.checked}))}
+            style={{width:16,height:16,accentColor:C.gold,cursor:"pointer"}}/>
+          <label htmlFor="mustChange" style={{fontSize:12,color:C.txt,cursor:"pointer"}}>
+            🔐 Exigir troca de senha no primeiro acesso
+          </label>
+        </div>
+
+        {/* Permissões por módulo */}
+        <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase"}}>🔑 Acesso aos Módulos</div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setForm(f=>({...f,perms:ALL_MODULES.map(m=>m.k)}))} style={{background:`${C.grn}22`,color:C.grn,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>Marcar Tudo</button>
+              <button onClick={()=>setForm(f=>({...f,perms:[]}))} style={{background:C.redD,color:C.red,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>Desmarcar</button>
+            </div>
+          </div>
+          {Object.entries(MODULE_GROUPS).map(([group,groupLabel])=>{
+            const mods=ALL_MODULES.filter(m=>m.group===group);
+            return <div key={group} style={{marginBottom:12}}>
+              <div style={{fontSize:10,fontWeight:700,color:C.muted2,letterSpacing:".06em",textTransform:"uppercase",marginBottom:6}}>{groupLabel}</div>
+              <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:6}}>
+                {mods.map(m=>(
+                  <div key={m.k} onClick={()=>togglePerm(m.k)}
+                    style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,cursor:"pointer",
+                      background:form.perms.includes(m.k)?`${C.gold}18`:C.card,
+                      border:`1px solid ${form.perms.includes(m.k)?`${C.gold}55`:C.bdr2}`}}>
+                    <div style={{width:16,height:16,borderRadius:4,background:form.perms.includes(m.k)?C.gold:C.bdr2,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      {form.perms.includes(m.k)&&<span style={{fontSize:10,color:"#000",fontWeight:800}}>✓</span>}
+                    </div>
+                    <span style={{fontSize:11,color:form.perms.includes(m.k)?C.txt:C.muted}}>{m.icon} {m.l}</span>
+                  </div>
+                ))}
+              </div>
+            </div>;
+          })}
+        </div>
+
         <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
           <Btn color="ghost" outline onClick={()=>setModal(null)}>Cancelar</Btn>
           <Btn color="gold" onClick={save}>Salvar Usuário</Btn>
@@ -3169,7 +3221,76 @@ export default function App(){
     const tipo=a.toLowerCase().includes("saída")||a.toLowerCase().includes("saida")?"saida":a.toLowerCase().includes("entrada")?"entrada":a.toLowerCase().includes("aprovada")?"aprovada":a.toLowerCase().includes("devolução")||a.toLowerCase().includes("solicitada")?"dev":"outro";
     setLogs(p=>[{id:uid(),date:now(),user:u,action:a,detail:d,tipo},...p]);
   };
+  // ── Meu Perfil ──
+  const[perfilModal,setPerfilModal]=useState(false);
+  const[perfilForm,setPerfilForm]=useState({pass:"",novaPass:"",confirmaPass:"",photo:""});
+  const[perfilMsg,setPerfilMsg]=useState("");
+  const salvarPerfil=()=>{
+    if(perfilForm.novaPass){
+      if(perfilForm.pass!==user.pass){setPerfilMsg("err:Senha atual incorreta.");return;}
+      if(perfilForm.novaPass.length<4){setPerfilMsg("err:Nova senha deve ter ao menos 4 caracteres.");return;}
+      if(perfilForm.novaPass!==perfilForm.confirmaPass){setPerfilMsg("err:As senhas não conferem.");return;}
+    }
+    const updated={...user,
+      pass:perfilForm.novaPass||user.pass,
+      photo:perfilForm.photo||user.photo,
+      mustChangePassword:false};
+    setUsers(p=>p.map(u=>u.id===user.id?updated:u));
+    setUser(updated);
+    try{localStorage.setItem("re_session",JSON.stringify(updated));}catch{}
+    setPerfilMsg("ok:Perfil atualizado com sucesso!");
+    setPerfilForm({pass:"",novaPass:"",confirmaPass:"",photo:""});
+    setTimeout(()=>{setPerfilMsg("");setPerfilModal(false);},2000);
+  };
+  const handlePerfilFoto=(e)=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    if(file.size>2*1024*1024){alert("Foto muito grande! Máx 2MB.");return;}
+    const reader=new FileReader();
+    reader.onload=(ev)=>setPerfilForm(f=>({...f,photo:ev.target.result}));
+    reader.readAsDataURL(file);
+  };
+
   if(!user)return <LoginPage users={users} onLogin={u=>{setUser(u);setPage("dash");try{localStorage.setItem("re_session",JSON.stringify(u));localStorage.setItem("re_page","dash");}catch{}}}/>;
+
+  // ── Força troca de senha no primeiro acesso ──
+  if(user.mustChangePassword) return <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <style>{CSS}</style>
+    <div style={{position:"fixed",inset:0,backgroundImage:`radial-gradient(ellipse at 50% 0%,${C.gold}18 0%,transparent 60%)`,pointerEvents:"none"}}/>
+    <div className="fi" style={{width:"100%",maxWidth:420,position:"relative",zIndex:1}}>
+      <div style={{textAlign:"center",marginBottom:24}}>
+        <div style={{fontSize:40,marginBottom:8}}>🔐</div>
+        <h1 style={{fontSize:20,fontWeight:800,color:C.txt}}>Primeiro Acesso</h1>
+        <p style={{fontSize:12,color:C.muted,marginTop:6}}>Por segurança, crie uma nova senha antes de continuar</p>
+      </div>
+      <Card style={{padding:24,display:"flex",flexDirection:"column",gap:14}}>
+        <div style={{background:`${C.gold}15`,border:`1px solid ${C.gold}44`,borderRadius:8,padding:"10px 14px"}}>
+          <div style={{fontSize:12,color:C.gold,fontWeight:600}}>👤 {user.name}</div>
+          <div style={{fontSize:11,color:C.muted}}>Login: {user.login}</div>
+        </div>
+        {(()=>{
+          const[np,setNp]=useState("");
+          const[cp,setCp]=useState("");
+          const[err,setErr]=useState("");
+          const confirmar=()=>{
+            if(np.length<4){setErr("Senha deve ter ao menos 4 caracteres.");return;}
+            if(np!==cp){setErr("As senhas não conferem.");return;}
+            const updated={...user,pass:np,mustChangePassword:false};
+            setUsers(p=>p.map(u=>u.id===user.id?updated:u));
+            setUser(updated);
+            setPage("dash");
+            try{localStorage.setItem("re_session",JSON.stringify(updated));localStorage.setItem("re_page","dash");}catch{}
+          };
+          return <>
+            <Inp label="Nova Senha *" value={np} onChange={setNp} type="password" placeholder="Mínimo 4 caracteres"/>
+            <Inp label="Confirmar Senha *" value={cp} onChange={setCp} type="password" placeholder="Repita a senha"/>
+            {err&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",color:C.red,fontSize:13}}>⚠️ {err}</div>}
+            <Btn color="gold" onClick={confirmar} style={{width:"100%"}}>✅ Definir Nova Senha e Entrar</Btn>
+          </>;
+        })()}
+      </Card>
+    </div>
+  </div>;
   const isAdm=user.role==="admin";
   const goPage=(p)=>{setPage(p);try{localStorage.setItem("re_page",p);}catch{}};
   const pendRet=returns.filter(r=>r.status==="pending").length;
@@ -3192,6 +3313,13 @@ export default function App(){
     log:<LogPage logs={logs} isMobile={isMobile}/>,
     frota:<FrotaPage veiculos={veiculos} setVeiculos={setVeiculos} abastecimentos={abastecimentos} setAbastecimentos={setAbastecimentos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
   };
+  // Listen for openPerfil event from Sidebar
+  useEffect(()=>{
+    const h=()=>{setPerfilForm({pass:"",novaPass:"",confirmaPass:"",photo:""});setPerfilMsg("");setPerfilModal(true);};
+    window.addEventListener("openPerfil",h);
+    return()=>window.removeEventListener("openPerfil",h);
+  },[]);
+
   return <div style={{height:"100dvh",background:C.bg,color:C.txt,display:"flex",overflow:"hidden"}}>
     <style>{CSS}</style>
     {!isMobile&&<Sidebar user={user} page={page} setPage={goPage} onLogout={()=>{setUser(null);try{localStorage.removeItem("re_session");localStorage.removeItem("re_page");}catch{}}}/>}
@@ -3207,5 +3335,63 @@ export default function App(){
       </div>}
     </div>
     {isMobile&&<BottomNav page={page} setPage={goPage} user={user} onMenuOpen={()=>setDrawerOpen(true)}/>}
+
+    {/* ── MODAL MEU PERFIL ── */}
+    {perfilModal&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:2000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
+      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,width:"100%",maxWidth:500,maxHeight:isMobile?"92vh":"88vh",display:"flex",flexDirection:"column",position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
+        <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+          <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>⚙️ Meu Perfil</h2>
+          <button onClick={()=>setPerfilModal(false)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+        </div>
+        <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:14}}>
+          {/* Info do usuário */}
+          <div style={{display:"flex",alignItems:"center",gap:14,padding:14,background:C.surf,borderRadius:10,border:`1px solid ${C.bdr}`}}>
+            <div style={{width:56,height:56,borderRadius:"50%",overflow:"hidden",background:`${C.gold}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}}>
+              {(perfilForm.photo||user.photo)?<img src={perfilForm.photo||user.photo} alt={user.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span>👤</span>}
+            </div>
+            <div>
+              <div style={{fontSize:14,fontWeight:700,color:C.txt}}>{user.name}</div>
+              <div style={{fontSize:11,color:C.muted}}>@{user.login} · {user.role==="admin"?"Administrador":user.role==="estoque"?"Estoque":"Técnico"}</div>
+              <div style={{fontSize:11,color:C.muted}}>{user.email}</div>
+            </div>
+          </div>
+
+          {/* Foto */}
+          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:10}}>📸 Alterar Foto de Perfil</div>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <div style={{width:60,height:60,borderRadius:"50%",overflow:"hidden",background:`${C.gold}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0,border:`2px solid ${C.bdr2}`}}>
+                {(perfilForm.photo||user.photo)?<img src={perfilForm.photo||user.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span>👤</span>}
+              </div>
+              <div style={{flex:1}}>
+                <label style={{background:C.gold,color:"#000",padding:"7px 14px",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:700,display:"inline-block",marginBottom:6}}>
+                  📷 Escolher Foto
+                  <input type="file" accept="image/*" onChange={handlePerfilFoto} style={{display:"none"}}/>
+                </label>
+                {perfilForm.photo&&<button onClick={()=>setPerfilForm(f=>({...f,photo:""}))} style={{background:"transparent",color:C.red,border:"none",cursor:"pointer",fontSize:12,marginLeft:10,fontWeight:600}}>✕ Remover</button>}
+                <div style={{fontSize:10,color:C.muted,marginTop:4}}>JPG, PNG · Máx 2MB</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Alterar senha */}
+          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:10}}>🔐 Alterar Senha</div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <Inp label="Senha Atual" value={perfilForm.pass} onChange={v=>setPerfilForm(f=>({...f,pass:v}))} type="password" placeholder="Digite sua senha atual"/>
+              <Inp label="Nova Senha" value={perfilForm.novaPass} onChange={v=>setPerfilForm(f=>({...f,novaPass:v}))} type="password" placeholder="Mínimo 4 caracteres"/>
+              <Inp label="Confirmar Nova Senha" value={perfilForm.confirmaPass} onChange={v=>setPerfilForm(f=>({...f,confirmaPass:v}))} type="password" placeholder="Repita a nova senha"/>
+            </div>
+            <div style={{fontSize:11,color:C.muted,marginTop:8}}>Deixe em branco para manter a senha atual</div>
+          </div>
+
+          {perfilMsg&&<div style={{background:perfilMsg.startsWith("ok:")?C.grnD:C.redD,border:`1px solid ${perfilMsg.startsWith("ok:")?C.grn:C.red}44`,borderRadius:8,padding:"10px 14px",color:perfilMsg.startsWith("ok:")?C.grn:C.red,fontSize:13}}>{perfilMsg.replace(/^(ok|err):/,"")}</div>}
+        </div>
+        <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,flexShrink:0,display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <Btn color="ghost" outline onClick={()=>setPerfilModal(false)}>Cancelar</Btn>
+          <Btn color="gold" onClick={salvarPerfil}>✅ Salvar Alterações</Btn>
+        </div>
+      </div>
+    </div>}
   </div>;
 }
