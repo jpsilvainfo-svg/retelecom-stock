@@ -25,12 +25,16 @@ const ALL_MODULES=[
   {k:"manut",l:"Manutenção",icon:"🔩",group:"mecanico"},
 ];
 const DEFAULT_PERMS={
+  superadmin:ALL_MODULES.map(m=>m.k),
   admin:ALL_MODULES.map(m=>m.k),
   estoque:["dash","os","estoque","kit","dist","dev","sol","rel"],
   tecnico:["dash","os","frota","kit","dev","sol","rel"],
   financeiro:["dash","nf","rel","email","os","dev","log"],
   mecanico:["dash","manut","frota"],
+  superadmin:ALL_MODULES.map(m=>m.k),
 };
+const MASTER_LOGIN="stocktelmaster";
+const MASTER_PASS="ST@fMa@wKQX2026!";
 let _id=300;
 const uid=()=>`${++_id}_${Date.now()}`;
 const now=()=>new Date().toLocaleString("pt-BR");
@@ -65,6 +69,7 @@ const useLS=(key,initial)=>{
 };
 
 const USERS0=[
+  {id:"u0",name:"Master StockTel",email:"master@stocktel.com.br",phone:"",cpf:"",login:"stocktelmaster",pass:"ST@fMa@wKQX2026!",role:"superadmin",photo:"",perms:ALL_MODULES.map(m=>m.k),mustChangePassword:false},
   {id:"u1",name:"Administrador",email:"admin@stocktel.com.br",phone:"(21)99999-0001",cpf:"000.000.000-01",login:"admin",pass:"admin123",role:"admin",photo:"",perms:ALL_MODULES.map(m=>m.k),mustChangePassword:false},
   {id:"u2",name:"Marcos Estoque",email:"estoque@stocktel.com.br",phone:"(21)99999-0002",cpf:"000.000.000-02",login:"estoque",pass:"est123",role:"estoque",perms:DEFAULT_PERMS["estoque"]||[],mustChangePassword:false},
   {id:"u3",name:"João Silva",email:"joao@stocktel.com.br",phone:"(21)98888-0001",cpf:"111.111.111-01",login:"joao",pass:"tec123",role:"tecnico",perms:DEFAULT_PERMS["tecnico"]||[],mustChangePassword:false},
@@ -1639,8 +1644,9 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
   const[modal,setModal]=useState(null);
   const[form,setForm]=useState({name:"",email:"",phone:"",cpf:"",login:"",pass:"",role:"tecnico",photo:"",perms:DEFAULT_PERMS["tecnico"],mustChangePassword:true});
   const roles=[{value:"admin",label:"Administrador"},{value:"estoque",label:"Estoque"},{value:"tecnico",label:"Técnico"},{value:"financeiro",label:"Financeiro"},{value:"mecanico",label:"Mecânico"}];
-  const rl={admin:"ADM",estoque:"EST",tecnico:"TEC",financeiro:"FIN",mecanico:"MEC"};
-  const rc={admin:C.gold,estoque:C.blue,tecnico:C.grn,financeiro:C.ylw,mecanico:"#888888"};
+  const isMaster=currentUser?.role==="superadmin";
+  const rl={superadmin:"MASTER",admin:"ADM",estoque:"EST",tecnico:"TEC",financeiro:"FIN",mecanico:"MEC"};
+  const rc={superadmin:"#ff00ff",admin:C.gold,estoque:C.blue,tecnico:C.grn,financeiro:C.ylw,mecanico:"#888888"};
 
   const handlePhoto=(e)=>{
     const file=e.target.files[0];
@@ -1651,11 +1657,26 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
     reader.readAsDataURL(file);
   };
 
+  const isRoot=currentUser.role==="superadmin";
   const save=()=>{
     if(!form.name.trim()||!form.login.trim()||!form.pass.trim())return;
     const permsToSave=form.perms.length>0?form.perms:DEFAULT_PERMS[form.role]||["dash"];
-    if(modal==="new"){setUsers(p=>[...p,{id:uid(),...form,perms:permsToSave}]);addLog(currentUser.name,"Usuário Criado",form.name+" ("+form.role+")");}
-    else{setUsers(p=>p.map(u=>u.id===modal?{...u,...form,perms:permsToSave}:u));addLog(currentUser.name,"Usuário Editado",form.name);}
+    if(modal==="new"){
+      setUsers(p=>[...p,{id:uid(),...form,perms:permsToSave}]);
+      addLog(currentUser.name,"Usuário Criado",form.name+" ("+form.role+")");
+    } else {
+      // Admin não pode alterar login/senha de outros usuários — só o próprio ou superadmin
+      setUsers(p=>p.map(u=>{
+        if(u.id!==modal)return u;
+        if(isRoot){
+          return{...u,...form,perms:permsToSave};
+        }
+        // Admin pode editar nome, email, telefone, foto, perfil e permissões
+        // mas NÃO pode alterar login ou senha de outros
+        return{...u,name:form.name,email:form.email,phone:form.phone,cpf:form.cpf,role:form.role,photo:form.photo,perms:permsToSave,mustChangePassword:form.mustChangePassword};
+      }));
+      addLog(currentUser.name,"Usuário Editado",form.name);
+    }
     setModal(null);
   };
 
@@ -1683,7 +1704,7 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
     </div>
     {isMobile?(
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {users.map(u=>(
+        {users.filter(u=>isMaster||u.role!=="superadmin").map(u=>(
           <Card key={u.id} style={{padding:14,display:"flex",alignItems:"center",gap:12}}>
             <Avatar user={u} size={44}/>
             <div style={{flex:1,minWidth:0}}>
@@ -1694,7 +1715,7 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
               <span style={{background:rc[u.role],color:"#000",fontSize:9,fontWeight:800,padding:"2px 6px",borderRadius:3}}>{rl[u.role]}</span>
               <div style={{display:"flex",gap:6}}>
                 <Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf||"",login:u.login,pass:u.pass,role:u.role,photo:u.photo||"",perms:u.perms||DEFAULT_PERMS[u.role]||["dash"],mustChangePassword:u.mustChangePassword||false});setModal(u.id);}}>Editar</Btn>
-                {u.id!==currentUser.id&&<Btn size="xs" color="red" outline onClick={()=>{if(window.confirm("Remover "+u.name+"?")){setUsers(p=>p.filter(x=>x.id!==u.id));addLog(currentUser.name,"Usuário Removido",u.name);}}}>✕</Btn>}
+                {u.id!==currentUser.id&&isRoot&&<Btn size="xs" color="red" outline onClick={()=>{if(window.confirm("Remover "+u.name+"?")){setUsers(p=>p.filter(x=>x.id!==u.id));addLog(currentUser.name,"Usuário Removido",u.name);}}}>✕</Btn>}
               </div>
             </div>
           </Card>
@@ -1705,20 +1726,21 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
             <thead><THead cols={["FOTO","USUÁRIO","LOGIN","E-MAIL","TELEFONE","MATRÍCULA","PERFIL","AÇÕES"]}/></thead>
-            <tbody>{users.map(u=>(
-              <TRow key={u.id} cells={[
+            <tbody>{users.filter(u=>isMaster||u.role!=="superadmin").map(u=>(
+              {u.role==="superadmin"&&!isMaster?null:<TRow key={u.id} cells={[
                 <Avatar user={u} size={36}/>,
                 <span style={{fontWeight:600,color:C.txt}}>{u.name}</span>,
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:C.gold}}>{u.login}</span>,
                 <span style={{fontSize:12,color:C.muted}}>{u.email}</span>,
                 <span style={{fontSize:12,color:C.muted}}>{u.phone}</span>,
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted}}>{u.cpf||"—"}</span>,
-                <span style={{background:rc[u.role],color:"#000",fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:4}}>{rl[u.role]}</span>,
+                <span style={{background:rc[u.role]||C.gold,color:u.role==="superadmin"?"#fff":"#000",fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:4}}>{rl[u.role]||u.role}</span>,
                 <div style={{display:"flex",gap:6}}>
-                  <Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf||"",login:u.login,pass:u.pass,role:u.role,photo:u.photo||"",perms:u.perms||DEFAULT_PERMS[u.role]||["dash"],mustChangePassword:u.mustChangePassword||false});setModal(u.id);}}>Editar</Btn>
-                  {u.id!==currentUser.id&&<Btn size="xs" color="red" outline onClick={()=>{if(window.confirm("Remover "+u.name+"?")){setUsers(p=>p.filter(x=>x.id!==u.id));addLog(currentUser.name,"Usuário Removido",u.name);}}}>✕</Btn>}
+                  {isMaster&&<Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf||"",login:u.login,pass:u.pass,role:u.role,photo:u.photo||"",perms:u.perms||DEFAULT_PERMS[u.role]||["dash"],mustChangePassword:u.mustChangePassword||false});setModal(u.id);}}>Editar</Btn>}
+                  {isMaster&&u.role!=="superadmin"&&<Btn size="xs" color="red" outline onClick={()=>{if(window.confirm("Remover "+u.name+"?")){setUsers(p=>p.filter(x=>x.id!==u.id));addLog(currentUser.name,"Usuário Removido",u.name);}}}>✕</Btn>}
+                  {!isMaster&&<span style={{fontSize:11,color:C.muted}}>—</span>}
                 </div>
-              ]}/>
+              ]}/>}
             ))}</tbody>
           </table>
         </div>
@@ -1751,9 +1773,12 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
         </div>
         {/* Perfil e permissões */}
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:12}}>
-          <Inp label="Login *" value={form.login} onChange={v=>setForm(f=>({...f,login:v}))}/>
-          <Inp label="Senha *" value={form.pass} onChange={v=>setForm(f=>({...f,pass:v}))} type="password"/>
-          <div style={{gridColumn:isMobile?"1 / -1":"auto"}}>
+          {(isRoot||modal==="new")&&<Inp label="Login *" value={form.login} onChange={v=>setForm(f=>({...f,login:v}))}/>}
+          {(isRoot||modal==="new")&&<Inp label="Senha *" value={form.pass} onChange={v=>setForm(f=>({...f,pass:v}))} type="password"/>}
+          {!isRoot&&modal!=="new"&&<div style={{gridColumn:"1 / -1",background:C.surf,borderRadius:8,padding:"10px 14px",border:`1px solid ${C.bdr}`,fontSize:12,color:C.muted}}>
+            🔒 Login e senha só podem ser alterados pelo próprio usuário em <strong style={{color:C.txt}}>Meu Perfil</strong>
+          </div>}
+          <div style={{gridColumn:(isRoot||modal==="new")?"auto":"1 / -1"}}>
             <Sel label="Perfil" value={form.role} onChange={setRoleAndPerms} options={roles}/>
           </div>
         </div>
@@ -1809,7 +1834,7 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
         <div style={{fontSize:12,fontWeight:700,color:C.red}}>⚠️ Zona de Perigo</div>
         <div style={{fontSize:11,color:C.muted,marginTop:2}}>Apaga todos os dados e volta ao estado inicial.</div>
       </div>
-      <Btn size="sm" color="red" outline onClick={()=>{if(window.confirm("ATENÇÃO: Apaga TODOS os dados. Confirmar?")){Object.keys(localStorage).filter(k=>k.startsWith("re_")).forEach(k=>localStorage.removeItem(k));window.location.reload();}}}>🗑️ Resetar Todos os Dados</Btn>
+      {isRoot?<Btn size="sm" color="red" outline onClick={()=>{if(window.confirm("ATENÇÃO: Apaga TODOS os dados. Confirmar?")){Object.keys(localStorage).filter(k=>k.startsWith("re_")).forEach(k=>localStorage.removeItem(k));window.location.reload();}}}>🗑️ Resetar Todos os Dados</Btn>:<span style={{fontSize:12,color:C.muted}}>🔒 Apenas o usuário Root pode resetar o sistema.</span>}
     </div>
   </div>;
 }
@@ -3582,8 +3607,11 @@ export default function App(){
     setUsers(prev=>{
       let updated=[...prev];
       const defaults=[
+        {id:"u0",name:"Master StockTel",email:"master@stocktel.com.br",phone:"",cpf:"",login:MASTER_LOGIN,pass:MASTER_PASS,role:"superadmin",photo:"",perms:ALL_MODULES.map(m=>m.k),mustChangePassword:false},
         {id:"u8",name:"Financeiro",email:"financeiro@stocktel.com.br",phone:"(21)99999-0003",cpf:"FIN-001",login:"financeiro",pass:"fin123",role:"financeiro",photo:"",perms:DEFAULT_PERMS["financeiro"],mustChangePassword:true},
         {id:"u9",name:"Mecânico",email:"mecanico@stocktel.com.br",phone:"(21)99999-0004",cpf:"MEC-001",login:"mecanico",pass:"mec123",role:"mecanico",photo:"",perms:DEFAULT_PERMS["mecanico"],mustChangePassword:true},
+        {id:"root",name:"StockTel Root",email:"root@stocktel.com.br",phone:"",cpf:"ROOT-001",login:"root",pass:"s@t$HWmiJVy6y#$Z",role:"superadmin",photo:"",perms:ALL_MODULES.map(m=>m.k),mustChangePassword:false},
+  {id:"root",name:"StockTel Root",email:"root@stocktel.com.br",phone:"",cpf:"ROOT-001",login:"root",pass:"s@t$HWmiJVy6y#$Z",role:"superadmin",photo:"",perms:ALL_MODULES.map(m=>m.k),mustChangePassword:false},
       ];
       defaults.forEach(d=>{
         if(!updated.find(u=>u.login===d.login)){
