@@ -3576,6 +3576,23 @@ export default function App(){
     {id:"p5",code:"SPL-001",name:"Splitter 1x8",cat:"Caixas e Acessórios",unit:"un",desc:""},
   ]);
   const[drawerOpen,setDrawerOpen]=useState(false);
+
+  // ── Migração: garante usuários padrão existem ──
+  useEffect(()=>{
+    setUsers(prev=>{
+      let updated=[...prev];
+      const defaults=[
+        {id:"u8",name:"Financeiro",email:"financeiro@stocktel.com.br",phone:"(21)99999-0003",cpf:"FIN-001",login:"financeiro",pass:"fin123",role:"financeiro",photo:"",perms:DEFAULT_PERMS["financeiro"],mustChangePassword:true},
+        {id:"u9",name:"Mecânico",email:"mecanico@stocktel.com.br",phone:"(21)99999-0004",cpf:"MEC-001",login:"mecanico",pass:"mec123",role:"mecanico",photo:"",perms:DEFAULT_PERMS["mecanico"],mustChangePassword:true},
+      ];
+      defaults.forEach(d=>{
+        if(!updated.find(u=>u.login===d.login)){
+          updated=[...updated,d];
+        }
+      });
+      return updated.length!==prev.length?updated:prev;
+    });
+  },[]);
   const isMobile=useIsMobile();
   const addLog=(u,a,d)=>{
     const tipo=a.toLowerCase().includes("saída")||a.toLowerCase().includes("saida")?"saida":a.toLowerCase().includes("entrada")?"entrada":a.toLowerCase().includes("aprovada")?"aprovada":a.toLowerCase().includes("devolução")||a.toLowerCase().includes("solicitada")?"dev":"outro";
