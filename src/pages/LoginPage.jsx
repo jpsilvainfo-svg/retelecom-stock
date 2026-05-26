@@ -4,18 +4,17 @@ import { C, ALL_MODULES, DEFAULT_PERMS } from "../lib/constants";
 import { uid, now, fmt } from "../lib/utils";
 import { Btn, Inp, Sel, Card, Bdg, THead, TRow, Modal } from "../components/ui";
 import { useToast } from "../hooks/useToast";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 function LoginPage({users,onLogin}){
   const[login,setLogin]=useState("");
   const[pass,setPass]=useState("");
   const[err,setErr]=useState("");
   const isMobile=useIsMobile();
-  const[toast,setToast]=useState(null);
-  const showToast=(msg,type="info")=>setToast({msg,type,id:Date.now()});
+  const { showToast } = useToast();
   const go=()=>{const u=users.find(u=>u.login===login&&u.pass===pass);if(u)onLogin(u);else setErr("Login ou senha inválidos.");};
   const handleKey=e=>{if(e.key==="Enter")go();};
   return <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?"16px":"20px"}}>
-    <style>{CSS}</style>
     <div style={{position:"fixed",inset:0,backgroundImage:`radial-gradient(ellipse at 50% 0%,${C.gold}18 0%,transparent 60%)`,pointerEvents:"none"}}/>
     <div className="fi" style={{width:"100%",maxWidth:400,position:"relative",zIndex:1}}>
       <div style={{textAlign:"center",marginBottom:32}}>
