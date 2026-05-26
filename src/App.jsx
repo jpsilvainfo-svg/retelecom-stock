@@ -1,4 +1,4 @@
-// StockTel v1.1 build 20260525_193511 - filtro periodo relatorio admin
+// StockTel v1.2 BUILD-20260526-0750 ROLLDOWN-FIXED
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
 import * as XLSX from "xlsx";
