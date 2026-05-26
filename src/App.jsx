@@ -1,5 +1,5 @@
 // StockTel v1.2 BUILD-20260526-0750 ROLLDOWN-FIXED
-import { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
 import * as XLSX from "xlsx";
 import { sbGet, sbSet } from "./supabase.js";
@@ -194,6 +194,24 @@ function TRow({cells}){
 }
 
 /* ── LOGIN ── */
+class ErrorBoundary extends React.Component {
+  constructor(props){super(props);this.state={hasError:false,error:null};}
+  static getDerivedStateFromError(e){return{hasError:true,error:e};}
+  render(){
+    if(this.state.hasError){
+      return <div style={{minHeight:"100vh",background:"#161616",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:24}}>
+        <div style={{fontSize:40}}>⚠️</div>
+        <div style={{fontSize:18,fontWeight:700,color:"#cc0000"}}>Erro ao carregar o sistema</div>
+        <div style={{fontSize:13,color:"#888",maxWidth:500,textAlign:"center"}}>{String(this.state.error?.message||this.state.error)}</div>
+        <button onClick={()=>window.location.reload()} style={{background:"#cc0000",color:"#fff",border:"none",borderRadius:8,padding:"10px 24px",fontSize:14,fontWeight:700,cursor:"pointer",marginTop:8}}>
+          🔄 Recarregar
+        </button>
+      </div>;
+    }
+    return this.props.children;
+  }
+}
+
 function LoginPage({users,onLogin}){
   const[login,setLogin]=useState("");
   const[pass,setPass]=useState("");
@@ -3497,7 +3515,7 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
 }
 
 /* ── APP ── */
-export default function App(){
+function AppInner(){
   // ── TODOS OS HOOKS PRIMEIRO (regra do React) ──
   const[user,setUser]=useState(()=>{
     try{const u=localStorage.getItem("re_session");return u?JSON.parse(u):null;}catch{return null;}
@@ -3735,3 +3753,5 @@ export default function App(){
     </div>}
   </div>;
 }
+
+export default function App(){return <ErrorBoundary><AppInner/></ErrorBoundary>;}
