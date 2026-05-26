@@ -4,6 +4,8 @@ import { C, ALL_MODULES, DEFAULT_PERMS } from "../lib/constants";
 import { uid, now, fmt } from "../lib/utils";
 import { Btn, Inp, Sel, Card, Bdg, THead, TRow, Modal } from "../components/ui";
 import { useToast } from "../hooks/useToast";
+import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import * as XLSX from "xlsx";
 
 function RelPage({stock,os,returns,users,nf,isMobile,currentUser}){
   const isTec=currentUser?.role==="tecnico";

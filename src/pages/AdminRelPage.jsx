@@ -4,6 +4,7 @@ import { C, ALL_MODULES, DEFAULT_PERMS } from "../lib/constants";
 import { uid, now, fmt } from "../lib/utils";
 import { Btn, Inp, Sel, Card, Bdg, THead, TRow, Modal } from "../components/ui";
 import { useToast } from "../hooks/useToast";
+import * as XLSX from "xlsx";
 
 function AdminRelPage({nf,stock,os,returns,tstock,users,solicitacoes,isMobile,addLog}){
   const[tab,setTab]=useState("financeiro");

@@ -4,6 +4,7 @@ import { C, ALL_MODULES, DEFAULT_PERMS } from "../lib/constants";
 import { uid, now, fmt } from "../lib/utils";
 import { Btn, Inp, Sel, Card, Bdg, THead, TRow, Modal } from "../components/ui";
 import { useToast } from "../hooks/useToast";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
 function Dashboard({stock,tstock,users,os,returns,logs,setPage,isMobile,currentUser,pendSol,veiculos=[],abastecimentos=[]}){
   const isTec=currentUser?.role==="tecnico";
