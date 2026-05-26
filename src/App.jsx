@@ -35,8 +35,7 @@ const DEFAULT_PERMS={
 };
 const MASTER_LOGIN="stocktelmaster";
 const MASTER_PASS="ST@fMa@wKQX2026!";
-let _id=300;
-const uid=()=>`${++_id}_${Date.now()}`;
+const uid=()=>crypto.randomUUID();
 const now=()=>new Date().toLocaleString("pt-BR");
 const today=()=>new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})+" - "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
 const fmt=(n)=>new Intl.NumberFormat("pt-BR").format(n??0);
@@ -212,11 +211,31 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+
+/* ── TOAST NOTIFICATION ── */
+function Toast({msg,type,onClose}){
+  useEffect(()=>{const t=setTimeout(onClose,3500);return()=>clearTimeout(t);},[onClose]);
+  const bg=type==="success"?C.grnD:type==="error"?C.redD:`${C.gold}22`;
+  const border=type==="success"?C.grn:type==="error"?C.red:C.gold;
+  const color=type==="success"?C.grn:type==="error"?C.red:C.gold;
+  const icon=type==="success"?"✅":type==="error"?"❌":"ℹ️";
+  return <div style={{position:"fixed",top:16,right:16,zIndex:9999,maxWidth:360,
+    background:bg,border:`1px solid ${border}`,borderRadius:10,padding:"12px 16px",
+    display:"flex",alignItems:"center",gap:10,boxShadow:"0 4px 20px #00000066",
+    animation:"fadeIn 0.2s ease"}}>
+    <span style={{fontSize:18,flexShrink:0}}>{icon}</span>
+    <span style={{fontSize:13,color,flex:1,fontWeight:500}}>{msg}</span>
+    <button onClick={onClose} style={{background:"transparent",color,border:"none",cursor:"pointer",fontSize:16,padding:2}}>✕</button>
+  </div>;
+}
+
 function LoginPage({users,onLogin}){
   const[login,setLogin]=useState("");
   const[pass,setPass]=useState("");
   const[err,setErr]=useState("");
   const isMobile=useIsMobile();
+  const[toast,setToast]=useState(null);
+  const showToast=(msg,type="info")=>setToast({msg,type,id:Date.now()});
   const go=()=>{const u=users.find(u=>u.login===login&&u.pass===pass);if(u)onLogin(u);else setErr("Login ou senha inválidos.");};
   const handleKey=e=>{if(e.key==="Enter")go();};
   return <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?"16px":"20px"}}>
@@ -3964,7 +3983,8 @@ function AppInner(){
         <span style={{fontSize:11,color:C.muted}}>© {new Date().getFullYear()} StockTel — Todos os direitos reservados.</span>
       </div>}
     </div>
-    {isMobile&&<BottomNav page={page} setPage={goPage} user={user} onMenuOpen={()=>setDrawerOpen(true)}/>}
+    {isMobile&&<BottomNav page={page} setPage={goPage} user={user} onMenuOpen={()=>setDrawerOpen(true)}/>
+    {toast&&<Toast key={toast.id} msg={toast.msg} type={toast.type} onClose={()=>setToast(null)}/>}}
 
     {perfilModal&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:2000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
       <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,width:"100%",maxWidth:500,maxHeight:isMobile?"92vh":"88vh",display:"flex",flexDirection:"column",position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
