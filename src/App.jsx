@@ -1644,7 +1644,7 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
   const[modal,setModal]=useState(null);
   const[form,setForm]=useState({name:"",email:"",phone:"",cpf:"",login:"",pass:"",role:"tecnico",photo:"",perms:DEFAULT_PERMS["tecnico"],mustChangePassword:true});
   const roles=[{value:"admin",label:"Administrador"},{value:"estoque",label:"Estoque"},{value:"tecnico",label:"Técnico"},{value:"financeiro",label:"Financeiro"},{value:"mecanico",label:"Mecânico"}];
-  const isMaster=currentUser?.role==="superadmin";
+  const isRoot=currentUser?.role==="superadmin";
   const rl={superadmin:"MASTER",admin:"ADM",estoque:"EST",tecnico:"TEC",financeiro:"FIN",mecanico:"MEC"};
   const rc={superadmin:"#ff00ff",admin:C.gold,estoque:C.blue,tecnico:C.grn,financeiro:C.ylw,mecanico:"#888888"};
 
@@ -1657,7 +1657,6 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
     reader.readAsDataURL(file);
   };
 
-  const isRoot=currentUser.role==="superadmin";
   const save=()=>{
     if(!form.name.trim()||!form.login.trim()||!form.pass.trim())return;
     const permsToSave=form.perms.length>0?form.perms:DEFAULT_PERMS[form.role]||["dash"];
@@ -1704,7 +1703,7 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
     </div>
     {isMobile?(
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {users.filter(u=>isMaster||u.role!=="superadmin").map(u=>(
+        {users.filter(u=>isRoot||u.role!=="superadmin").map(u=>(
           <Card key={u.id} style={{padding:14,display:"flex",alignItems:"center",gap:12}}>
             <Avatar user={u} size={44}/>
             <div style={{flex:1,minWidth:0}}>
@@ -1726,8 +1725,8 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
             <thead><THead cols={["FOTO","USUÁRIO","LOGIN","E-MAIL","TELEFONE","MATRÍCULA","PERFIL","AÇÕES"]}/></thead>
-            <tbody>{users.filter(u=>isMaster||u.role!=="superadmin").map(u=>(
-              {u.role==="superadmin"&&!isMaster?null:<TRow key={u.id} cells={[
+            <tbody>{users.filter(u=>isRoot||u.role!=="superadmin").map(u=>(
+              {u.role==="superadmin"&&!isRoot?null:<TRow key={u.id} cells={[
                 <Avatar user={u} size={36}/>,
                 <span style={{fontWeight:600,color:C.txt}}>{u.name}</span>,
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:C.gold}}>{u.login}</span>,
@@ -1736,9 +1735,9 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted}}>{u.cpf||"—"}</span>,
                 <span style={{background:rc[u.role]||C.gold,color:u.role==="superadmin"?"#fff":"#000",fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:4}}>{rl[u.role]||u.role}</span>,
                 <div style={{display:"flex",gap:6}}>
-                  {isMaster&&<Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf||"",login:u.login,pass:u.pass,role:u.role,photo:u.photo||"",perms:u.perms||DEFAULT_PERMS[u.role]||["dash"],mustChangePassword:u.mustChangePassword||false});setModal(u.id);}}>Editar</Btn>}
-                  {isMaster&&u.role!=="superadmin"&&<Btn size="xs" color="red" outline onClick={()=>{if(window.confirm("Remover "+u.name+"?")){setUsers(p=>p.filter(x=>x.id!==u.id));addLog(currentUser.name,"Usuário Removido",u.name);}}}>✕</Btn>}
-                  {!isMaster&&<span style={{fontSize:11,color:C.muted}}>—</span>}
+                  {isRoot&&<Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf||"",login:u.login,pass:u.pass,role:u.role,photo:u.photo||"",perms:u.perms||DEFAULT_PERMS[u.role]||["dash"],mustChangePassword:u.mustChangePassword||false});setModal(u.id);}}>Editar</Btn>}
+                  {isRoot&&u.role!=="superadmin"&&<Btn size="xs" color="red" outline onClick={()=>{if(window.confirm("Remover "+u.name+"?")){setUsers(p=>p.filter(x=>x.id!==u.id));addLog(currentUser.name,"Usuário Removido",u.name);}}}>✕</Btn>}
+                  {!isRoot&&<span style={{fontSize:11,color:C.muted}}>—</span>}
                 </div>
               ]}/>}
             ))}</tbody>
