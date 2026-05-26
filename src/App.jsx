@@ -3552,6 +3552,11 @@ export default function App(){
     const tipo=a.toLowerCase().includes("saída")||a.toLowerCase().includes("saida")?"saida":a.toLowerCase().includes("entrada")?"entrada":a.toLowerCase().includes("aprovada")?"aprovada":a.toLowerCase().includes("devolução")||a.toLowerCase().includes("solicitada")?"dev":"outro";
     setLogs(p=>[{id:uid(),date:now(),user:u,action:a,detail:d,tipo},...p]);
   };
+  // ── Força troca de senha (hooks antes do return condicional) ──
+  const[npwd,setNpwd]=useState("");
+  const[cpwd,setCpwd]=useState("");
+  const[pwdErr,setPwdErr]=useState("");
+
   // ── Meu Perfil ──
   const[perfilModal,setPerfilModal]=useState(false);
   const[perfilForm,setPerfilForm]=useState({pass:"",novaPass:"",confirmaPass:"",photo:""});
@@ -3582,12 +3587,16 @@ export default function App(){
     reader.readAsDataURL(file);
   };
 
+  // ── Listener Meu Perfil (deve estar antes de qualquer return condicional) ──
+  useEffect(()=>{
+    const h=()=>{setPerfilForm({pass:"",novaPass:"",confirmaPass:"",photo:""});setPerfilMsg("");setPerfilModal(true);};
+    window.addEventListener("openPerfil",h);
+    return()=>window.removeEventListener("openPerfil",h);
+  },[]);
+
   if(!user)return <LoginPage users={users} onLogin={u=>{setUser(u);setPage("dash");try{localStorage.setItem("re_session",JSON.stringify(u));localStorage.setItem("re_page","dash");}catch{}}}/>;
 
   // ── Força troca de senha no primeiro acesso ──
-  const[npwd,setNpwd]=useState("");
-  const[cpwd,setCpwd]=useState("");
-  const[pwdErr,setPwdErr]=useState("");
   const confirmarSenha=()=>{
     if(npwd.length<4){setPwdErr("Senha deve ter ao menos 4 caracteres.");return;}
     if(npwd!==cpwd){setPwdErr("As senhas não conferem.");return;}
@@ -3642,13 +3651,6 @@ export default function App(){
     manut:<ManutencaoPage manutSols={manutSols} setManutSols={setManutSols} manutOS={manutOS} setManutOS={setManutOS} veiculos={veiculos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
     frota:<FrotaPage veiculos={veiculos} setVeiculos={setVeiculos} abastecimentos={abastecimentos} setAbastecimentos={setAbastecimentos} checkouts={checkouts} setCheckouts={setCheckouts} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
   };
-  // Listen for openPerfil event from Sidebar
-  useEffect(()=>{
-    const h=()=>{setPerfilForm({pass:"",novaPass:"",confirmaPass:"",photo:""});setPerfilMsg("");setPerfilModal(true);};
-    window.addEventListener("openPerfil",h);
-    return()=>window.removeEventListener("openPerfil",h);
-  },[]);
-
   return <div style={{height:"100dvh",background:C.bg,color:C.txt,display:"flex",overflow:"hidden"}}>
     <style>{CSS}</style>
     {!isMobile&&<Sidebar user={user} page={page} setPage={goPage} onLogout={()=>{setUser(null);try{localStorage.removeItem("re_session");localStorage.removeItem("re_page");}catch{}}}/>}
