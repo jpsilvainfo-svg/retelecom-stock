@@ -3586,6 +3586,19 @@ export default function App(){
   if(!user)return <LoginPage users={users} onLogin={u=>{setUser(u);setPage("dash");try{localStorage.setItem("re_session",JSON.stringify(u));localStorage.setItem("re_page","dash");}catch{}}}/>;
 
   // ── Força troca de senha no primeiro acesso ──
+  const[npwd,setNpwd]=useState("");
+  const[cpwd,setCpwd]=useState("");
+  const[pwdErr,setPwdErr]=useState("");
+  const confirmarSenha=()=>{
+    if(npwd.length<4){setPwdErr("Senha deve ter ao menos 4 caracteres.");return;}
+    if(npwd!==cpwd){setPwdErr("As senhas não conferem.");return;}
+    const updated={...user,pass:npwd,mustChangePassword:false};
+    setUsers(p=>p.map(u=>u.id===user.id?updated:u));
+    setUser(updated);
+    goPage("dash");
+    try{localStorage.setItem("re_session",JSON.stringify(updated));localStorage.setItem("re_page","dash");}catch{}
+  };
+
   if(user.mustChangePassword) return <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
     <style>{CSS}</style>
     <div style={{position:"fixed",inset:0,backgroundImage:`radial-gradient(ellipse at 50% 0%,${C.gold}18 0%,transparent 60%)`,pointerEvents:"none"}}/>
@@ -3600,26 +3613,10 @@ export default function App(){
           <div style={{fontSize:12,color:C.gold,fontWeight:600}}>👤 {user.name}</div>
           <div style={{fontSize:11,color:C.muted}}>Login: {user.login}</div>
         </div>
-        {(()=>{
-          const[np,setNp]=useState("");
-          const[cp,setCp]=useState("");
-          const[err,setErr]=useState("");
-          const confirmar=()=>{
-            if(np.length<4){setErr("Senha deve ter ao menos 4 caracteres.");return;}
-            if(np!==cp){setErr("As senhas não conferem.");return;}
-            const updated={...user,pass:np,mustChangePassword:false};
-            setUsers(p=>p.map(u=>u.id===user.id?updated:u));
-            setUser(updated);
-            setPage("dash");
-            try{localStorage.setItem("re_session",JSON.stringify(updated));localStorage.setItem("re_page","dash");}catch{}
-          };
-          return <>
-            <Inp label="Nova Senha *" value={np} onChange={setNp} type="password" placeholder="Mínimo 4 caracteres"/>
-            <Inp label="Confirmar Senha *" value={cp} onChange={setCp} type="password" placeholder="Repita a senha"/>
-            {err&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",color:C.red,fontSize:13}}>⚠️ {err}</div>}
-            <Btn color="gold" onClick={confirmar} style={{width:"100%"}}>✅ Definir Nova Senha e Entrar</Btn>
-          </>;
-        })()}
+        <Inp label="Nova Senha *" value={npwd} onChange={setNpwd} type="password" placeholder="Mínimo 4 caracteres"/>
+        <Inp label="Confirmar Senha *" value={cpwd} onChange={setCpwd} type="password" placeholder="Repita a senha"/>
+        {pwdErr&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",color:C.red,fontSize:13}}>⚠️ {pwdErr}</div>}
+        <Btn color="gold" onClick={confirmarSenha} style={{width:"100%"}}>✅ Definir Nova Senha e Entrar</Btn>
       </Card>
     </div>
   </div>;
@@ -3629,7 +3626,7 @@ export default function App(){
   const pendSol=solicitacoes.filter(s=>s.status==="pending").length;
   const p={stock,setStock,tstock,setTstock,os,setOs,returns,setReturns,nf,setNf,users,setUsers,currentUser:user,addLog,isAdmin:isAdm,isMobile};
   const pages={
-    dash:<Dashboard {...p} setPage={setPage} logs={logs} pendSol={pendSol}/>,
+    dash:<Dashboard {...p} setPage={goPage} logs={logs} pendSol={pendSol} currentUser={user} veiculos={veiculos} abastecimentos={abastecimentos}/>,
     estoque:<EstoquePage {...p}/>,
     kit:<KitPage tstock={tstock} stock={stock} users={users} currentUser={user} isMobile={isMobile}/>,
     dist:<DistPage {...p}/>,
