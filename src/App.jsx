@@ -7,6 +7,7 @@ import { C, ALL_MODULES, DEFAULT_PERMS, USERS0, STOCK0, TSTOCK0, OS0, RET0, NF0,
 import { uid, now, fmt } from "./lib/utils";
 import { Btn, Inp, Sel, Card, Bdg, Modal } from "./components/ui";
 import { Spinner } from "./components/ui/Toast";
+import { useToast } from "./hooks/useToast";
 import { Sidebar, MobileDrawer, TopBar, BottomNav } from "./components/layout";
 
 // Páginas principais (carregamento imediato)
@@ -88,6 +89,7 @@ function AppInner(){
   ]);
   const[drawerOpen,setDrawerOpen]=useState(false);
   const isMobile=useIsMobile();
+  const { showToast } = useToast();
 
   // Meu Perfil
   const[npwd,setNpwd]=useState("");
@@ -239,7 +241,6 @@ function AppInner(){
       </div>}
     </div>
     {isMobile&&<BottomNav page={page} setPage={goPage} user={user} onMenuOpen={()=>setDrawerOpen(true)}/>}
-    {toast&&<Toast key={toast.id} msg={toast.msg} type={toast.type} onClose={()=>setToast(null)}/>}
 
     {perfilModal&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:2000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
       <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,width:"100%",maxWidth:500,maxHeight:isMobile?"92vh":"88vh",display:"flex",flexDirection:"column",position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
