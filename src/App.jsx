@@ -141,10 +141,6 @@ input,select,textarea{font-family:'Inter',sans-serif;border:none;outline:none;}
 .fi{animation:fadeIn .2s ease}
 .su{animation:slideUp .25s ease}
 .sl{animation:slideLeft .25s ease}
-
-  #root { background: #161616; }
-  body { background: #161616 !important; }
-  .page-enter { animation: fadeIn 0.2s ease; }
 `;
 
 /* ── ATOMS ── */
@@ -3617,14 +3613,11 @@ export default function App(){
   };
 
   // ── RETURNS CONDICIONAIS (após todos os hooks) ──
-  if(!user)return <div style={{minHeight:"100vh",background:C.bg,color:C.txt}}>
-    <style>{CSS}</style>
-    <LoginPage users={users} onLogin={u=>{
-      setUser(u);
-      goPage("dash");
-      try{localStorage.setItem("re_session",JSON.stringify(u));localStorage.setItem("re_page","dash");}catch{}
-    }}/>
-  </div>;
+  if(!user)return <LoginPage users={users} onLogin={u=>{
+    try{localStorage.setItem("re_session",JSON.stringify(u));localStorage.setItem("re_page","dash");}catch{}
+    setUser(u);
+    setPage("dash");
+  }}/>;
 
   if(user.mustChangePassword) return (
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
@@ -3676,7 +3669,7 @@ export default function App(){
     manut:<ManutencaoPage manutSols={manutSols} setManutSols={setManutSols} manutOS={manutOS} setManutOS={setManutOS} veiculos={veiculos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
   };
 
-  return <div style={{height:"100dvh",background:C.bg,color:C.txt,display:"flex",overflow:"hidden",opacity:1,transition:"opacity 0.15s ease"}}>
+  return <div style={{height:"100dvh",background:C.bg,color:C.txt,display:"flex",overflow:"hidden"}}>
     <style>{CSS}</style>
     {!isMobile&&<Sidebar user={user} page={page} setPage={goPage} onLogout={()=>{setPage("dash");setUser(null);try{localStorage.removeItem("re_session");localStorage.removeItem("re_page");}catch{}}}/>}
     {isMobile&&drawerOpen&&<MobileDrawer user={user} page={page} setPage={goPage} onLogout={()=>{setPage("dash");setUser(null);try{localStorage.removeItem("re_session");localStorage.removeItem("re_page");}catch{}}} onClose={()=>setDrawerOpen(false)}/>}
