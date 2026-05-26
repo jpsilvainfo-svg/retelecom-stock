@@ -1725,8 +1725,9 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
             <thead><THead cols={["FOTO","USUÁRIO","LOGIN","E-MAIL","TELEFONE","MATRÍCULA","PERFIL","AÇÕES"]}/></thead>
-            <tbody>{users.filter(u=>isRoot||u.role!=="superadmin").map(u=>(
-              {u.role==="superadmin"&&!isRoot?null:<TRow key={u.id} cells={[
+            <tbody>{users.filter(u=>isRoot||u.role!=="superadmin").map(u=>{
+              if(u.role==="superadmin"&&!isRoot)return null;
+              return <TRow key={u.id} cells={[
                 <Avatar user={u} size={36}/>,
                 <span style={{fontWeight:600,color:C.txt}}>{u.name}</span>,
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:C.gold}}>{u.login}</span>,
@@ -1739,8 +1740,8 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
                   {isRoot&&u.role!=="superadmin"&&<Btn size="xs" color="red" outline onClick={()=>{if(window.confirm("Remover "+u.name+"?")){setUsers(p=>p.filter(x=>x.id!==u.id));addLog(currentUser.name,"Usuário Removido",u.name);}}}>✕</Btn>}
                   {!isRoot&&<span style={{fontSize:11,color:C.muted}}>—</span>}
                 </div>
-              ]}/>}
-            ))}</tbody>
+              ]}/>;
+            })}</tbody>
           </table>
         </div>
       </Card>
@@ -1833,7 +1834,9 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
         <div style={{fontSize:12,fontWeight:700,color:C.red}}>⚠️ Zona de Perigo</div>
         <div style={{fontSize:11,color:C.muted,marginTop:2}}>Apaga todos os dados e volta ao estado inicial.</div>
       </div>
-      {isRoot?<Btn size="sm" color="red" outline onClick={()=>{if(window.confirm("ATENÇÃO: Apaga TODOS os dados. Confirmar?")){Object.keys(localStorage).filter(k=>k.startsWith("re_")).forEach(k=>localStorage.removeItem(k));window.location.reload();}}}>🗑️ Resetar Todos os Dados</Btn>:<span style={{fontSize:12,color:C.muted}}>🔒 Apenas o usuário Root pode resetar o sistema.</span>}
+      isRoot
+          ?<Btn size="sm" color="red" outline onClick={()=>{if(window.confirm("ATENÇÃO: Apaga TODOS os dados. Confirmar?")){Object.keys(localStorage).filter(k=>k.startsWith("re_")).forEach(k=>localStorage.removeItem(k));window.location.reload();}}}>🗑️ Resetar Todos os Dados</Btn>
+          :<span style={{fontSize:12,color:C.muted}}>🔒 Apenas o usuário Root pode resetar o sistema.</span>
     </div>
   </div>;
 }
@@ -3495,6 +3498,7 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
 
 /* ── APP ── */
 export default function App(){
+  // ── TODOS OS HOOKS PRIMEIRO (regra do React) ──
   const[user,setUser]=useState(()=>{
     try{const u=localStorage.getItem("re_session");return u?JSON.parse(u):null;}catch{return null;}
   });
@@ -3527,40 +3531,50 @@ export default function App(){
     {id:"p5",code:"SPL-001",name:"Splitter 1x8",cat:"Caixas e Acessórios",unit:"un",desc:""},
   ]);
   const[drawerOpen,setDrawerOpen]=useState(false);
+  const isMobile=useIsMobile();
 
-  // ── Migração: garante usuários padrão existem ──
+  // Meu Perfil
+  const[npwd,setNpwd]=useState("");
+  const[cpwd,setCpwd]=useState("");
+  const[pwdErr,setPwdErr]=useState("");
+  const[perfilModal,setPerfilModal]=useState(false);
+  const[perfilForm,setPerfilForm]=useState({pass:"",novaPass:"",confirmaPass:"",photo:""});
+  const[perfilMsg,setPerfilMsg]=useState("");
+
+  // Listener Meu Perfil
+  useEffect(()=>{
+    const h=()=>{setPerfilForm({pass:"",novaPass:"",confirmaPass:"",photo:""});setPerfilMsg("");setPerfilModal(true);};
+    window.addEventListener("openPerfil",h);
+    return()=>window.removeEventListener("openPerfil",h);
+  },[]);
+
+  // Migração usuários padrão
   useEffect(()=>{
     setUsers(prev=>{
       let updated=[...prev];
       const defaults=[
-        {id:"u0",name:"Master StockTel",email:"master@stocktel.com.br",phone:"",cpf:"",login:MASTER_LOGIN,pass:MASTER_PASS,role:"superadmin",photo:"",perms:ALL_MODULES.map(m=>m.k),mustChangePassword:false},
         {id:"u8",name:"Financeiro",email:"financeiro@stocktel.com.br",phone:"(21)99999-0003",cpf:"FIN-001",login:"financeiro",pass:"fin123",role:"financeiro",photo:"",perms:DEFAULT_PERMS["financeiro"],mustChangePassword:true},
         {id:"u9",name:"Mecânico",email:"mecanico@stocktel.com.br",phone:"(21)99999-0004",cpf:"MEC-001",login:"mecanico",pass:"mec123",role:"mecanico",photo:"",perms:DEFAULT_PERMS["mecanico"],mustChangePassword:true},
         {id:"root",name:"StockTel Root",email:"root@stocktel.com.br",phone:"",cpf:"ROOT-001",login:"root",pass:"s@t$HWmiJVy6y#$Z",role:"superadmin",photo:"",perms:ALL_MODULES.map(m=>m.k),mustChangePassword:false},
-  {id:"root",name:"StockTel Root",email:"root@stocktel.com.br",phone:"",cpf:"ROOT-001",login:"root",pass:"s@t$HWmiJVy6y#$Z",role:"superadmin",photo:"",perms:ALL_MODULES.map(m=>m.k),mustChangePassword:false},
       ];
       defaults.forEach(d=>{
-        if(!updated.find(u=>u.login===d.login)){
-          updated=[...updated,d];
-        }
+        if(!updated.find(u=>u.login===d.login)) updated=[...updated,d];
       });
       return updated.length!==prev.length?updated:prev;
     });
   },[]);
-  const isMobile=useIsMobile();
+
+  // ── FUNÇÕES E LÓGICA (após hooks) ──
+  const goPage=(p)=>{setPage(p);try{localStorage.setItem("re_page",p);}catch{}};
+
   const addLog=(u,a,d)=>{
-    const tipo=a.toLowerCase().includes("saída")||a.toLowerCase().includes("saida")?"saida":a.toLowerCase().includes("entrada")?"entrada":a.toLowerCase().includes("aprovada")?"aprovada":a.toLowerCase().includes("devolução")||a.toLowerCase().includes("solicitada")?"dev":"outro";
+    const tipo=a.toLowerCase().includes("saída")||a.toLowerCase().includes("saida")?"saida":
+      a.toLowerCase().includes("entrada")?"entrada":
+      a.toLowerCase().includes("aprovada")?"aprovada":
+      a.toLowerCase().includes("devolução")||a.toLowerCase().includes("solicitada")?"dev":"outro";
     setLogs(p=>[{id:uid(),date:now(),user:u,action:a,detail:d,tipo},...p]);
   };
-  // ── Força troca de senha (hooks antes do return condicional) ──
-  const[npwd,setNpwd]=useState("");
-  const[cpwd,setCpwd]=useState("");
-  const[pwdErr,setPwdErr]=useState("");
 
-  // ── Meu Perfil ──
-  const[perfilModal,setPerfilModal]=useState(false);
-  const[perfilForm,setPerfilForm]=useState({pass:"",novaPass:"",confirmaPass:"",photo:""});
-  const[perfilMsg,setPerfilMsg]=useState("");
   const salvarPerfil=()=>{
     if(perfilForm.novaPass){
       if(perfilForm.pass!==user.pass){setPerfilMsg("err:Senha atual incorreta.");return;}
@@ -3578,6 +3592,7 @@ export default function App(){
     setPerfilForm({pass:"",novaPass:"",confirmaPass:"",photo:""});
     setTimeout(()=>{setPerfilMsg("");setPerfilModal(false);},2000);
   };
+
   const handlePerfilFoto=(e)=>{
     const file=e.target.files[0];
     if(!file)return;
@@ -3587,52 +3602,54 @@ export default function App(){
     reader.readAsDataURL(file);
   };
 
-  // ── Listener Meu Perfil (deve estar antes de qualquer return condicional) ──
-  useEffect(()=>{
-    const h=()=>{setPerfilForm({pass:"",novaPass:"",confirmaPass:"",photo:""});setPerfilMsg("");setPerfilModal(true);};
-    window.addEventListener("openPerfil",h);
-    return()=>window.removeEventListener("openPerfil",h);
-  },[]);
-
-  if(!user)return <LoginPage users={users} onLogin={u=>{setUser(u);setPage("dash");try{localStorage.setItem("re_session",JSON.stringify(u));localStorage.setItem("re_page","dash");}catch{}}}/>;
-
-  // ── Força troca de senha no primeiro acesso ──
   const confirmarSenha=()=>{
     if(npwd.length<4){setPwdErr("Senha deve ter ao menos 4 caracteres.");return;}
     if(npwd!==cpwd){setPwdErr("As senhas não conferem.");return;}
-    const updated={...user,pass:npwd,mustChangePassword:false};
-    setUsers(p=>p.map(u=>u.id===user.id?updated:u));
-    setUser(updated);
+    const upd={...user,pass:npwd,mustChangePassword:false};
+    setUsers(p=>p.map(u=>u.id===user.id?upd:u));
+    setUser(upd);
     goPage("dash");
-    try{localStorage.setItem("re_session",JSON.stringify(updated));localStorage.setItem("re_page","dash");}catch{}
+    try{localStorage.setItem("re_session",JSON.stringify(upd));localStorage.setItem("re_page","dash");}catch{}
   };
 
-  if(user.mustChangePassword) return <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-    <style>{CSS}</style>
-    <div style={{position:"fixed",inset:0,backgroundImage:`radial-gradient(ellipse at 50% 0%,${C.gold}18 0%,transparent 60%)`,pointerEvents:"none"}}/>
-    <div className="fi" style={{width:"100%",maxWidth:420,position:"relative",zIndex:1}}>
-      <div style={{textAlign:"center",marginBottom:24}}>
-        <div style={{fontSize:40,marginBottom:8}}>🔐</div>
-        <h1 style={{fontSize:20,fontWeight:800,color:C.txt}}>Primeiro Acesso</h1>
-        <p style={{fontSize:12,color:C.muted,marginTop:6}}>Por segurança, crie uma nova senha antes de continuar</p>
-      </div>
-      <Card style={{padding:24,display:"flex",flexDirection:"column",gap:14}}>
-        <div style={{background:`${C.gold}15`,border:`1px solid ${C.gold}44`,borderRadius:8,padding:"10px 14px"}}>
-          <div style={{fontSize:12,color:C.gold,fontWeight:600}}>👤 {user.name}</div>
-          <div style={{fontSize:11,color:C.muted}}>Login: {user.login}</div>
+  // ── RETURNS CONDICIONAIS (após todos os hooks) ──
+  if(!user)return <LoginPage users={users} onLogin={u=>{
+    setUser(u);
+    goPage("dash");
+    try{localStorage.setItem("re_session",JSON.stringify(u));localStorage.setItem("re_page","dash");}catch{}
+  }}/>;
+
+  if(user.mustChangePassword) return (
+    <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <style>{CSS}</style>
+      <div style={{position:"fixed",inset:0,backgroundImage:`radial-gradient(ellipse at 50% 0%,${C.gold}18 0%,transparent 60%)`,pointerEvents:"none"}}/>
+      <div className="fi" style={{width:"100%",maxWidth:420,position:"relative",zIndex:1}}>
+        <div style={{textAlign:"center",marginBottom:24}}>
+          <div style={{fontSize:40,marginBottom:8}}>🔐</div>
+          <h1 style={{fontSize:20,fontWeight:800,color:C.txt}}>Primeiro Acesso</h1>
+          <p style={{fontSize:12,color:C.muted,marginTop:6}}>Por segurança, crie uma nova senha antes de continuar</p>
         </div>
-        <Inp label="Nova Senha *" value={npwd} onChange={setNpwd} type="password" placeholder="Mínimo 4 caracteres"/>
-        <Inp label="Confirmar Senha *" value={cpwd} onChange={setCpwd} type="password" placeholder="Repita a senha"/>
-        {pwdErr&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",color:C.red,fontSize:13}}>⚠️ {pwdErr}</div>}
-        <Btn color="gold" onClick={confirmarSenha} style={{width:"100%"}}>✅ Definir Nova Senha e Entrar</Btn>
-      </Card>
+        <Card style={{padding:24,display:"flex",flexDirection:"column",gap:14}}>
+          <div style={{background:`${C.gold}15`,border:`1px solid ${C.gold}44`,borderRadius:8,padding:"10px 14px"}}>
+            <div style={{fontSize:12,color:C.gold,fontWeight:600}}>👤 {user.name}</div>
+            <div style={{fontSize:11,color:C.muted}}>Login: {user.login}</div>
+          </div>
+          <Inp label="Nova Senha *" value={npwd} onChange={setNpwd} type="password" placeholder="Mínimo 4 caracteres"/>
+          <Inp label="Confirmar Senha *" value={cpwd} onChange={setCpwd} type="password" placeholder="Repita a senha"/>
+          {pwdErr&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",color:C.red,fontSize:13}}>⚠️ {pwdErr}</div>}
+          <Btn color="gold" onClick={confirmarSenha} style={{width:"100%"}}>✅ Definir Nova Senha e Entrar</Btn>
+        </Card>
+      </div>
     </div>
-  </div>;
+  );
+
+  // ── LÓGICA DA APP (após returns condicionais) ──
   const isAdm=user.role==="admin";
-  const goPage=(p)=>{setPage(p);try{localStorage.setItem("re_page",p);}catch{}};
+  const isSuperAdmin=user.role==="superadmin";
   const pendRet=returns.filter(r=>r.status==="pending").length;
   const pendSol=solicitacoes.filter(s=>s.status==="pending").length;
-  const p={stock,setStock,tstock,setTstock,os,setOs,returns,setReturns,nf,setNf,users,setUsers,currentUser:user,addLog,isAdmin:isAdm,isMobile};
+  const p={stock,setStock,tstock,setTstock,os,setOs,returns,setReturns,nf,setNf,users,setUsers,currentUser:user,addLog,isAdmin:isAdm||isSuperAdmin,isMobile};
+
   const pages={
     dash:<Dashboard {...p} setPage={goPage} logs={logs} pendSol={pendSol} currentUser={user} veiculos={veiculos} abastecimentos={abastecimentos}/>,
     estoque:<EstoquePage {...p}/>,
@@ -3648,9 +3665,10 @@ export default function App(){
     produtos:<ProdutosPage produtos={produtos} setProdutos={setProdutos} cats={cats} isMobile={isMobile}/>,
     usr:<UsrPage users={users} setUsers={setUsers} addLog={addLog} currentUser={user} isMobile={isMobile}/>,
     log:<LogPage logs={logs} isMobile={isMobile}/>,
-    manut:<ManutencaoPage manutSols={manutSols} setManutSols={setManutSols} manutOS={manutOS} setManutOS={setManutOS} veiculos={veiculos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
     frota:<FrotaPage veiculos={veiculos} setVeiculos={setVeiculos} abastecimentos={abastecimentos} setAbastecimentos={setAbastecimentos} checkouts={checkouts} setCheckouts={setCheckouts} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
+    manut:<ManutencaoPage manutSols={manutSols} setManutSols={setManutSols} manutOS={manutOS} setManutOS={setManutOS} veiculos={veiculos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
   };
+
   return <div style={{height:"100dvh",background:C.bg,color:C.txt,display:"flex",overflow:"hidden"}}>
     <style>{CSS}</style>
     {!isMobile&&<Sidebar user={user} page={page} setPage={goPage} onLogout={()=>{setUser(null);try{localStorage.removeItem("re_session");localStorage.removeItem("re_page");}catch{}}}/>}
@@ -3661,13 +3679,12 @@ export default function App(){
         {pages[page]||pages.dash}
       </main>
       {!isMobile&&<div style={{padding:"8px 24px",background:C.surf,borderTop:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <span style={{fontSize:11,color:C.muted}}>StockTel — v1.0.0</span>
+        <span style={{fontSize:11,color:C.muted}}>StockTel — Soluções em Telecomunicações · v1.1</span>
         <span style={{fontSize:11,color:C.muted}}>© {new Date().getFullYear()} StockTel — Todos os direitos reservados.</span>
       </div>}
     </div>
     {isMobile&&<BottomNav page={page} setPage={goPage} user={user} onMenuOpen={()=>setDrawerOpen(true)}/>}
 
-    {/* ── MODAL MEU PERFIL ── */}
     {perfilModal&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:2000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
       <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,width:"100%",maxWidth:500,maxHeight:isMobile?"92vh":"88vh",display:"flex",flexDirection:"column",position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
         <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
@@ -3675,47 +3692,39 @@ export default function App(){
           <button onClick={()=>setPerfilModal(false)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
         </div>
         <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:14}}>
-          {/* Info do usuário */}
           <div style={{display:"flex",alignItems:"center",gap:14,padding:14,background:C.surf,borderRadius:10,border:`1px solid ${C.bdr}`}}>
             <div style={{width:56,height:56,borderRadius:"50%",overflow:"hidden",background:`${C.gold}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}}>
               {(perfilForm.photo||user.photo)?<img src={perfilForm.photo||user.photo} alt={user.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span>👤</span>}
             </div>
             <div>
               <div style={{fontSize:14,fontWeight:700,color:C.txt}}>{user.name}</div>
-              <div style={{fontSize:11,color:C.muted}}>@{user.login} · {user.role==="admin"?"Administrador":user.role==="estoque"?"Estoque":"Técnico"}</div>
-              <div style={{fontSize:11,color:C.muted}}>{user.email}</div>
+              <div style={{fontSize:11,color:C.muted}}>@{user.login} · {user.role}</div>
             </div>
           </div>
-
-          {/* Foto */}
           <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:10}}>📸 Alterar Foto de Perfil</div>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:"uppercase",marginBottom:10}}>📸 Alterar Foto</div>
             <div style={{display:"flex",alignItems:"center",gap:12}}>
-              <div style={{width:60,height:60,borderRadius:"50%",overflow:"hidden",background:`${C.gold}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0,border:`2px solid ${C.bdr2}`}}>
+              <div style={{width:56,height:56,borderRadius:"50%",overflow:"hidden",background:`${C.gold}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>
                 {(perfilForm.photo||user.photo)?<img src={perfilForm.photo||user.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span>👤</span>}
               </div>
-              <div style={{flex:1}}>
-                <label style={{background:C.gold,color:"#000",padding:"7px 14px",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:700,display:"inline-block",marginBottom:6}}>
+              <div>
+                <label style={{background:C.gold,color:"#000",padding:"7px 14px",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:700,display:"inline-block"}}>
                   📷 Escolher Foto
                   <input type="file" accept="image/*" onChange={handlePerfilFoto} style={{display:"none"}}/>
                 </label>
-                {perfilForm.photo&&<button onClick={()=>setPerfilForm(f=>({...f,photo:""}))} style={{background:"transparent",color:C.red,border:"none",cursor:"pointer",fontSize:12,marginLeft:10,fontWeight:600}}>✕ Remover</button>}
-                <div style={{fontSize:10,color:C.muted,marginTop:4}}>JPG, PNG · Máx 2MB</div>
+                {perfilForm.photo&&<button onClick={()=>setPerfilForm(f=>({...f,photo:""}))} style={{background:"transparent",color:C.red,border:"none",cursor:"pointer",fontSize:12,marginLeft:10}}>✕</button>}
               </div>
             </div>
           </div>
-
-          {/* Alterar senha */}
           <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:10}}>🔐 Alterar Senha</div>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:"uppercase",marginBottom:10}}>🔐 Alterar Senha</div>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              <Inp label="Senha Atual" value={perfilForm.pass} onChange={v=>setPerfilForm(f=>({...f,pass:v}))} type="password" placeholder="Digite sua senha atual"/>
+              <Inp label="Senha Atual" value={perfilForm.pass} onChange={v=>setPerfilForm(f=>({...f,pass:v}))} type="password" placeholder="Senha atual"/>
               <Inp label="Nova Senha" value={perfilForm.novaPass} onChange={v=>setPerfilForm(f=>({...f,novaPass:v}))} type="password" placeholder="Mínimo 4 caracteres"/>
-              <Inp label="Confirmar Nova Senha" value={perfilForm.confirmaPass} onChange={v=>setPerfilForm(f=>({...f,confirmaPass:v}))} type="password" placeholder="Repita a nova senha"/>
+              <Inp label="Confirmar" value={perfilForm.confirmaPass} onChange={v=>setPerfilForm(f=>({...f,confirmaPass:v}))} type="password" placeholder="Repita a senha"/>
             </div>
             <div style={{fontSize:11,color:C.muted,marginTop:8}}>Deixe em branco para manter a senha atual</div>
           </div>
-
           {perfilMsg&&<div style={{background:perfilMsg.startsWith("ok:")?C.grnD:C.redD,border:`1px solid ${perfilMsg.startsWith("ok:")?C.grn:C.red}44`,borderRadius:8,padding:"10px 14px",color:perfilMsg.startsWith("ok:")?C.grn:C.red,fontSize:13}}>{perfilMsg.replace(/^(ok|err):/,"")}</div>}
         </div>
         <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,flexShrink:0,display:"flex",gap:10,justifyContent:"flex-end"}}>
