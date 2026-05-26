@@ -4,6 +4,7 @@ import { C, ALL_MODULES, DEFAULT_PERMS } from "../lib/constants";
 import { uid, now, fmt } from "../lib/utils";
 import { Btn, Inp, Sel, Card, Bdg, THead, TRow, Modal } from "../components/ui";
 import { useToast } from "../hooks/useToast";
+import ItemList from "../components/shared/ItemList";
 
 function DevPage({returns,setReturns,tstock,setTstock,stock,users,currentUser,addLog,isMobile}){
   const isTec=currentUser.role==="tecnico";

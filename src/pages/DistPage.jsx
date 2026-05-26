@@ -4,6 +4,7 @@ import { C, ALL_MODULES, DEFAULT_PERMS } from "../lib/constants";
 import { uid, now, fmt } from "../lib/utils";
 import { Btn, Inp, Sel, Card, Bdg, THead, TRow, Modal } from "../components/ui";
 import { useToast } from "../hooks/useToast";
+import ItemList from "../components/shared/ItemList";
 
 function DistPage({stock,setStock,tstock,setTstock,users,addLog,currentUser,isMobile}){
   const techs=users.filter(u=>u.role==="tecnico");
