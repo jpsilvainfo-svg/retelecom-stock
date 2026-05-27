@@ -59,15 +59,16 @@ const ALL_MODULES=[
   {k:"produtos",l:"Produtos",icon:"🔩",group:"admin"},
   {k:"usr",l:"Usuários",icon:"👥",group:"admin"},
   {k:"log",l:"Logs do Sistema",icon:"📋",group:"admin"},
+  {k:"ajuda",l:"Ajuda / Docs",icon:"❓",group:"admin"},
   {k:"manut",l:"Manutenção",icon:"🔩",group:"mecanico"},
 ];
 const DEFAULT_PERMS={
   superadmin:ALL_MODULES.map(m=>m.k),
   admin:ALL_MODULES.map(m=>m.k),
-  estoque:["dash","os","estoque","kit","dist","dev","sol","rel"],
-  tecnico:["dash","os","frota","kit","dev","sol","rel"],
-  financeiro:["dash","nf","rel","email","os","dev","log"],
-  mecanico:["dash","manut","frota"],
+  estoque:["dash","os","estoque","kit","dist","dev","sol","rel","ajuda"],
+  tecnico:["dash","os","frota","kit","dev","sol","rel","ajuda"],
+  financeiro:["dash","nf","rel","email","os","dev","log","ajuda"],
+  mecanico:["dash","manut","frota","ajuda"],
   superadmin:ALL_MODULES.map(m=>m.k),
 };
 const MASTER_LOGIN="stocktelmaster";
@@ -202,6 +203,25 @@ input:focus,select:focus,textarea:focus{box-shadow:0 0 0 1px rgba(209,0,0,.55),0
 .fi{animation:fadeIn .28s ease}
 .su{animation:slideUp .25s ease}
 .sl{animation:slideLeft .25s ease}
+
+/* ── PREMIUM UI ── */
+.fi { animation: fadeIn 0.25s ease; }
+.card-hover { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+.gradient-red { background: linear-gradient(135deg, #cc0000 0%, #8b0000 100%); }
+.gradient-dark { background: linear-gradient(135deg, #1a1a1a 0%, #2d0000 60%, #cc000044 100%); }
+.pulse { animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+@keyframes countUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
+.kpi-value { animation: countUp 0.5s ease; }
+.badge-glow { box-shadow: 0 0 12px currentColor; }
+.progress-bar { height:6px; border-radius:3px; background:#2a2a2a; overflow:hidden; }
+.progress-fill { height:100%; border-radius:3px; transition:width 0.6s ease; }
+.stat-card { position:relative; overflow:hidden; }
+.stat-card::after { content:''; position:absolute; top:-50%; right:-20%; width:120px; height:120px; border-radius:50%; background:currentColor; opacity:0.05; }
+.tooltip-wrapper { position:relative; }
+.tooltip-wrapper:hover .tooltip { display:block; }
+.tooltip { display:none; position:absolute; bottom:100%; left:50%; transform:translateX(-50%); background:#1a1a1a; color:#fff; padding:6px 12px; border-radius:6px; font-size:11px; white-space:nowrap; z-index:100; margin-bottom:6px; border:1px solid #333; }
 `;
 
 /* ── ATOMS ── */
@@ -336,33 +356,111 @@ function Spinner(){
 }
 
 function LoginPage({users,onLogin}){
+  const isMobile=useIsMobile();
   const[login,setLogin]=useState("");
   const[pass,setPass]=useState("");
   const[err,setErr]=useState("");
-  const isMobile=useIsMobile();
+  const[loading,setLoading]=useState(false);
+  const[showPass,setShowPass]=useState(false);
 
-  const go=()=>{const u=users.find(u=>u.login===login&&u.pass===pass);if(u)onLogin(u);else setErr("Login ou senha inválidos.");};
-  const handleKey=e=>{if(e.key==="Enter")go();};
-  return <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?"16px":"20px"}}>
-    <style>{CSS}</style>
-    <div style={{position:"fixed",inset:0,backgroundImage:`radial-gradient(ellipse at 50% 0%,${C.gold}18 0%,transparent 60%)`,pointerEvents:"none"}}/>
-    <div className="fi" style={{width:"100%",maxWidth:400,position:"relative",zIndex:1}}>
-      <div style={{textAlign:"center",marginBottom:32}}>
-        <img src="/logo-stocktel.png" alt="StockTel" style={{width:"100%",maxWidth:isMobile?260:320,objectFit:"contain",marginBottom:12}}/>
-        <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:".12em",textTransform:"uppercase"}}>Soluções em Telecomunicações</div>
+  const doLogin=()=>{
+    if(!login||!pass){setErr("Preencha login e senha.");return;}
+    setLoading(true);
+    setTimeout(()=>{
+      const u=users.find(u=>u.login===login&&u.pass===pass);
+      if(u){setErr("");onLogin(u);}
+      else{setErr("Login ou senha incorretos.");setLoading(false);}
+    },400);
+  };
+
+  return <div style={{minHeight:"100vh",background:"#070707",display:"flex",alignItems:"center",justifyContent:"center",padding:16,position:"relative",overflow:"hidden"}}>
+    {/* Background effects */}
+    <div style={{position:"fixed",inset:0,background:"radial-gradient(ellipse 80% 60% at 50% -10%,rgba(209,0,0,0.15) 0%,transparent 70%)",pointerEvents:"none"}}/>
+    <div style={{position:"fixed",top:"20%",right:"10%",width:300,height:300,background:"radial-gradient(circle,rgba(209,0,0,0.06) 0%,transparent 70%)",pointerEvents:"none"}}/>
+    <div style={{position:"fixed",bottom:"20%",left:"5%",width:200,height:200,background:"radial-gradient(circle,rgba(33,150,243,0.05) 0%,transparent 70%)",pointerEvents:"none"}}/>
+
+    <div style={{width:"100%",maxWidth:420,position:"relative",zIndex:1}}>
+      {/* Logo */}
+      <div style={{textAlign:"center",marginBottom:36}}>
+        <div style={{display:"inline-flex",alignItems:"center",gap:14,marginBottom:12}}>
+          <img src="/logo-stocktel.png" alt="StockTel" style={{height:52,filter:"drop-shadow(0 0 16px rgba(209,0,0,0.5))"}} onError={e=>e.target.style.display="none"}/>
+          <div style={{textAlign:"left"}}>
+            <div style={{fontSize:28,fontWeight:800,color:"#fff",letterSpacing:"-0.5px",lineHeight:1}}>StockTel</div>
+            <div style={{fontSize:12,color:"#9a9a9a",letterSpacing:".08em",textTransform:"uppercase"}}>Soluções em Telecom</div>
+          </div>
+        </div>
+        <div style={{fontSize:14,color:"#666",marginTop:4}}>Gestão inteligente para provedores FTTH</div>
       </div>
-      <Card style={{padding:isMobile?20:28,display:"flex",flexDirection:"column",gap:16,borderRadius:16}}>
-        <Inp label="Login" value={login} onChange={setLogin} placeholder="Seu usuário"/>
-        <Inp label="Senha" value={pass} onChange={setPass} type="password" placeholder="Sua senha" style={{}} />
-        {err&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",color:C.red,fontSize:13}}>⚠️ {err}</div>}
-        <Btn onClick={go} color="gold" size="lg" style={{width:"100%",borderRadius:10,marginTop:4}}>Entrar</Btn>
-      </Card>
-      <div style={{marginTop:14,textAlign:"center",fontSize:11,color:C.muted2}}>StockTel v1.0.0</div>
+
+      {/* Card */}
+      <div style={{background:"rgba(23,23,23,0.95)",border:"1px solid #2d2d2d",borderRadius:16,padding:isMobile?24:32,boxShadow:"0 24px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03)"}}>
+        <div style={{marginBottom:24}}>
+          <h2 style={{fontSize:20,fontWeight:700,color:"#fff",marginBottom:4}}>Bem-vindo de volta 👋</h2>
+          <p style={{fontSize:13,color:"#666"}}>Entre com suas credenciais de acesso</p>
+        </div>
+
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          {/* Login field */}
+          <div>
+            <label style={{fontSize:11,fontWeight:700,color:"#666",letterSpacing:".06em",textTransform:"uppercase",display:"block",marginBottom:6}}>Login</label>
+            <div style={{position:"relative"}}>
+              <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",fontSize:16,color:"#444"}}>👤</span>
+              <input value={login} onChange={e=>setLogin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doLogin()}
+                placeholder="Seu usuário" autoComplete="username"
+                style={{width:"100%",background:"#101010",border:"1px solid #2d2d2d",borderRadius:10,padding:"12px 12px 12px 38px",color:"#fff",fontSize:14,outline:"none",boxSizing:"border-box",transition:"border-color 0.2s"}}
+                onFocus={e=>e.target.style.borderColor="#d10000"} onBlur={e=>e.target.style.borderColor="#2d2d2d"}/>
+            </div>
+          </div>
+
+          {/* Password field */}
+          <div>
+            <label style={{fontSize:11,fontWeight:700,color:"#666",letterSpacing:".06em",textTransform:"uppercase",display:"block",marginBottom:6}}>Senha</label>
+            <div style={{position:"relative"}}>
+              <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",fontSize:16,color:"#444"}}>🔒</span>
+              <input value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doLogin()}
+                type={showPass?"text":"password"} placeholder="Sua senha" autoComplete="current-password"
+                style={{width:"100%",background:"#101010",border:"1px solid #2d2d2d",borderRadius:10,padding:"12px 42px 12px 38px",color:"#fff",fontSize:14,outline:"none",boxSizing:"border-box",transition:"border-color 0.2s"}}
+                onFocus={e=>e.target.style.borderColor="#d10000"} onBlur={e=>e.target.style.borderColor="#2d2d2d"}/>
+              <button onClick={()=>setShowPass(!showPass)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"transparent",border:"none",cursor:"pointer",fontSize:16,color:"#444",padding:0}}>
+                {showPass?"🙈":"👁️"}
+              </button>
+            </div>
+          </div>
+
+          {/* Error */}
+          {err&&<div style={{background:"rgba(209,0,0,0.12)",border:"1px solid rgba(209,0,0,0.3)",borderRadius:8,padding:"10px 14px",color:"#ff4444",fontSize:13,display:"flex",alignItems:"center",gap:8}}>
+            <span>⚠️</span> {err}
+          </div>}
+
+          {/* Submit */}
+          <button onClick={doLogin} disabled={loading}
+            style={{width:"100%",padding:"13px",borderRadius:10,border:"none",cursor:loading?"not-allowed":"pointer",fontSize:14,fontWeight:700,letterSpacing:".04em",transition:"all 0.2s",marginTop:4,
+              background:loading?"#333":"linear-gradient(135deg,#d10000 0%,#ff1a1a 100%)",
+              color:"#fff",boxShadow:loading?"none":"0 4px 20px rgba(209,0,0,0.4)"}}>
+            {loading?"Verificando...":"Entrar →"}
+          </button>
+        </div>
+
+        {/* Footer */}
+        <div style={{marginTop:24,paddingTop:20,borderTop:"1px solid #1a1a1a",textAlign:"center"}}>
+          <div style={{display:"flex",justifyContent:"center",gap:16,flexWrap:"wrap"}}>
+            {[{icon:"📦",label:"Estoque"},{icon:"🔧",label:"OS"},{icon:"🚗",label:"Frota"},{icon:"📊",label:"Relatórios"}].map((f,i)=>(
+              <div key={i} style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"#444"}}>
+                <span>{f.icon}</span><span>{f.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{textAlign:"center",marginTop:20,fontSize:11,color:"#333"}}>
+        StockTel v1.6 · © {new Date().getFullYear()} · Todos os direitos reservados
+      </div>
     </div>
   </div>;
 }
 
-/* ── SIDEBAR DESKTOP ── */
+
 function Sidebar({user,page,setPage,onLogout}){
   const perms=user.perms||DEFAULT_PERMS[user.role]||["dash"];
   const nav=ALL_MODULES.filter(m=>perms.includes(m.k)).map(m=>({k:m.k,icon:m.icon,label:m.l,group:m.group}));
@@ -2881,7 +2979,7 @@ function AdminRelPage({nf,stock,os,returns,tstock,users,solicitacoes,isMobile,ad
     setTimeout(()=>setMsg(""),5000);
   };
 
-  const tabs2=[{k:"financeiro",l:"💰 Financeiro"},{k:"frota",l:"🚗 Frota/Gastos"},{k:"tecnicos",l:"👷 Técnicos"},{k:"alertas",l:"🔔 Alertas de Preço"},{k:"email",l:"📧 Enviar"}];
+  const tabs2=[{k:"financeiro",l:"💰 Financeiro"},{k:"frota",l:"🚗 Frota/Gastos"},{k:"tecnicos",l:"👷 Técnicos"},{k:"sla",l:"⏱️ SLA"},{k:"tendencia",l:"📈 Tendência"},{k:"alertas",l:"🔔 Alertas de Preço"},{k:"email",l:"📧 Enviar"}];
 
   return <div className="fi" style={{display:"flex",flexDirection:"column",gap:16}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
@@ -3058,8 +3156,207 @@ function AdminRelPage({nf,stock,os,returns,tstock,users,solicitacoes,isMobile,ad
       </div>
     </Card>}
 
+    {/* FROTA */}
+    {tab==="frota"&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
+      <Card style={{padding:18}}>
+        <div style={{fontSize:14,fontWeight:700,color:C.txt,marginBottom:4}}>🚗 Gastos por Veículo — {periodoLabel}</div>
+        <div style={{fontSize:12,color:C.muted,marginBottom:16}}>Combustível + Manutenção no período selecionado</div>
+        {veiculos.length===0?<div style={{color:C.muted}}>Nenhum veículo cadastrado.</div>:
+        veiculos.map(v=>{
+          const gastoComb=abastecimentos.filter(a=>a.veiculoId===v.id&&inRange(a.dtAbast)).reduce((s,a)=>s+(parseFloat(a.valor)||0),0);
+          const litrosV=abastecimentos.filter(a=>a.veiculoId===v.id&&inRange(a.dtAbast)).reduce((s,a)=>s+(parseFloat(a.litros)||0),0);
+          const qtdAbast=abastecimentos.filter(a=>a.veiculoId===v.id&&inRange(a.dtAbast)).length;
+          const gastoManut=manutOS.filter(o=>o.veiculoId===v.id&&inRange(o.dtEntrada||"")).reduce((s,o)=>s+(o.pecas?.reduce((ps,p)=>ps+(parseFloat(p.valor)||0)*(parseInt(p.qtd)||1),0)||0),0);
+          const total=gastoComb+gastoManut;
+          if(total===0&&qtdAbast===0)return null;
+          const pctComb=total>0?Math.round((gastoComb/total)*100):0;
+          return <div key={v.id} style={{marginBottom:14,padding:14,background:C.surf,borderRadius:10,border:`1px solid ${C.bdr}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexWrap:"wrap",gap:8}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:14}}>{v.placa}</span>
+                <span style={{fontSize:12,color:C.txt2}}>{v.modelo} {v.ano}</span>
+                <Bdg color={v.status==="ativo"?"grn":v.status==="manutenção"?"ylw":"red"}>{v.status}</Bdg>
+              </div>
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,fontSize:16,color:C.grn}}>R$ {fmt(Math.round(total))}</span>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:10}}>
+              {[
+                {l:"COMBUSTÍVEL",v:`R$ ${fmt(Math.round(gastoComb))}`,s:`${qtdAbast} abast · ${Math.round(litrosV)}L`,c:C.gold,i:"⛽"},
+                {l:"MANUTENÇÃO",v:`R$ ${fmt(Math.round(gastoManut))}`,s:`${manutOS.filter(o=>o.veiculoId===v.id).length} OS`,c:C.red,i:"🔧"},
+                {l:"TOTAL",v:`R$ ${fmt(Math.round(total))}`,s:"no período",c:C.grn,i:"💰"},
+                {l:"% COMBUSTÍVEL",v:`${pctComb}%`,s:"do total",c:C.blue,i:"📊"},
+              ].map((s,i)=>(
+                <div key={i} style={{background:C.card,borderRadius:8,padding:"10px 12px",textAlign:"center"}}>
+                  <div style={{fontSize:16,marginBottom:3}}>{s.i}</div>
+                  <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",marginBottom:2,fontWeight:700}}>{s.l}</div>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,fontSize:13,color:s.c}}>{s.v}</div>
+                  <div style={{fontSize:10,color:C.muted,marginTop:2}}>{s.s}</div>
+                </div>
+              ))}
+            </div>
+            {/* Barra de composição */}
+            <div style={{marginTop:6}}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.muted,marginBottom:4}}>
+                <span>⛽ Combustível {pctComb}%</span><span>🔧 Manutenção {100-pctComb}%</span>
+              </div>
+              <div className="progress-bar">
+                <div className="progress-fill" style={{width:`${pctComb}%`,background:`linear-gradient(90deg,${C.gold},${C.goldL})`}}/>
+              </div>
+            </div>
+          </div>;
+        }).filter(Boolean)}
+        {/* Total geral */}
+        {veiculos.length>0&&<div style={{marginTop:14,padding:14,background:`${C.gold}18`,borderRadius:10,border:`1px solid ${C.gold}44`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:13,fontWeight:700,color:C.txt}}>💰 Total Geral da Frota</div>
+            <div style={{fontSize:11,color:C.muted,marginTop:2}}>{periodoLabel}</div>
+          </div>
+          <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,fontSize:20,color:C.gold}}>
+            R$ {fmt(Math.round(
+              abastecimentos.filter(a=>inRange(a.dtAbast)).reduce((s,a)=>s+(parseFloat(a.valor)||0),0)+
+              manutOS.filter(o=>inRange(o.dtEntrada||"")).reduce((s,o)=>s+(o.pecas?.reduce((ps,p)=>ps+(parseFloat(p.valor)||0)*(parseInt(p.qtd)||1),0)||0),0)
+            ))}
+          </span>
+        </div>}
+      </Card>
+    </div>}
+
     {/* ALERTAS */}
-    {tab==="alertas"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
+    
+  {/* SLA */}
+  {tab==="sla"&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <Card style={{padding:18}}>
+      <div style={{fontSize:14,fontWeight:700,color:C.txt,marginBottom:16}}>⏱️ SLA — Análise de Desempenho no Período</div>
+      {(()=>{
+        const osP=os.filter(o=>inRange(o.date));
+        if(osP.length===0) return <div style={{color:C.muted}}>Nenhuma OS no período selecionado.</div>;
+        const techSLA=users.filter(u=>u.role==="tecnico").map(t=>{
+          const myOs=osP.filter(o=>o.uid===t.id);
+          const totalMat=myOs.reduce((s,o)=>s+o.items.reduce((a,i)=>a+i.qty,0),0);
+          return{name:t.name.split(" ")[0],photo:t.photo,total:myOs.length,totalMat};
+        }).filter(t=>t.total>0).sort((a,b)=>b.total-a.total);
+        const maxOS=techSLA[0]?.total||1;
+        return <>
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)",gap:12,marginBottom:20}}>
+            {[
+              {l:"OS NO PERÍODO",v:osP.length,i:"🔧",c:C.gold},
+              {l:"TÉCNICOS ATIVOS",v:techSLA.length,i:"👷",c:C.grn},
+              {l:"MÉDIA OS/TÉCNICO",v:techSLA.length>0?Math.round(osP.length/techSLA.length):0,i:"📊",c:C.blue},
+            ].map((s,i)=>(
+              <div key={i} style={{background:C.surf,borderRadius:10,padding:14,textAlign:"center",border:`1px solid ${C.bdr}`}}>
+                <div style={{fontSize:20,marginBottom:4}}>{s.i}</div>
+                <div style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",marginBottom:4}}>{s.l}</div>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,fontSize:22,color:s.c}}>{s.v}</div>
+              </div>
+            ))}
+          </div>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead><THead cols={["#","TÉCNICO","OS","MATERIAIS","PERFORMANCE"]}/></thead>
+            <tbody>{techSLA.map((t,i)=>{
+              const pct=Math.round((t.total/maxOS)*100);
+              return <TRow key={t.name} cells={[
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:[C.gold,C.muted,C.ylw][i]||C.muted,fontSize:14}}>{i+1}</span>,
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{width:28,height:28,borderRadius:"50%",overflow:"hidden",background:`${C.gold}33`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    {t.photo?<img src={t.photo} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontSize:12}}>👤</span>}
+                  </div>
+                  <span style={{fontWeight:600}}>{t.name}</span>
+                </div>,
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.txt,fontSize:16}}>{t.total}</span>,
+                <span style={{fontFamily:"'JetBrains Mono',monospace",color:C.blue}}>{t.totalMat}</span>,
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{flex:1,background:C.bdr,borderRadius:4,height:8}}>
+                    <div style={{background:i===0?C.grn:i===1?C.gold:C.blue,height:8,borderRadius:4,width:`${pct}%`}}/>
+                  </div>
+                  <span style={{fontSize:11,color:C.muted,minWidth:35}}>{pct}%</span>
+                </div>
+              ]}/>;
+            })}</tbody>
+          </table>
+        </>;
+      })()}
+    </Card>
+  </div>}
+
+  {/* TENDÊNCIA */}
+  {tab==="tendencia"&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <Card style={{padding:18}}>
+      <div style={{fontSize:14,fontWeight:700,color:C.txt,marginBottom:16}}>📈 Tendência de Consumo e Previsão de Ruptura</div>
+      {/* Consumo mensal */}
+      <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:12}}>📊 Consumo Mensal de Materiais</div>
+      {(()=>{
+        const meses={};
+        os.forEach(o=>{const mes=(o.date||"").slice(0,7);if(!mes)return;o.items?.forEach(it=>{meses[mes]=(meses[mes]||0)+it.qty;});});
+        const dados=Object.entries(meses).sort((a,b)=>a[0].localeCompare(b[0])).slice(-6);
+        if(dados.length===0) return <div style={{color:C.muted,fontSize:12}}>Nenhum dado de consumo ainda.</div>;
+        const maxV=Math.max(...dados.map(([,v])=>v))||1;
+        return <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
+          {dados.map(([mes,qty])=>(
+            <div key={mes} style={{display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:11,color:C.muted,minWidth:55,fontFamily:"'JetBrains Mono',monospace"}}>{mes.slice(5)}/{mes.slice(2,4)}</span>
+              <div style={{flex:1,background:C.bdr,borderRadius:4,height:10}}>
+                <div style={{background:`linear-gradient(90deg,${C.gold},${C.goldL})`,height:10,borderRadius:4,width:`${(qty/maxV)*100}%`}}/>
+              </div>
+              <span style={{fontSize:12,fontWeight:700,color:C.txt,minWidth:40,textAlign:"right",fontFamily:"'JetBrains Mono',monospace"}}>{qty}</span>
+            </div>
+          ))}
+        </div>;
+      })()}
+      {/* Previsão de ruptura */}
+      <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:12}}>⚠️ Previsão de Ruptura (próximos 90 dias)</div>
+      {(()=>{
+        const consumo90={};
+        const limite=new Date();limite.setDate(limite.getDate()-90);
+        os.filter(o=>new Date(o.date)>=limite).forEach(o=>o.items?.forEach(it=>{consumo90[it.sid]=(consumo90[it.sid]||0)+it.qty;}));
+        const previsoes=stock.filter(s=>consumo90[s.id]>0).map(s=>{
+          const c90=consumo90[s.id]||0;
+          const cDia=c90/90;
+          const dias=cDia>0?Math.round(s.qty/cDia):999;
+          return{...s,dias,cDia:cDia.toFixed(2)};
+        }).filter(s=>s.dias<90).sort((a,b)=>a.dias-b.dias).slice(0,10);
+        if(previsoes.length===0) return <div style={{background:`${C.grn}18`,border:`1px solid ${C.grn}44`,borderRadius:8,padding:"10px 14px",color:C.grn,fontSize:13}}>✅ Nenhum item com risco de ruptura nos próximos 90 dias.</div>;
+        return <table style={{width:"100%",borderCollapse:"collapse"}}>
+          <thead><THead cols={["MATERIAL","ESTOQUE","CONSUMO/DIA","DIAS RESTANTES","AÇÃO"]}/></thead>
+          <tbody>{previsoes.map((s,i)=>(
+            <TRow key={i} cells={[
+              <span style={{fontWeight:600,fontSize:12}}>{s.name}</span>,
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:s.qty<=s.min?C.red:C.ylw}}>{s.qty} {s.unit}</span>,
+              <span style={{fontSize:11,color:C.muted}}>{s.cDia}/dia</span>,
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,fontSize:14,color:s.dias<=15?C.red:s.dias<=30?C.ylw:C.gold}}>{s.dias===999?"∞":s.dias+"d"}</span>,
+              <Bdg color={s.dias<=15?"red":s.dias<=30?"ylw":"gold"}>{s.dias<=15?"COMPRAR JÁ":s.dias<=30?"ATENÇÃO":"MONITORAR"}</Bdg>
+            ]}/>
+          ))}</tbody>
+        </table>;
+      })()}
+      {/* Variação de preços */}
+      <div style={{fontSize:13,fontWeight:700,color:C.txt,margin:"20px 0 12px"}}>💹 Variação de Preços por Material</div>
+      {(()=>{
+        const pm={};
+        [...nf].sort((a,b)=>(a.date||"").localeCompare(b.date||"")).forEach(n=>n.items?.forEach(it=>{if(!pm[it.sid])pm[it.sid]=[];if(it.unitCost)pm[it.sid].push({price:it.unitCost});}));
+        const trends=Object.entries(pm).filter(([,v])=>v.length>=2).map(([sid,prices])=>{
+          const s=stock.find(x=>x.id===sid);
+          const vp=((prices[prices.length-1].price-prices[0].price)/prices[0].price*100).toFixed(1);
+          return{name:s?.name||sid,first:prices[0].price,last:prices[prices.length-1].price,vp:parseFloat(vp)};
+        }).sort((a,b)=>Math.abs(b.vp)-Math.abs(a.vp)).slice(0,8);
+        if(trends.length===0) return <div style={{color:C.muted,fontSize:12}}>Mínimo 2 NFs do mesmo produto para análise.</div>;
+        return <table style={{width:"100%",borderCollapse:"collapse"}}>
+          <thead><THead cols={["MATERIAL","PREÇO INICIAL","PREÇO ATUAL","VARIAÇÃO"]}/></thead>
+          <tbody>{trends.map((t,i)=>(
+            <TRow key={i} cells={[
+              <span style={{fontWeight:600,fontSize:12}}>{t.name.slice(0,35)}</span>,
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:C.muted}}>R$ {(t.first||0).toFixed(2)}</span>,
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12}}>R$ {(t.last||0).toFixed(2)}</span>,
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:t.vp>5?C.red:t.vp<-5?C.grn:C.muted}}>
+                {t.vp>0?"↑":"↓"} {Math.abs(t.vp)}%
+              </span>
+            ]}/>
+          ))}</tbody>
+        </table>;
+      })()}
+    </Card>
+  </div>}
+
+  {tab==="alertas"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
       {alertasPreco.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted}}>Nenhuma variação de preço detectada ainda.<br/>Registre ao menos 2 NFs com o mesmo produto.</span></Card>}
       {alertasAlta.length>0&&<div>
         <div style={{fontSize:12,fontWeight:700,color:C.red,marginBottom:8,letterSpacing:".06em",textTransform:"uppercase"}}>📈 Aumento de Preço ({alertasAlta.length})</div>
@@ -4538,6 +4835,291 @@ function ManutencaoPage({manutSols,setManutSols,manutOS,setManutOS,veiculos,user
 }
 
 
+/* ── DOCUMENTAÇÃO / AJUDA ── */
+function HelpPage({currentUser,isMobile}){
+  const[section,setSection]=useState("inicio");
+  const isAdm=["admin","superadmin"].includes(currentUser?.role);
+
+  const sections=[
+    {k:"inicio",l:"🏠 Início",icon:"🏠"},
+    {k:"estoque",l:"📦 Estoque",icon:"📦"},
+    {k:"os",l:"🔧 Ordens de Serviço",icon:"🔧"},
+    {k:"frota",l:"🚗 Frota",icon:"🚗"},
+    {k:"relatorios",l:"📊 Relatórios",icon:"📊"},
+    {k:"usuarios",l:"👥 Usuários",icon:"👥"},
+    {k:"faq",l:"❓ FAQ",icon:"❓"},
+    {k:"atalhos",l:"⌨️ Atalhos",icon:"⌨️"},
+  ];
+
+  const InfoCard=({icon,title,items,color=C.gold})=>(
+    <div style={{background:C.surf,borderRadius:10,padding:16,border:`1px solid ${C.bdr}`,marginBottom:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+        <span style={{fontSize:20}}>{icon}</span>
+        <span style={{fontSize:14,fontWeight:700,color}}>{title}</span>
+      </div>
+      <ul style={{listStyle:"none",padding:0,margin:0,display:"flex",flexDirection:"column",gap:8}}>
+        {items.map((item,i)=>(
+          <li key={i} style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+            <span style={{color,fontSize:12,marginTop:2,flexShrink:0}}>▶</span>
+            <span style={{fontSize:13,color:C.txt2,lineHeight:1.5}}>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+
+  const TipCard=({tip,color=C.ylw})=>(
+    <div style={{background:`${color}15`,border:`1px solid ${color}44`,borderRadius:8,padding:"10px 14px",marginBottom:8,display:"flex",gap:10,alignItems:"flex-start"}}>
+      <span style={{fontSize:16,flexShrink:0}}>💡</span>
+      <span style={{fontSize:12,color:C.txt2,lineHeight:1.5}}>{tip}</span>
+    </div>
+  );
+
+  return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div>
+      <h1 style={{fontSize:isMobile?17:22,fontWeight:700,color:C.txt}}>📚 Documentação & Ajuda</h1>
+      <p style={{fontSize:12,color:C.muted,marginTop:4}}>Guia completo do StockTel — Sistema de Gestão para Provedores FTTH</p>
+    </div>
+
+    {/* Quick stats */}
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
+      {[
+        {l:"VERSÃO",v:"1.0",i:"🚀",c:C.gold},
+        {l:"MÓDULOS",v:"15+",i:"📦",c:C.blue},
+        {l:"PERFIS",v:"6",i:"👥",c:C.grn},
+        {l:"SUPORTE",v:"24/7",i:"🎧",c:C.ylw},
+      ].map((s,i)=>(
+        <Card key={i} style={{padding:12,display:"flex",gap:10,alignItems:"center"}}>
+          <div style={{width:36,height:36,borderRadius:10,background:`${s.c}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{s.i}</div>
+          <div>
+            <div style={{fontSize:9,fontWeight:700,color:C.muted}}>{s.l}</div>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:18,fontWeight:800,color:s.c}}>{s.v}</div>
+          </div>
+        </Card>
+      ))}
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"220px 1fr",gap:14}}>
+      {/* Menu */}
+      <Card style={{padding:12,alignSelf:"flex-start"}}>
+        <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",marginBottom:10}}>SEÇÕES</div>
+        {sections.map(s=>(
+          <div key={s.k} onClick={()=>setSection(s.k)}
+            style={{padding:"9px 12px",borderRadius:8,cursor:"pointer",marginBottom:4,
+              background:section===s.k?`${C.gold}22`:"transparent",
+              border:`1px solid ${section===s.k?`${C.gold}55`:"transparent"}`,
+              color:section===s.k?C.gold:C.muted,fontSize:13,fontWeight:section===s.k?700:400,
+              display:"flex",alignItems:"center",gap:8}}>
+            <span>{s.icon}</span>{s.l}
+          </div>
+        ))}
+      </Card>
+
+      {/* Content */}
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+
+        {section==="inicio"&&<>
+          <Card style={{padding:20,background:"linear-gradient(135deg,#1a1a1a,#2d0000)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+              <div style={{fontSize:48}}>🚀</div>
+              <div>
+                <div style={{fontSize:18,fontWeight:800,color:C.txt}}>Bem-vindo ao StockTel</div>
+                <div style={{fontSize:13,color:C.muted,marginTop:4}}>Sistema completo de gestão para provedores de internet FTTH</div>
+                <div style={{marginTop:12,display:"flex",gap:8,flexWrap:"wrap"}}>
+                  <Bdg color="grn">Logado como {currentUser?.role}</Bdg>
+                  <Bdg color="gold">v1.0.0</Bdg>
+                </div>
+              </div>
+            </div>
+          </Card>
+          <InfoCard icon="🎯" title="O que é o StockTel?" color={C.gold} items={[
+            "Sistema web de gestão de estoque e operações para provedores FTTH",
+            "Controle completo de materiais: ONU, ONT, cabos, conectores, splitters e mais",
+            "Gestão de frota: veículos, abastecimento, manutenção e checklists",
+            "Ordens de Serviço com baixa automática do estoque do técnico",
+            "Relatórios gerenciais com PDF e Excel profissionais",
+            "Acesso via web e celular — sincronização em tempo real via Supabase",
+          ]}/>
+          <InfoCard icon="👥" title="Perfis de Usuário" color={C.blue} items={[
+            "🔴 Admin: acesso total — gerencia usuários, estoque, frota, relatórios",
+            "📦 Estoque: cadastro e controle de materiais, liberação para técnicos",
+            "🔧 Técnico: kit pessoal, OS, checklists de frota e abastecimento",
+            "🔩 Mecânico: ordens de serviço de manutenção e pneus",
+            "💰 Financeiro: NFs, relatórios financeiros e aprovação de manutenção",
+            "🔐 ROOT (stocktelmaster): único que pode deletar usuários e resetar o sistema",
+          ]}/>
+          <TipCard tip="Dica: Use o botão ⚙️ Meu Perfil no menu lateral para alterar sua senha e foto de perfil a qualquer momento."/>
+        </>}
+
+        {section==="estoque"&&<>
+          <InfoCard icon="📦" title="Estoque Base" color={C.gold} items={[
+            "Cadastre materiais com código, nome, categoria, unidade e quantidade mínima",
+            "Alertas automáticos quando o estoque atinge o nível mínimo (🔴 CRÍTICO / 🟡 BAIXO)",
+            "Categorias personalizáveis: Equipamentos, Cabos, Conectores, Acessórios, etc.",
+            "Entrada via Nota Fiscal: registre o fornecedor, valor e itens recebidos",
+          ]}/>
+          <InfoCard icon="🎒" title="Estoque Técnico (Kit)" color={C.blue} items={[
+            "Cada técnico tem seu kit individual de materiais",
+            "Admin/Estoque libera materiais do estoque base para o kit do técnico",
+            "Técnico registra OS com baixa automática dos materiais do seu kit",
+            "Devoluções: técnico devolve materiais excedentes para o estoque base",
+            "Relatório de kit por técnico disponível nos Relatórios",
+          ]}/>
+          <InfoCard icon="🔁" title="Fluxo de Materiais" color={C.grn} items={[
+            "1️⃣ Entrada de NF → material entra no Estoque Base",
+            "2️⃣ Saída/Liberação → do Estoque Base para o Kit do Técnico",
+            "3️⃣ OS → técnico usa materiais do seu kit, baixa automática",
+            "4️⃣ Devolução → material volta do kit para o Estoque Base",
+            "5️⃣ Solicitação → técnico pede mais materiais pelo app",
+          ]}/>
+          <TipCard tip="Materiais Preventivos (óleos, correias, pastilhas) ficam em categoria especial no Estoque Base. O Mecânico pode solicitar diretamente."/>
+        </>}
+
+        {section==="os"&&<>
+          <InfoCard icon="🔧" title="Ordens de Serviço" color={C.red} items={[
+            "Registre OS com número, cliente, data e materiais utilizados",
+            "Baixa automática dos materiais no kit do técnico ao salvar a OS",
+            "Filtro por período e por técnico nos Relatórios",
+            "Exportação PDF e Excel com listagem completa",
+          ]}/>
+          <InfoCard icon="↩️" title="Devoluções" color={C.ylw} items={[
+            "Técnico solicita devolução de materiais excedentes",
+            "Admin/Estoque aprova ou rejeita a devolução",
+            "Material aprovado retorna automaticamente ao Estoque Base",
+            "Histórico completo de todas as devoluções",
+          ]}/>
+          <InfoCard icon="📋" title="Solicitações" color={C.blue} items={[
+            "Técnico solicita materiais diretamente pelo sistema",
+            "Admin/Estoque recebe alerta de solicitação pendente",
+            "Ao confirmar, o material é transferido do Estoque Base para o Kit",
+            "Urgência: Normal, Alta ou Urgente",
+          ]}/>
+        </>}
+
+        {section==="frota"&&<>
+          <InfoCard icon="🚗" title="Gestão de Veículos" color={C.gold} items={[
+            "Cadastre veículos com placa, modelo, ano, cor, técnico responsável",
+            "Upload do documento do veículo (CRVL/licenciamento em PDF)",
+            "4 fotos do veículo: Frente, Lado Esq, Lado Dir, Traseira",
+            "Controle de vencimentos: IPVA, Licenciamento, Seguro — alertas automáticos",
+            "Alerta de troca de óleo a cada 10.000 km",
+          ]}/>
+          <InfoCard icon="⛽" title="Abastecimento" color={C.grn} items={[
+            "Registre combustível, litros, valor, KM e posto",
+            "Cálculo automático do preço por litro",
+            "Foto da nota fiscal diretamente pela câmera do celular",
+            "Consumo médio por veículo (km/L) calculado automaticamente",
+          ]}/>
+          <InfoCard icon="📋" title="Checklist (Retirada/Devolução)" color={C.blue} items={[
+            "Preencha ao retirar e ao devolver cada veículo",
+            "Registre: KM, nível de combustível, estado dos 4 pneus",
+            "Foto do odômetro e fotos de avarias",
+            "Histórico completo disponível na aba Histórico",
+          ]}/>
+          <InfoCard icon="🔄" title="Controle de Pneus" color={C.ylw} items={[
+            "Registre marca, DOT, data de troca, KM e posição",
+            "5 posições: Dianteiro Esq/Dir, Traseiro Esq/Dir, Estepe",
+            "Histórico de todos os pneus por veículo",
+          ]}/>
+        </>}
+
+        {section==="relatorios"&&<>
+          <InfoCard icon="📊" title="Relatórios Disponíveis" color={C.gold} items={[
+            "📦 Estoque: listagem completa com situação (OK/Baixo/Crítico)",
+            "🔧 OS: todas as ordens por período e técnico",
+            "👷 Técnicos: ranking com materiais consumidos e devoluções",
+            "↩️ Devoluções: histórico de todas as devoluções",
+            "💰 NFs: notas fiscais com valor total no período",
+          ]}/>
+          <InfoCard icon="📈" title="Relatório Administrativo" color={C.blue} items={[
+            "💰 Financeiro: gastos mensais com NFs e fornecedores",
+            "🚗 Frota: gastos por veículo (combustível + manutenção)",
+            "👷 Técnicos: ranking completo de performance",
+            "⏱️ SLA: tempo médio de atendimento por técnico",
+            "📈 Tendência: crescimento de OS e gastos mês a mês",
+            "🔔 Alertas de Preço: detecta variações de preço entre NFs",
+          ]}/>
+          <InfoCard icon="🖨️" title="Exportação" color={C.grn} items={[
+            "PDF profissional: abre em nova aba para imprimir ou salvar",
+            "Excel: múltiplas abas organizadas por categoria",
+            "Filtro de período: Hoje, Semana, Mês, Trimestre ou personalizado",
+          ]}/>
+        </>}
+
+        {section==="usuarios"&&<>
+          <InfoCard icon="👥" title="Gestão de Usuários (Admin)" color={C.gold} items={[
+            "Crie usuários com login, senha, perfil e permissões personalizadas",
+            "Defina quais módulos cada usuário pode acessar",
+            "Foto de perfil e matrícula para identificação",
+            "Opção de exigir troca de senha no primeiro acesso",
+          ]}/>
+          <InfoCard icon="🔐" title="Segurança" color={C.red} items={[
+            "Apenas o usuário ROOT pode deletar usuários ou resetar o sistema",
+            "Admin não pode alterar senha de outros usuários — cada um altera a própria em Meu Perfil",
+            "Sessão persistente: não perde login ao fechar o navegador",
+            "Dados sincronizados com Supabase (nuvem segura)",
+          ]}/>
+          <TipCard tip="O usuário ROOT (login: stocktelmaster) é oculto para todos e só você deve conhecer a senha. Guarde-a em local seguro!" color={C.red}/>
+        </>}
+
+        {section==="faq"&&<>
+          {[
+            {p:"Por que o sistema mostra tela preta?",r:"Pressione Ctrl+Shift+R para forçar o reload. Se persistir, limpe o cache do navegador."},
+            {p:"Como recuperar senha de um usuário?",r:"O Admin edita o usuário e define nova senha. Cada usuário pode alterar a própria em ⚙️ Meu Perfil."},
+            {p:"Os dados são salvos onde?",r:"No Supabase (PostgreSQL na nuvem) + localStorage como backup offline. Os dados ficam salvos mesmo sem internet."},
+            {p:"Como liberar material para técnico?",r:"Estoque Base → Saída/Liberação → selecione técnico e materiais → confirmar."},
+            {p:"Como registrar que um técnico fez uma OS?",r:"Menu Ordens de Serviço → Nova OS → preencha os dados e materiais usados. A baixa do kit é automática."},
+            {p:"O técnico não vê o menu Estoque Base. Por quê?",r:"O perfil Técnico tem acesso apenas ao Kit (estoque pessoal), OS, Solicitações e Frota. O Admin controla as permissões."},
+            {p:"Como cadastrar um veículo novo?",r:"Frota → aba Veículos → + Veículo. Preencha os dados e faça upload das fotos e documento PDF."},
+            {p:"Como o sistema avisa sobre troca de óleo?",r:"Automaticamente quando faltam 2.000 km (🟡 alerta) ou 500 km (🔴 urgente) para completar 10.000 km."},
+          ].map((f,i)=>(
+            <Card key={i} style={{padding:14}}>
+              <div style={{fontSize:13,fontWeight:700,color:C.gold,marginBottom:6}}>❓ {f.p}</div>
+              <div style={{fontSize:12,color:C.txt2,lineHeight:1.6}}>↳ {f.r}</div>
+            </Card>
+          ))}
+        </>}
+
+        {section==="atalhos"&&<>
+          <Card style={{padding:16}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:12}}>⌨️ Atalhos e Dicas de Uso</div>
+            {[
+              ["Ctrl+Shift+R","Forçar reload / limpar cache","teclado"],
+              ["F12","Abrir DevTools para ver erros","teclado"],
+              ["Ctrl+P (na tela PDF)","Imprimir ou salvar como PDF","teclado"],
+              ["Swipe ← →","Navegar entre abas no mobile","mobile"],
+              ["Segurar botão Home","Instalar como app no celular","mobile"],
+              ["Câmera no upload de foto","Use 'capture' para foto direta","mobile"],
+            ].map(([atalho,desc,tipo],i)=>(
+              <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderBottom:i<5?`1px solid ${C.bdr}`:"none"}}>
+                <div style={{background:tipo==="mobile"?`${C.blue}22`:`${C.gold}22`,border:`1px solid ${tipo==="mobile"?C.blue:C.gold}44`,borderRadius:6,padding:"4px 10px",minWidth:80,textAlign:"center"}}>
+                  <span style={{fontSize:11,fontWeight:700,color:tipo==="mobile"?C.blue:C.gold,fontFamily:"'JetBrains Mono',monospace"}}>{atalho}</span>
+                </div>
+                <div>
+                  <div style={{fontSize:12,color:C.txt}}>{desc}</div>
+                  <Bdg color={tipo==="mobile"?"blue":"gold"} style={{marginTop:4}}>{tipo}</Bdg>
+                </div>
+              </div>
+            ))}
+          </Card>
+          <Card style={{padding:16}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:12}}>📞 Suporte</div>
+            <div style={{fontSize:12,color:C.muted,lineHeight:1.8}}>
+              <div>📧 Sistema desenvolvido com React + Vite + Supabase + Vercel</div>
+              <div>🚀 Deploy automático via GitHub → Vercel</div>
+              <div>💾 Banco de dados: Supabase (PostgreSQL)</div>
+              <div style={{marginTop:10,padding:"10px 14px",background:C.surf,borderRadius:8,color:C.txt2,fontSize:11}}>
+                Para suporte técnico, acesse o repositório ou entre em contato com o desenvolvedor.
+              </div>
+            </div>
+          </Card>
+        </>}
+
+      </div>
+    </div>
+  </div>;
+}
+
 /* ── APP ── */
 function AppInner(){
   // ── TODOS OS HOOKS PRIMEIRO (regra do React) ──
@@ -4718,6 +5300,7 @@ function AppInner(){
     produtos:<ProdutosPage produtos={produtos} setProdutos={setProdutos} cats={cats} isMobile={isMobile}/>,
     usr:<UsrPage users={users} setUsers={setUsers} addLog={addLog} currentUser={user} isMobile={isMobile}/>,
     log:<LogPage logs={logs} isMobile={isMobile}/>,
+    ajuda:<HelpPage currentUser={user} isMobile={isMobile}/>,
     frota:<FrotaPage veiculos={veiculos} setVeiculos={setVeiculos} abastecimentos={abastecimentos} setAbastecimentos={setAbastecimentos} checkouts={checkouts} setCheckouts={setCheckouts} pneus={pneus} setPneus={setPneus} docsVeic={docsVeic} setDocsVeic={setDocsVeic} manutOS={manutOS} manutSols={manutSols} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
     manut:<ManutencaoPage manutSols={manutSols} setManutSols={setManutSols} manutOS={manutOS} setManutOS={setManutOS} veiculos={veiculos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} abastecimentos={abastecimentos} pneus={pneus}/>,
   };
