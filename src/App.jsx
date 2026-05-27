@@ -1,4 +1,4 @@
-// StockTel v1.6 BUILD-20260526-2139 RELATORIO-ADMIN-FROTA-TODOS-CARROS
+// StockTel v1.6 FIXED-20260527 — visual premium + main/render corrigido
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
 import * as XLSX from "xlsx";
@@ -864,20 +864,7 @@ function EstoquePage({stock,setStock,isAdmin,addLog,currentUser,isMobile}){
   const[form,setForm]=useState({code:"",name:"",cat:"Equipamentos",unit:"un",qty:"",min:""});
   const cats=["Equipamentos","Cabos e Fios","Conectores","Caixas e Acessórios","Acessórios","Ferramentas"];
   const filtered=stock.filter(s=>s.name.toLowerCase().includes(q.toLowerCase())||s.code.toLowerCase().includes(q.toLowerCase()));
-  const handlePdfUpload=(file)=>{
-    if(!file)return;
-    if(file.type!=="application/pdf"){
-      setErr("O arquivo precisa ser PDF.");
-      return;
-    }
-    const reader=new FileReader();
-    reader.onload=()=>{
-      setForm(f=>({...f,pdfName:file.name,pdfData:reader.result}));
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const save=()=>{
+    const save=()=>{
     if(!form.name||!form.qty)return;
     if(modal==="new")setStock(p=>[...p,{id:uid(),code:form.code,name:form.name,cat:form.cat,unit:form.unit,qty:parseInt(form.qty)||0,min:parseInt(form.min)||0}]);
     else setStock(p=>p.map(s=>s.id===modal?{...s,...form,qty:parseInt(form.qty)||0,min:parseInt(form.min)||0}:s));
@@ -1343,6 +1330,19 @@ function NFPage({nf,setNf,stock,setStock,addLog,currentUser,isMobile}){
 
   const abrirModal=()=>{setForm({num:"",supplier:"",date:"",obs:"",pdfName:"",pdfData:""});setItems([]);setErr("");setNovoMat(null);setModal(true);};
 
+  const handlePdfUpload=(file)=>{
+    if(!file)return;
+    if(file.type!=="application/pdf"){
+      setErr("O arquivo precisa ser PDF.");
+      return;
+    }
+    const reader=new FileReader();
+    reader.onload=()=>{
+      setForm(f=>({...f,pdfName:file.name,pdfData:reader.result}));
+    };
+    reader.readAsDataURL(file);
+  };
+
   const save=()=>{
     if(!form.num.trim()){setErr("Informe o número da NF.");return;}
     if(!form.supplier.trim()){setErr("Informe o fornecedor.");return;}
@@ -1618,7 +1618,7 @@ function RelPage({stock,os,returns,users,nf,isMobile,currentUser}){
       td{padding:9px 12px;border-bottom:1px solid #eee;vertical-align:middle;}
       .footer{margin-top:36px;padding-top:16px;border-top:2px solid #cc0000;display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#888;}
       .footer-logo{color:#cc0000;font-weight:800;font-size:13px;}
-      @media print{.no-print{display:none!important;}body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.page{padding:16px;}}
+      @media print{...no-print{display:none!important;}body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.page{padding:16px;}}
     </style></head><body>
     <div class="page">
       <div class="no-print" style="padding:12px;background:#f5f5f5;border-radius:8px;margin-bottom:20px;display:flex;gap:10px;align-items:center;">
