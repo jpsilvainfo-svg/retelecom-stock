@@ -30,7 +30,7 @@ const DEFAULT_PERMS={
   estoque:["dash","os","estoque","kit","dist","dev","sol","rel"],
   tecnico:["dash","os","frota","kit","dev","sol","rel"],
   financeiro:["dash","nf","rel","email","os","dev","log"],
-  mecanico:["dash","manut","frota"],
+  mecanico:["dash","manut","frota","estoque","sol","rel"],
   superadmin:ALL_MODULES.map(m=>m.k),
 };
 const MASTER_LOGIN="stocktelmaster";
@@ -98,6 +98,13 @@ const STOCK0=[
   {id:"s16",code:"PCH-001",name:"Patch Cord SC/APC 3m",cat:"Cabos e Fios",unit:"un",qty:85,min:30},
   {id:"s17",code:"DIO-001",name:"DIO 16 Portas",cat:"Caixas e Acessórios",unit:"un",qty:12,min:5},
   {id:"s18",code:"FER-001",name:"Fusionadora de Fibra",cat:"Ferramentas",unit:"un",qty:4,min:2},
+  {id:"s19",code:"VEIC-001",name:"Óleo de Motor 5W30",cat:"Preventiva Veicular",unit:"l",qty:20,min:10},
+  {id:"s20",code:"VEIC-002",name:"Óleo de Freio DOT 4",cat:"Preventiva Veicular",unit:"un",qty:8,min:4},
+  {id:"s21",code:"VEIC-003",name:"Aditivo de Radiador",cat:"Preventiva Veicular",unit:"un",qty:12,min:6},
+  {id:"s22",code:"VEIC-004",name:"Correia do Alternador",cat:"Preventiva Veicular",unit:"un",qty:6,min:3},
+  {id:"s23",code:"VEIC-005",name:"Pastilha de Freio",cat:"Preventiva Veicular",unit:"par",qty:10,min:4},
+  {id:"s24",code:"VEIC-006",name:"Filtro de Óleo",cat:"Preventiva Veicular",unit:"un",qty:15,min:6},
+  {id:"s25",code:"VEIC-007",name:"Filtro de Ar",cat:"Preventiva Veicular",unit:"un",qty:10,min:5},
 ];
 const TSTOCK0=[
   {id:"ts1",uid:"u3",sid:"s1",qty:3},{id:"ts2",uid:"u3",sid:"s6",qty:150},{id:"ts3",uid:"u3",sid:"s8",qty:10},{id:"ts4",uid:"u3",sid:"s14",qty:20},
@@ -727,7 +734,7 @@ function EstoquePage({stock,setStock,isAdmin,addLog,currentUser,isMobile}){
   const[q,setQ]=useState("");
   const[modal,setModal]=useState(null);
   const[form,setForm]=useState({code:"",name:"",cat:"Equipamentos",unit:"un",qty:"",min:""});
-  const cats=["Equipamentos","Cabos e Fios","Conectores","Caixas e Acessórios","Acessórios","Ferramentas"];
+  const cats=["Equipamentos","Cabos e Fios","Conectores","Caixas e Acessórios","Acessórios","Ferramentas","Preventiva Veicular"];
   const filtered=stock.filter(s=>s.name.toLowerCase().includes(q.toLowerCase())||s.code.toLowerCase().includes(q.toLowerCase()));
   const save=()=>{
     if(!form.name||!form.qty)return;
@@ -1348,7 +1355,7 @@ function NFPage({nf,setNf,stock,setStock,addLog,currentUser,isMobile}){
 }
 
 /* ── RELATÓRIOS ── */
-function RelPage({stock,os,returns,users,nf,isMobile,currentUser}){
+function RelPage({stock,os,returns,users,nf,isMobile,currentUser,veiculos=[],abastecimentos=[],manutOS=[]}){
   const isTec=currentUser?.role==="tecnico";
   const[tab,setTab]=useState("estoque");
 
@@ -1563,10 +1570,46 @@ function RelPage({stock,os,returns,users,nf,isMobile,currentUser}){
       XLSX.utils.book_append_sheet(wb,ws5,"👷 Técnicos");
     }
 
+
+    if(!isTec){
+      const veicData=[
+        [`STOCKTEL — GASTOS POR VEÍCULO — ${periodoLabel}`,"","","","",""],[""],
+        ["PLACA","MODELO","KM ATUAL","ABASTECIMENTOS","LITROS","COMBUSTÍVEL","MANUTENÇÃO","TOTAL"],
+        ...gastosVeic.map(v=>[v.placa,v.modelo,v.kmAtual,v.abQtd,Number(v.litros.toFixed(2)),Number(v.gastoComb.toFixed(2)),Number(v.gastoManut.toFixed(2)),Number(v.total.toFixed(2))]),
+        [""],["TOTAL GERAL","","","","",Number(totalFrotaComb.toFixed(2)),Number(totalFrotaManut.toFixed(2)),Number(totalFrotaGeral.toFixed(2))]
+      ];
+      const ws6=XLSX.utils.aoa_to_sheet(veicData);
+      ws6["!cols"]=[{wch:12},{wch:24},{wch:12},{wch:16},{wch:12},{wch:16},{wch:16},{wch:16}];
+      XLSX.utils.book_append_sheet(wb,ws6,"🚗 Gastos Veículos");
+    }
+
     XLSX.writeFile(wb,`StockTel_${periodoLabel.replace(/\//g,"-")}.xlsx`);
   };
 
-  const tabs=[{k:"estoque",l:"📦 Estoque"},{k:"os",l:"🔧 OS"},{k:"tecnicos",l:"👷 Técnicos"},{k:"dev",l:"↩️ Devoluções"}];
+
+  // ── Relatório de gastos por veículo (combustível + manutenção) ──
+  const viewAbastRel=useMemo(()=>abastecimentos.filter(a=>inRange(a.dtAbast)),[abastecimentos,dtInicio,dtFim]);
+  const viewManutRel=useMemo(()=>manutOS.filter(o=>inRange(o.dtEntrada||o.dtSaida)),[manutOS,dtInicio,dtFim]);
+  const totalPecasOS=(o)=>o.pecas?.reduce((a,p)=>a+(parseFloat(p.valor)||0)*(parseInt(p.qtd)||1),0)||0;
+  const gastosVeic=useMemo(()=>veiculos.map(v=>{
+    const ab=viewAbastRel.filter(a=>a.veiculoId===v.id);
+    const mt=viewManutRel.filter(o=>o.veiculoId===v.id);
+    const gastoComb=ab.reduce((a,x)=>a+(parseFloat(String(x.valor).replace(",", "."))||0),0);
+    const litros=ab.reduce((a,x)=>a+(parseFloat(String(x.litros).replace(",", "."))||0),0);
+    const gastoManut=mt.reduce((a,o)=>a+totalPecasOS(o),0);
+    const kmList=[
+      ...ab.map(a=>parseInt(a.odometro)||0),
+      ...mt.map(o=>parseInt(o.kmEntrada)||0),
+      parseInt(v.kmCadastro)||0
+    ].filter(Boolean);
+    const kmAtual=kmList.length?Math.max(...kmList):0;
+    return{...v,abQtd:ab.length,osQtd:mt.length,litros,gastoComb,gastoManut,total:gastoComb+gastoManut,kmAtual};
+  }).filter(v=>v.abQtd>0||v.osQtd>0||v.total>0).sort((a,b)=>b.total-a.total),[veiculos,viewAbastRel,viewManutRel]);
+  const totalFrotaComb=gastosVeic.reduce((a,v)=>a+v.gastoComb,0);
+  const totalFrotaManut=gastosVeic.reduce((a,v)=>a+v.gastoManut,0);
+  const totalFrotaGeral=totalFrotaComb+totalFrotaManut;
+
+  const tabs=[{k:"estoque",l:"📦 Estoque"},{k:"os",l:"🔧 OS"},{k:"tecnicos",l:"👷 Técnicos"},{k:"dev",l:"↩️ Devoluções"},{k:"veic",l:"🚗 Gastos por Veículo"}];
   const sc2={pending:"ylw",approved:"grn",rejected:"red"};
   const sl2={pending:"Pendente",approved:"Aprovada",rejected:"Rejeitada"};
 
@@ -1672,6 +1715,45 @@ function RelPage({stock,os,returns,users,nf,isMobile,currentUser}){
             </div>
           </div>
         ))}
+      </Card>
+    </div>}
+
+
+    {/* GASTOS POR VEÍCULO */}
+    {tab==="veic"&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)",gap:10}}>
+        <Card style={{padding:14}}>
+          <div style={{fontSize:10,fontWeight:700,color:C.muted}}>COMBUSTÍVEL NO PERÍODO</div>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:isMobile?18:24,fontWeight:800,color:C.gold}}>R$ {totalFrotaComb.toFixed(2)}</div>
+        </Card>
+        <Card style={{padding:14}}>
+          <div style={{fontSize:10,fontWeight:700,color:C.muted}}>MANUTENÇÃO NO PERÍODO</div>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:isMobile?18:24,fontWeight:800,color:C.ylw}}>R$ {totalFrotaManut.toFixed(2)}</div>
+        </Card>
+        <Card style={{padding:14}}>
+          <div style={{fontSize:10,fontWeight:700,color:C.muted}}>TOTAL DA FROTA</div>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:isMobile?18:24,fontWeight:800,color:C.grn}}>R$ {totalFrotaGeral.toFixed(2)}</div>
+        </Card>
+      </div>
+      <Card style={{padding:0,overflow:"hidden"}}>
+        <div style={{padding:"10px 16px",borderBottom:`1px solid ${C.bdr}`,fontSize:12,color:C.muted}}>Relatório de custos por veículo no período: {periodoLabel}</div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead><THead cols={["VEÍCULO","KM ATUAL","ABAST.","LITROS","COMBUSTÍVEL","MANUTENÇÃO","TOTAL"]}/></thead>
+            <tbody>
+              {gastosVeic.length===0?<tr><td colSpan={7} style={{padding:20,textAlign:"center",color:C.muted}}>Nenhum gasto de frota encontrado nesse período.</td></tr>
+              :gastosVeic.map(v=><TRow key={v.id} cells={[
+                <div><strong style={{color:C.gold,fontFamily:"'JetBrains Mono',monospace"}}>{v.placa}</strong><div style={{fontSize:11,color:C.muted}}>{v.modelo}</div></div>,
+                <span style={{fontFamily:"'JetBrains Mono',monospace"}}>{fmt(v.kmAtual)} km</span>,
+                v.abQtd,
+                `${v.litros.toFixed(2)} L`,
+                <strong style={{color:C.gold}}>R$ {v.gastoComb.toFixed(2)}</strong>,
+                <strong style={{color:C.ylw}}>R$ {v.gastoManut.toFixed(2)}</strong>,
+                <strong style={{color:C.grn,fontSize:14}}>R$ {v.total.toFixed(2)}</strong>
+              ]}/>)}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </div>}
 
@@ -2075,7 +2157,7 @@ function ProdutosPage({produtos,setProdutos,cats,isMobile}){
 }
 
 /* ── EMAIL / RELATÓRIO ADMIN ── */
-function AdminRelPage({nf,stock,os,returns,tstock,users,solicitacoes,isMobile,addLog}){
+function AdminRelPage({nf,stock,os,returns,tstock,users,solicitacoes,isMobile,addLog,veiculos=[],abastecimentos=[],manutOS=[]}){
   const[tab,setTab]=useState("financeiro");
   const[emails,setEmails]=useState("");
   const[msg,setMsg]=useState("");
@@ -3117,8 +3199,8 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
   const viewAbast=isTec?abastecimentos.filter(a=>a.tecnicoId===currentUser.id):abastecimentos;
   const viewCheck=isTec?checkouts.filter(c=>c.tecnicoId===currentUser.id):checkouts;
 
-  const totalGastoComb=viewAbast.reduce((a,x)=>a+(parseFloat(x.valor)||0),0);
-  const totalLitros=viewAbast.reduce((a,x)=>a+(parseFloat(x.litros)||0),0);
+  const totalGastoComb=viewAbastFilt.reduce((a,x)=>a+(parseFloat(x.valor)||0),0);
+  const totalLitros=viewAbastFilt.reduce((a,x)=>a+(parseFloat(x.litros)||0),0);
 
   // ── File handlers ──
   const handleFotoVeic=(idx,e)=>{const f=e.target.files[0];if(!f)return;if(f.size>3*1024*1024){alert("Máx 3MB");return;}const r=new FileReader();r.onload=ev=>setFormVeic(fv=>({...fv,fotos:fv.fotos.map((ft,i)=>i===idx?ev.target.result:ft)}));r.readAsDataURL(f);};
@@ -3171,6 +3253,33 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
     ?[{k:"check",l:"📋 Checklist"},{k:"abast",l:"⛽ Abastecimento"}]
     :[{k:"dash",l:"📊 Dashboard"},{k:"abast",l:"⛽ Abastecimento"}];
 
+  // ── Filtro de data ──
+  const hoje2=new Date().toISOString().slice(0,10);
+  const primMes=new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().slice(0,10);
+  const[dtFrIn,setDtFrIn]=useState(primMes);
+  const[dtFrFim,setDtFrFim]=useState(hoje2);
+  const[modoFiltro,setModoFiltro]=useState("mes");
+
+  const aplicarFiltroFrota=(modo)=>{
+    setModoFiltro(modo);
+    const h=new Date();
+    if(modo==="hoje"){const d=h.toISOString().slice(0,10);setDtFrIn(d);setDtFrFim(d);}
+    else if(modo==="semana"){const i=new Date(h);i.setDate(h.getDate()-7);setDtFrIn(i.toISOString().slice(0,10));setDtFrFim(h.toISOString().slice(0,10));}
+    else if(modo==="mes"){setDtFrIn(new Date(h.getFullYear(),h.getMonth(),1).toISOString().slice(0,10));setDtFrFim(h.toISOString().slice(0,10));}
+    else if(modo==="ano"){setDtFrIn(new Date(h.getFullYear(),0,1).toISOString().slice(0,10));setDtFrFim(h.toISOString().slice(0,10));}
+    else if(modo==="tudo"){setDtFrIn("2020-01-01");setDtFrFim("2099-12-31");}
+  };
+  const inFrotaRange=(dtStr)=>{
+    if(!dtStr)return true;
+    const d=new Date(dtStr+"T00:00:00");
+    return d>=new Date(dtFrIn+"T00:00:00")&&d<=new Date(dtFrFim+"T23:59:59");
+  };
+  const frotaLabel=dtFrIn===dtFrFim?dtFrIn.split("-").reverse().join("/"):`${dtFrIn.split("-").reverse().join("/")} a ${dtFrFim.split("-").reverse().join("/")}`;
+
+  // Filtered views
+  const viewAbastFilt=viewAbast.filter(a=>inFrotaRange(a.dtAbast));
+  const viewCheckFilt=viewCheck.filter(c=>inFrotaRange(c.dtCheck));
+
   if(!tab||!tabList.find(t=>t.k===tab)) {
     // reset to first available tab
   }
@@ -3206,6 +3315,28 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
     <div style={{display:"flex",borderBottom:`1px solid ${C.bdr}`,overflowX:"auto",gap:0}}>
       {tabList.map(t=><div key={t.k} onClick={()=>setTab(t.k)} style={{padding:"9px 16px",cursor:"pointer",fontSize:12,fontWeight:600,borderBottom:`2px solid ${tab===t.k?C.gold:"transparent"}`,color:tab===t.k?C.gold:C.muted,whiteSpace:"nowrap"}}>{t.l}</div>)}
     </div>
+
+    {/* Filtro de Período */}
+    <Card style={{padding:12}}>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+        <span style={{fontSize:11,fontWeight:700,color:C.gold}}>📅 PERÍODO:</span>
+        {[{k:"hoje",l:"Hoje"},{k:"semana",l:"Semana"},{k:"mes",l:"Mês"},{k:"ano",l:"Ano"},{k:"tudo",l:"Tudo"}].map(p=>(
+          <button key={p.k} onClick={()=>aplicarFiltroFrota(p.k)} style={{padding:"5px 12px",borderRadius:20,border:`1.5px solid ${modoFiltro===p.k?C.gold:C.bdr2}`,background:modoFiltro===p.k?`${C.gold}22`:"transparent",color:modoFiltro===p.k?C.gold:C.muted,fontSize:12,fontWeight:modoFiltro===p.k?700:400,cursor:"pointer"}}>
+            {p.l}
+          </button>
+        ))}
+        <div style={{display:"flex",gap:8,flex:1,flexWrap:"wrap"}}>
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            <input type="date" value={dtFrIn} onChange={e=>{setDtFrIn(e.target.value);setModoFiltro("custom");}} style={{background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:6,padding:"5px 10px",color:C.txt,fontSize:12}}/>
+            <span style={{color:C.muted,fontSize:12}}>até</span>
+            <input type="date" value={dtFrFim} onChange={e=>{setDtFrFim(e.target.value);setModoFiltro("custom");}} style={{background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:6,padding:"5px 10px",color:C.txt,fontSize:12}}/>
+          </div>
+          <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}44`,borderRadius:6,padding:"4px 12px",fontSize:11,fontWeight:700,color:C.gold}}>
+            📅 {frotaLabel} · {viewAbastFilt.length} abast · {viewCheckFilt.length} checks
+          </div>
+        </div>
+      </div>
+    </Card>
 
     {/* ── DASHBOARD FROTA ── */}
     {tab==="dash"&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
@@ -3375,8 +3506,8 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
           </Card>
         ))}
       </div>
-      {viewAbast.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted}}>Nenhum abastecimento. Clique em "⛽ Abastecimento".</span></Card>}
-      {viewAbast.map(a=>{
+      {viewAbastFilt.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted}}>Nenhum abastecimento no período selecionado.</span></Card>}
+      {viewAbastFilt.map(a=>{
         const v=veiculos.find(x=>x.id===a.veiculoId);
         const tech=users.find(u=>u.id===a.tecnicoId);
         return <Card key={a.id} style={{padding:14,borderLeft:`3px solid ${C.gold}`}}>
@@ -3405,8 +3536,8 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
 
     {/* ── CHECKLIST ── */}
     {tab==="check"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
-      {viewCheck.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted}}>Nenhum checklist. Clique em "📋 Retirada".</span></Card>}
-      {viewCheck.map(c=>{
+      {viewCheckFilt.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted}}>Nenhum checklist no período.</span></Card>}
+      {viewCheckFilt.map(c=>{
         const v=veiculos.find(x=>x.id===c.veiculoId);
         const tech=users.find(u=>u.id===c.tecnicoId);
         const pneuProb=Object.values(c.pneus||{}).some(p=>p==="problema");
@@ -3878,16 +4009,20 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
 
 
 /* ── MANUTENÇÃO (MECÂNICO) ── */
-function ManutencaoPage({manutSols,setManutSols,manutOS,setManutOS,veiculos,users,currentUser,addLog,isMobile}){
+function ManutencaoPage({manutSols,setManutSols,manutOS,setManutOS,veiculos,users,currentUser,addLog,isMobile,stock=[],solicitacoes=[],setSolicitacoes}){
   const isMec=currentUser.role==="mecanico";
   const isAdm=currentUser.role==="admin"||currentUser.role==="superadmin";
   const[tab,setTab]=useState("sols");
   const[modalSol,setModalSol]=useState(false);
   const[modalOS,setModalOS]=useState(null);
+  const[modalMat,setModalMat]=useState(false);
+  const[formMat,setFormMat]=useState({veiculoId:"",sid:"",qty:"1",obs:""});
+  const[errMat,setErrMat]=useState("");
 
   const blankSol=()=>({id:uid(),veiculoId:"",solicitanteId:currentUser.id,tipo:"corretiva",urgencia:"normal",descricao:"",status:"aberta",dtSol:now(),obs:""});
   const blankOS=()=>({id:uid(),solicitacaoId:"",veiculoId:"",mecanicoId:currentUser.id,tipo:"corretiva",descricao:"",kmEntrada:"",kmSaida:"",dtEntrada:new Date().toISOString().slice(0,10),dtSaida:"",pecas:[],servicos:"",status:"aberta",obs:""});
   const blankPeca=()=>({id:uid(),nome:"",qtd:"1",valor:""});
+  const materiaisPreventivos=stock.filter(s=>s.cat==="Preventiva Veicular");
 
   const[formSol,setFormSol]=useState(blankSol());
   const[formOS,setFormOS]=useState(blankOS());
@@ -3932,6 +4067,20 @@ function ManutencaoPage({manutSols,setManutSols,manutOS,setManutOS,veiculos,user
     addLog(currentUser.name,"OS Mecânica","Concluída: "+(getVeic(os.veiculoId)?.placa||"?"));
   };
 
+
+  const salvarMat=()=>{
+    if(!formMat.veiculoId){setErrMat("Selecione o veículo.");return;}
+    if(!formMat.sid){setErrMat("Selecione o material preventivo.");return;}
+    const qtd=parseInt(formMat.qty)||0;
+    if(qtd<=0){setErrMat("Informe uma quantidade válida.");return;}
+    const mat=stock.find(s=>s.id===formMat.sid);
+    const vei=getVeic(formMat.veiculoId);
+    const req={id:uid(),uid:currentUser.id,date:now(),items:[{sid:formMat.sid,qty:qtd}],status:"pending",origem:"mecanico",veiculoId:formMat.veiculoId,notes:`Solicitação preventiva para veículo ${vei?.placa||""}. ${formMat.obs||""}`.trim()};
+    setSolicitacoes?.(p=>[req,...p]);
+    addLog(currentUser.name,"Solicitação Mecânica",`${mat?.name||"Material"} ×${qtd} · ${vei?.placa||"?"}`);
+    setModalMat(false);setErrMat("");setFormMat({veiculoId:"",sid:"",qty:"1",obs:""});
+  };
+
   return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
       <div>
@@ -3940,6 +4089,7 @@ function ManutencaoPage({manutSols,setManutSols,manutOS,setManutOS,veiculos,user
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
         <Btn color="gold" size="sm" onClick={()=>{setFormSol(blankSol());setModalSol(true);setErrSol("");}}>+ Solicitação</Btn>
+        {(isAdm||isMec)&&<Btn color="gold" size="sm" outline onClick={()=>{setFormMat({veiculoId:"",sid:"",qty:"1",obs:""});setModalMat(true);setErrMat("");}}>📦 Solicitar Material</Btn>}
         {(isAdm||isMec)&&<Btn color="red" size="sm" onClick={()=>{setFormOS(blankOS());setModalOS("new");setErrOS("");}}>🔧 Nova OS</Btn>}
       </div>
     </div>
@@ -3961,7 +4111,7 @@ function ManutencaoPage({manutSols,setManutSols,manutOS,setManutOS,veiculos,user
 
     {/* Tabs */}
     <div style={{display:"flex",borderBottom:`1px solid ${C.bdr}`}}>
-      {[{k:"sols",l:"📋 Solicitações"},{k:"os",l:"🔧 Ordens de Serviço"},{k:"hist",l:"📊 Histórico"}].map(t=>(
+      {[{k:"sols",l:"📋 Solicitações"},{k:"os",l:"🔧 Ordens de Serviço"},{k:"mat",l:"📦 Materiais Preventivos"},{k:"hist",l:"📊 Histórico"}].map(t=>(
         <div key={t.k} onClick={()=>setTab(t.k)} style={{padding:"9px 16px",cursor:"pointer",fontSize:13,fontWeight:600,borderBottom:`2px solid ${tab===t.k?C.gold:"transparent"}`,color:tab===t.k?C.gold:C.muted,whiteSpace:"nowrap"}}>{t.l}</div>
       ))}
     </div>
@@ -4038,6 +4188,44 @@ function ManutencaoPage({manutSols,setManutSols,manutOS,setManutOS,veiculos,user
       })}
     </div>}
 
+
+    {/* Materiais Preventivos */}
+    {tab==="mat"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+        <div style={{fontSize:13,color:C.muted}}>Itens cadastrados na categoria <strong style={{color:C.gold}}>Preventiva Veicular</strong>.</div>
+        {(isAdm||isMec)&&<Btn size="sm" color="gold" onClick={()=>{setFormMat({veiculoId:"",sid:"",qty:"1",obs:""});setModalMat(true);setErrMat("");}}>📦 Nova Solicitação</Btn>}
+      </div>
+      <Card style={{padding:0,overflow:"hidden"}}>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead><THead cols={["CÓDIGO","MATERIAL","ESTOQUE","MÍNIMO","STATUS"]}/></thead>
+            <tbody>
+              {materiaisPreventivos.length===0?<tr><td colSpan={5} style={{padding:20,textAlign:"center",color:C.muted}}>Nenhum material preventivo cadastrado no estoque.</td></tr>
+              :materiaisPreventivos.map(s=>{const crit=s.qty<=s.min;return <TRow key={s.id} cells={[
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted}}>{s.code}</span>,
+                <strong style={{color:C.txt}}>{s.name}</strong>,
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:crit?C.ylw:C.grn}}>{fmt(s.qty)} {s.unit}</span>,
+                fmt(s.min),
+                crit?<Bdg color="ylw">Baixo</Bdg>:<Bdg color="grn">OK</Bdg>
+              ]}/>;})}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+      <Card style={{padding:0,overflow:"hidden"}}>
+        <div style={{padding:"10px 16px",borderBottom:`1px solid ${C.bdr}`,fontSize:13,fontWeight:700,color:C.txt}}>📋 Solicitações feitas pelo mecânico</div>
+        {(solicitacoes||[]).filter(s=>s.origem==="mecanico").length===0?<div style={{padding:18,color:C.muted,fontSize:12}}>Nenhuma solicitação mecânica registrada.</div>
+        :(solicitacoes||[]).filter(s=>s.origem==="mecanico").map(s=>{
+          const mat=stock.find(x=>x.id===s.items?.[0]?.sid);
+          const vei=getVeic(s.veiculoId);
+          return <div key={s.id} style={{padding:"10px 16px",borderBottom:`1px solid ${C.bdr}33`,display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+            <div><strong style={{color:C.gold}}>{mat?.name||"Material"}</strong> ×{s.items?.[0]?.qty||0}<div style={{fontSize:11,color:C.muted}}>🚗 {vei?.placa||"?"} · {s.date} · {s.notes}</div></div>
+            <Bdg color={s.status==="approved"?"grn":s.status==="rejected"?"red":"ylw"}>{s.status==="approved"?"Aprovada":s.status==="rejected"?"Rejeitada":"Pendente"}</Bdg>
+          </div>;
+        })}
+      </Card>
+    </div>}
+
     {/* Histórico por veículo */}
     {tab==="hist"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
       {veiculos.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted}}>Nenhum veículo cadastrado.</span></Card>}
@@ -4088,6 +4276,28 @@ function ManutencaoPage({manutSols,setManutSols,manutOS,setManutOS,veiculos,user
         <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,display:"flex",gap:10,justifyContent:"flex-end"}}>
           <Btn color="ghost" outline onClick={()=>setModalSol(false)}>Cancelar</Btn>
           <Btn color="gold" onClick={salvarSol}>✅ Enviar Solicitação</Btn>
+        </div>
+      </div>
+    </div>}
+
+
+    {/* Modal Solicitar Material Preventivo */}
+    {modalMat&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
+      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,width:"100%",maxWidth:520,maxHeight:isMobile?"88vh":"82vh",display:"flex",flexDirection:"column"}}>
+        <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>📦 Solicitar Material Preventivo</h2>
+          <button onClick={()=>setModalMat(false)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,border:"none",cursor:"pointer"}}>✕</button>
+        </div>
+        <div style={{padding:"16px 20px",display:"flex",flexDirection:"column",gap:12,overflowY:"auto"}}>
+          <Sel label="Veículo *" value={formMat.veiculoId} onChange={v=>setFormMat(f=>({...f,veiculoId:v}))} options={[{value:"",label:"— Selecionar —"},...veiculos.map(v=>({value:v.id,label:`${v.placa} — ${v.modelo}`}))]}/>
+          <Sel label="Material preventivo *" value={formMat.sid} onChange={v=>setFormMat(f=>({...f,sid:v}))} options={[{value:"",label:"— Selecionar —"},...materiaisPreventivos.map(s=>({value:s.id,label:`${s.code} — ${s.name} (${fmt(s.qty)} ${s.unit} em estoque)`}))]}/>
+          <Inp label="Quantidade *" value={formMat.qty} onChange={v=>setFormMat(f=>({...f,qty:v}))} type="number" placeholder="1"/>
+          <Inp label="Observação" value={formMat.obs} onChange={v=>setFormMat(f=>({...f,obs:v}))} placeholder="Ex: troca preventiva, vazamento, revisão..."/>
+          {errMat&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",color:C.red,fontSize:13}}>⚠️ {errMat}</div>}
+        </div>
+        <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <Btn color="ghost" outline onClick={()=>setModalMat(false)}>Cancelar</Btn>
+          <Btn color="gold" onClick={salvarMat}>📤 Enviar Solicitação</Btn>
         </div>
       </div>
     </div>}
@@ -4170,7 +4380,7 @@ function AppInner(){
   const[cats,setCats]=useLS("re_cats",[
     {id:"c1",name:"Equipamentos",icon:"📡"},{id:"c2",name:"Cabos e Fios",icon:"🔌"},
     {id:"c3",name:"Conectores",icon:"🔗"},{id:"c4",name:"Caixas e Acessórios",icon:"🗃️"},
-    {id:"c5",name:"Acessórios",icon:"🔩"},{id:"c6",name:"Ferramentas",icon:"🛠️"},
+    {id:"c5",name:"Acessórios",icon:"🔩"},{id:"c6",name:"Ferramentas",icon:"🛠️"},{id:"c7",name:"Preventiva Veicular",icon:"🚗"},
   ]);
   const[produtos,setProdutos]=useLS("re_produtos",[
     {id:"p1",code:"ONU-001",name:"ONU Huawei HG8145V5",cat:"Equipamentos",unit:"un",desc:"ONT para rede GPON"},
@@ -4178,6 +4388,8 @@ function AppInner(){
     {id:"p3",code:"DROP-001",name:"Cabo Drop Flat 2FO",cat:"Cabos e Fios",unit:"m",desc:"Cabo óptico drop para cliente"},
     {id:"p4",code:"CON-001",name:"Conector SC/APC",cat:"Conectores",unit:"un",desc:""},
     {id:"p5",code:"SPL-001",name:"Splitter 1x8",cat:"Caixas e Acessórios",unit:"un",desc:""},
+    {id:"p6",code:"VEIC-001",name:"Óleo de Motor 5W30",cat:"Preventiva Veicular",unit:"l",desc:"Item preventivo para frota"},
+    {id:"p7",code:"VEIC-003",name:"Aditivo de Radiador",cat:"Preventiva Veicular",unit:"un",desc:"Item preventivo para frota"},
   ]);
   const[drawerOpen,setDrawerOpen]=useState(false);
   const isMobile=useIsMobile();
@@ -4317,14 +4529,14 @@ function AppInner(){
     dev:<DevPage {...p}/>,
     sol:<SolicitacaoPage solicitacoes={solicitacoes} setSolicitacoes={setSolicitacoes} stock={stock} setStock={setStock} tstock={tstock} setTstock={setTstock} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
     nf:<NFPage nf={nf} setNf={setNf} stock={stock} setStock={setStock} addLog={addLog} currentUser={user} isMobile={isMobile}/>,
-    rel:<RelPage stock={stock} os={os} returns={returns} users={users} nf={nf} isMobile={isMobile} currentUser={user}/>,
-    email:<AdminRelPage nf={nf} stock={stock} os={os} returns={returns} tstock={tstock} users={users} solicitacoes={solicitacoes} isMobile={isMobile} addLog={addLog}/>,
+    rel:<RelPage stock={stock} os={os} returns={returns} users={users} nf={nf} isMobile={isMobile} currentUser={user} veiculos={veiculos} abastecimentos={abastecimentos} manutOS={manutOS}/>,
+    email:<AdminRelPage nf={nf} stock={stock} os={os} returns={returns} tstock={tstock} users={users} solicitacoes={solicitacoes} isMobile={isMobile} addLog={addLog} veiculos={veiculos} abastecimentos={abastecimentos} manutOS={manutOS}/>,
     cat:<CatPage cats={cats} setCats={setCats} isMobile={isMobile}/>,
     produtos:<ProdutosPage produtos={produtos} setProdutos={setProdutos} cats={cats} isMobile={isMobile}/>,
     usr:<UsrPage users={users} setUsers={setUsers} addLog={addLog} currentUser={user} isMobile={isMobile}/>,
     log:<LogPage logs={logs} isMobile={isMobile}/>,
     frota:<FrotaPage veiculos={veiculos} setVeiculos={setVeiculos} abastecimentos={abastecimentos} setAbastecimentos={setAbastecimentos} checkouts={checkouts} setCheckouts={setCheckouts} pneus={pneus} setPneus={setPneus} docsVeic={docsVeic} setDocsVeic={setDocsVeic} manutOS={manutOS} manutSols={manutSols} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
-    manut:<ManutencaoPage manutSols={manutSols} setManutSols={setManutSols} manutOS={manutOS} setManutOS={setManutOS} veiculos={veiculos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} abastecimentos={abastecimentos} pneus={pneus}/>,
+    manut:<ManutencaoPage manutSols={manutSols} setManutSols={setManutSols} manutOS={manutOS} setManutOS={setManutOS} veiculos={veiculos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} abastecimentos={abastecimentos} pneus={pneus} stock={stock} solicitacoes={solicitacoes} setSolicitacoes={setSolicitacoes}/>,
   };
 
   return <div style={{height:"100dvh",background:C.bg,color:C.txt,display:"flex",overflow:"hidden"}}>
