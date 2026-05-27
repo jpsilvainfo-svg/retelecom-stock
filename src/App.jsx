@@ -4,8 +4,33 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis
 import * as XLSX from "xlsx";
 import { sbGet, sbSet } from "./supabase.js";
 
-const C={bg:"#161616",surf:"#1e1e1e",card:"#252525",bdr:"#2a2a2a",bdr2:"#333333",gold:"#cc0000",goldD:"#cc000022",goldL:"#e00000",red:"#cc0000",redD:"#cc000022",grn:"#43a047",grnD:"#43a04722",ylw:"#fb8c00",ylwD:"#fb8c0022",blue:"#1e88e5",txt:"#ffffff",txt2:"#cccccc",muted:"#888888",muted2:"#555555"};
-const PIE=["#cc0000","#666666","#999999","#444444","#aaaaaa"];
+const C={
+  bg:"#070707",
+  surf:"#101010",
+  card:"#171717",
+  card2:"#1d1d1f",
+  bdr:"#2d2d2d",
+  bdr2:"#3a3a3a",
+  gold:"#d10000",
+  goldD:"#d1000026",
+  goldL:"#ff1a1a",
+  red:"#d10000",
+  redD:"#d1000026",
+  grn:"#00c853",
+  grnD:"#00c85322",
+  ylw:"#ff9800",
+  ylwD:"#ff980022",
+  blue:"#2196f3",
+  blueD:"#2196f322",
+  txt:"#ffffff",
+  txt2:"#d6d6d6",
+  muted:"#9a9a9a",
+  muted2:"#666666",
+  glass:"rgba(20,20,22,.82)",
+  shadow:"0 18px 45px rgba(0,0,0,.45)",
+  glow:"0 0 28px rgba(209,0,0,.20)"
+};
+const PIE=["#d10000","#ff1a1a","#666666","#999999","#3a3a3a"];
 const ALL_MODULES=[
   {k:"dash",l:"Dashboard",icon:"🏠",group:"geral"},
   {k:"os",l:"Ordens de Serviço",icon:"🔧",group:"operacional"},
@@ -127,30 +152,70 @@ const LOGS0=[
 ];
 
 const CSS=`
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;}
-html{font-size:16px;}
-body{background:#141414;font-family:'Inter',sans-serif;-webkit-text-size-adjust:100%;}
-::-webkit-scrollbar{width:4px;height:4px;}
-::-webkit-scrollbar-track{background:#1c1c1c;}
-::-webkit-scrollbar-thumb{background:#333;border-radius:4px;}
+html{font-size:16px;background:#070707;}
+body{
+  background:
+    radial-gradient(circle at 10% 0%,rgba(209,0,0,.16),transparent 32%),
+    radial-gradient(circle at 88% 8%,rgba(255,26,26,.10),transparent 30%),
+    linear-gradient(135deg,#070707 0%,#101010 42%,#070707 100%);
+  font-family:'Inter',sans-serif;
+  -webkit-text-size-adjust:100%;
+  color:#fff;
+}
+body:before{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  opacity:.18;
+  background-image:
+    linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
+  background-size:42px 42px;
+  mask-image:linear-gradient(to bottom,black,transparent 82%);
+}
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:#0d0d0d;}
+::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#d10000,#3a3a3a);border-radius:6px;}
 button{cursor:pointer;border:none;font-family:'Inter',sans-serif;}
 input,select,textarea{font-family:'Inter',sans-serif;border:none;outline:none;}
-@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+input:focus,select:focus,textarea:focus{box-shadow:0 0 0 1px rgba(209,0,0,.55),0 0 22px rgba(209,0,0,.18)!important;border-color:#d10000!important;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @keyframes slideUp{from{opacity:0;transform:translateY(100%)}to{opacity:1;transform:none}}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes slideLeft{from{opacity:0;transform:translateX(-100%)}to{opacity:1;transform:none}}
-.fi{animation:fadeIn .2s ease}
+@keyframes pulseGlow{0%,100%{box-shadow:0 0 18px rgba(209,0,0,.18)}50%{box-shadow:0 0 32px rgba(209,0,0,.35)}}
+.fi{animation:fadeIn .28s ease}
 .su{animation:slideUp .25s ease}
 .sl{animation:slideLeft .25s ease}
 `;
 
 /* ── ATOMS ── */
 function Btn({children,onClick,color="gold",size="md",disabled,style:sx={},outline,full}){
-  const pal={gold:{bg:C.gold,fg:"#000"},red:{bg:C.red,fg:"#fff"},grn:{bg:C.grn,fg:"#fff"},ghost:{bg:"transparent",fg:C.muted}};
+  const pal={
+    gold:{bg:`linear-gradient(135deg,${C.gold},${C.goldL})`,solid:C.gold,fg:"#fff"},
+    red:{bg:`linear-gradient(135deg,${C.red},${C.goldL})`,solid:C.red,fg:"#fff"},
+    grn:{bg:`linear-gradient(135deg,${C.grn},#0fdc68)`,solid:C.grn,fg:"#061107"},
+    ghost:{bg:"transparent",solid:C.bdr2,fg:C.muted}
+  };
   const p=pal[color]||pal.gold;
-  const sz={xs:{padding:"4px 10px",fontSize:11},sm:{padding:"7px 14px",fontSize:12},md:{padding:"10px 20px",fontSize:13},lg:{padding:"13px 24px",fontSize:15}}[size];
-  return <button onClick={onClick} disabled={disabled} style={{background:outline?"transparent":p.bg,color:outline?p.bg:p.fg,border:outline?`1.5px solid ${p.bg}`:"none",borderRadius:8,fontWeight:600,opacity:disabled?.4:1,width:full?"100%":"auto",transition:"opacity .15s",...sz,...sx}}>{children}</button>;
+  const sz={xs:{padding:"5px 11px",fontSize:11},sm:{padding:"8px 15px",fontSize:12},md:{padding:"11px 21px",fontSize:13},lg:{padding:"14px 25px",fontSize:15}}[size];
+  return <button onClick={onClick} disabled={disabled} style={{
+    background:outline?"rgba(255,255,255,.02)":p.bg,
+    color:outline?p.solid:p.fg,
+    border:outline?`1px solid ${p.solid}`:"1px solid rgba(255,255,255,.06)",
+    borderRadius:12,
+    fontWeight:800,
+    opacity:disabled?.45:1,
+    width:full?"100%":"auto",
+    transition:"all .22s ease",
+    boxShadow:outline?"none":`0 10px 22px ${color==="ghost"?"rgba(0,0,0,.22)":"rgba(209,0,0,.22)"}`,
+    letterSpacing:".01em",
+    ...sz,
+    ...sx
+  }}>{children}</button>;
 }
 function Inp({label,value,onChange,type="text",placeholder,style:sx={}}){
   return <div style={{display:"flex",flexDirection:"column",gap:5}}>
@@ -169,7 +234,18 @@ function Sel({label,value,onChange,options,style:sx={}}){
   </div>;
 }
 function Card({children,style:sx={},onClick}){
-  return <div onClick={onClick} style={{background:C.card,border:`1px solid ${C.bdr}`,borderRadius:12,...sx}}>{children}</div>;
+  return <div onClick={onClick} style={{
+    background:`linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.012)),${C.card}`,
+    border:`1px solid ${C.bdr}`,
+    borderTop:`1px solid rgba(255,255,255,.08)`,
+    borderRadius:18,
+    boxShadow:C.shadow,
+    backdropFilter:"blur(10px)",
+    position:"relative",
+    overflow:"hidden",
+    transition:"transform .22s ease, box-shadow .22s ease, border-color .22s ease",
+    ...sx
+  }}>{children}</div>;
 }
 function Bdg({children,color="gold"}){
   const p={gold:{bg:C.goldD,fg:C.gold},red:{bg:C.redD,fg:C.red},grn:{bg:C.grnD,fg:C.grn},ylw:{bg:C.ylwD,fg:C.ylw},muted:{bg:"#88888820",fg:C.muted}}[color]||{bg:C.goldD,fg:C.gold};
@@ -277,46 +353,80 @@ function LoginPage({users,onLogin}){
 /* ── SIDEBAR DESKTOP ── */
 function Sidebar({user,page,setPage,onLogout}){
   const perms=user.perms||DEFAULT_PERMS[user.role]||["dash"];
-  const nav=ALL_MODULES.filter(m=>perms.includes(m.k)).map(m=>({k:m.k,icon:m.icon,label:m.l}));
-  return <div style={{width:220,minWidth:220,background:C.surf,borderRight:`1px solid ${C.bdr}`,display:"flex",flexDirection:"column",height:"100vh",flexShrink:0}}>
-    <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.bdr}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <img src="/logo-stocktel.png" alt="StockTel" style={{width:"100%",maxWidth:160,objectFit:"contain"}}/>
+  const nav=ALL_MODULES.filter(m=>perms.includes(m.k)).map(m=>({k:m.k,icon:m.icon,label:m.l,group:m.group}));
+  const groupLabels={geral:"GERAL",operacional:"OPERAÇÃO",estoque:"ESTOQUE",relatorios:"RELATÓRIOS",admin:"ADMIN",mecanico:"MECÂNICO"};
+  const groups=[...new Set(nav.map(n=>n.group||"geral"))];
+  return <div style={{
+    width:258,
+    minWidth:258,
+    background:"linear-gradient(180deg,rgba(22,22,24,.96),rgba(10,10,10,.98))",
+    borderRight:`1px solid ${C.bdr}`,
+    boxShadow:"18px 0 45px rgba(0,0,0,.35)",
+    display:"flex",
+    flexDirection:"column",
+    height:"100vh",
+    flexShrink:0,
+    position:"relative",
+    overflow:"hidden"
+  }}>
+    <div style={{position:"absolute",top:-120,left:-90,width:230,height:230,borderRadius:"50%",background:"rgba(209,0,0,.20)",filter:"blur(55px)"}}/>
+    <div style={{padding:"22px 18px 16px",borderBottom:`1px solid ${C.bdr}`,display:"flex",alignItems:"center",justifyContent:"center",position:"relative",zIndex:1}}>
+      <img src="/logo-stocktel.png" alt="StockTel" style={{width:"100%",maxWidth:180,objectFit:"contain",filter:"drop-shadow(0 0 16px rgba(209,0,0,.30))"}}/>
     </div>
-    <div style={{padding:"8px 16px 6px",borderBottom:`1px solid ${C.bdr}`}}>
-      <div style={{fontSize:10,color:C.muted2,lineHeight:1.4}}>Soluções em Telecomunicações</div>
+    <div style={{padding:"10px 18px 8px",borderBottom:`1px solid ${C.bdr}`,position:"relative",zIndex:1}}>
+      <div style={{fontSize:10,color:C.muted,letterSpacing:".18em",textTransform:"uppercase",lineHeight:1.5}}>Soluções em Telecomunicações</div>
     </div>
-    <nav style={{flex:1,padding:"8px",overflowY:"auto"}}>
-      {nav.map(n=>(
-        <div key={n.k} onClick={()=>setPage(n.k)}
-          style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:8,cursor:"pointer",marginBottom:2,
-            background:page===n.k?"#8b000066":"transparent",
-            borderLeft:page===n.k?`3px solid ${C.gold}`:"3px solid transparent",
-            color:page===n.k?C.gold:C.muted,fontWeight:page===n.k?600:400,fontSize:13}}>
-          <span style={{fontSize:15}}>{n.icon}</span><span>{n.label}</span>
-        </div>
-      ))}
+    <nav style={{flex:1,padding:"12px",overflowY:"auto",position:"relative",zIndex:1}}>
+      {groups.map(g=><div key={g} style={{marginBottom:12}}>
+        <div style={{fontSize:9,color:C.muted2,fontWeight:900,letterSpacing:".16em",padding:"8px 10px 6px",textTransform:"uppercase"}}>{groupLabels[g]||g}</div>
+        {nav.filter(n=>(n.group||"geral")===g).map(n=>{
+          const active=page===n.k;
+          return <div key={n.k} onClick={()=>setPage(n.k)}
+            style={{
+              display:"flex",
+              alignItems:"center",
+              gap:11,
+              padding:"11px 13px",
+              borderRadius:13,
+              cursor:"pointer",
+              marginBottom:4,
+              background:active?"linear-gradient(135deg,rgba(209,0,0,.32),rgba(209,0,0,.08))":"transparent",
+              border:active?`1px solid rgba(209,0,0,.45)`:"1px solid transparent",
+              boxShadow:active?"0 0 28px rgba(209,0,0,.18)":"none",
+              color:active?C.txt:C.muted,
+              fontWeight:active?800:600,
+              fontSize:13,
+              transition:"all .2s ease"
+            }}>
+            <span style={{fontSize:16,width:20,textAlign:"center",filter:active?"drop-shadow(0 0 8px rgba(209,0,0,.8))":"none"}}>{n.icon}</span>
+            <span style={{flex:1}}>{n.label}</span>
+            {active&&<span style={{width:6,height:6,borderRadius:"50%",background:C.gold,boxShadow:"0 0 12px rgba(209,0,0,.9)"}}/>}
+          </div>;
+        })}
+      </div>)}
     </nav>
-    <div style={{padding:"10px",borderTop:`1px solid ${C.bdr}`}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px",background:C.card,borderRadius:8,marginBottom:6}}>
-        <div style={{width:28,height:28,borderRadius:"50%",background:`${C.gold}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0,overflow:"hidden"}}>
+    <div style={{padding:"12px",borderTop:`1px solid ${C.bdr}`,position:"relative",zIndex:1}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px",background:"rgba(255,255,255,.035)",border:`1px solid ${C.bdr}`,borderRadius:14,marginBottom:8}}>
+        <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${C.goldD},rgba(255,255,255,.06))`,border:`1px solid rgba(209,0,0,.35)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0,overflow:"hidden"}}>
           {user.photo?<img src={user.photo} alt={user.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span>👤</span>}
         </div>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:11,fontWeight:600,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</div>
+          <div style={{fontSize:12,fontWeight:800,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</div>
           <div style={{fontSize:9,color:C.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.email}</div>
         </div>
-        <span style={{background:C.gold,color:"#000",fontSize:8,fontWeight:800,padding:"1px 4px",borderRadius:3,flexShrink:0,letterSpacing:".03em"}}>{user.role==="admin"?"ADM":user.role==="estoque"?"EST":"TEC"}</span>
+        <span style={{background:`linear-gradient(135deg,${C.gold},${C.goldL})`,color:"#fff",fontSize:8,fontWeight:900,padding:"3px 6px",borderRadius:6,flexShrink:0,letterSpacing:".06em"}}>{user.role==="admin"?"ADM":user.role==="estoque"?"EST":user.role==="mecanico"?"MEC":user.role==="financeiro"?"FIN":"TEC"}</span>
       </div>
-      <div onClick={()=>window.dispatchEvent(new CustomEvent("openPerfil"))} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",cursor:"pointer",color:C.muted,fontSize:12,borderRadius:6}}>
+      <div onClick={()=>window.dispatchEvent(new CustomEvent("openPerfil"))} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 10px",cursor:"pointer",color:C.muted,fontSize:12,borderRadius:8,fontWeight:700}}>
         <span>⚙️</span>Meu Perfil
       </div>
-      <div onClick={onLogout} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",cursor:"pointer",color:C.muted,fontSize:12,borderRadius:6}}>
+      <div onClick={onLogout} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 10px",cursor:"pointer",color:C.red,fontSize:12,borderRadius:8,fontWeight:800}}>
         <span>🚪</span>Sair
       </div>
     </div>
   </div>;
 }
 
+/* ── DRAWER MOBILE (menu lateral deslizante) ── */
 /* ── DRAWER MOBILE (menu lateral deslizante) ── */
 function MobileDrawer({user,page,setPage,onLogout,onClose}){
   const perms=user.perms||DEFAULT_PERMS[user.role]||["dash"];
@@ -361,52 +471,77 @@ function MobileDrawer({user,page,setPage,onLogout,onClose}){
 
 /* ── TOPBAR ── */
 function TopBar({user,pendRet,pendSol,setPage,isMobile,onMenuOpen}){
-  return <div style={{height:isMobile?52:56,background:C.surf,borderBottom:`1px solid ${C.bdr}`,display:"flex",alignItems:"center",padding:isMobile?"0 14px":"0 24px",gap:10,flexShrink:0}}>
-    {isMobile&&<button onClick={onMenuOpen} style={{background:"transparent",color:C.muted,fontSize:22,display:"flex",alignItems:"center",padding:4}}>☰</button>}
+  return <div style={{
+    height:isMobile?58:66,
+    background:"linear-gradient(90deg,rgba(16,16,16,.94),rgba(24,24,24,.90))",
+    borderBottom:`1px solid ${C.bdr}`,
+    boxShadow:"0 10px 30px rgba(0,0,0,.28)",
+    display:"flex",
+    alignItems:"center",
+    padding:isMobile?"0 14px":"0 26px",
+    gap:12,
+    flexShrink:0,
+    backdropFilter:"blur(12px)"
+  }}>
+    {isMobile&&<button onClick={onMenuOpen} style={{background:"rgba(255,255,255,.04)",color:C.txt,width:38,height:38,borderRadius:12,fontSize:22,display:"flex",alignItems:"center",justifyContent:"center",padding:4,border:`1px solid ${C.bdr}`}}>☰</button>}
     <div style={{flex:1,minWidth:0}}>
-      <div style={{fontSize:isMobile?13:14,fontWeight:600,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-        Olá, <span style={{color:C.gold}}>{user.name.split(" ")[0]}</span>
+      <div style={{fontSize:isMobile?13:15,fontWeight:900,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+        Olá, <span style={{color:C.gold,textShadow:"0 0 14px rgba(209,0,0,.45)"}}>{user.name.split(" ")[0]}</span>
       </div>
-      {!isMobile&&<div style={{fontSize:11,color:C.muted}}>{today()}</div>}
+      {!isMobile&&<div style={{fontSize:11,color:C.muted,letterSpacing:".02em"}}>{today()}</div>}
     </div>
-    {pendSol>0&&<div onClick={()=>setPage("sol")} style={{display:"flex",alignItems:"center",gap:5,background:`${C.blue}22`,border:`1px solid ${C.blue}44`,borderRadius:6,padding:isMobile?"5px 8px":"5px 12px",cursor:"pointer",flexShrink:0}}>
+    {pendSol>0&&<div onClick={()=>setPage("sol")} style={{display:"flex",alignItems:"center",gap:6,background:C.blueD,border:`1px solid ${C.blue}55`,borderRadius:12,padding:isMobile?"7px 10px":"7px 13px",cursor:"pointer",flexShrink:0,boxShadow:"0 0 18px rgba(33,150,243,.16)"}}>
       <span style={{fontSize:13}}>📋</span>
-      <span style={{fontSize:12,color:C.blue,fontWeight:700}}>{pendSol}</span>
-      {!isMobile&&<span style={{fontSize:12,color:C.blue,fontWeight:600}}>solicitação{pendSol>1?"ões":""}</span>}
+      <span style={{fontSize:12,color:C.blue,fontWeight:900}}>{pendSol}</span>
+      {!isMobile&&<span style={{fontSize:12,color:C.blue,fontWeight:800}}>solicitação{pendSol>1?"ões":""}</span>}
     </div>}
-    {pendRet>0&&<div onClick={()=>setPage("dev")} style={{display:"flex",alignItems:"center",gap:5,background:C.ylwD,border:`1px solid ${C.ylw}44`,borderRadius:6,padding:isMobile?"5px 8px":"5px 12px",cursor:"pointer",flexShrink:0}}>
+    {pendRet>0&&<div onClick={()=>setPage("dev")} style={{display:"flex",alignItems:"center",gap:6,background:C.ylwD,border:`1px solid ${C.ylw}55`,borderRadius:12,padding:isMobile?"7px 10px":"7px 13px",cursor:"pointer",flexShrink:0,boxShadow:"0 0 18px rgba(255,152,0,.16)"}}>
       <span style={{fontSize:13}}>🔔</span>
-      {!isMobile&&<span style={{fontSize:12,color:C.ylw,fontWeight:600}}>{pendRet} devolução{pendRet>1?"ões":""}</span>}
-      {isMobile&&<span style={{fontSize:12,color:C.ylw,fontWeight:700}}>{pendRet}</span>}
+      {!isMobile&&<span style={{fontSize:12,color:C.ylw,fontWeight:800}}>{pendRet} devolução{pendRet>1?"ões":""}</span>}
+      {isMobile&&<span style={{fontSize:12,color:C.ylw,fontWeight:900}}>{pendRet}</span>}
     </div>}
-    {!isMobile&&<div style={{width:34,height:34,borderRadius:"50%",background:C.card,border:`1px solid ${C.bdr2}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,cursor:"pointer"}}>🔔</div>}
+    {!isMobile&&<div style={{width:38,height:38,borderRadius:"50%",background:"rgba(255,255,255,.035)",border:`1px solid ${C.bdr2}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,cursor:"pointer",boxShadow:"0 0 20px rgba(209,0,0,.10)"}}>🔔</div>}
   </div>;
 }
 
 /* ── BOTTOM NAV MOBILE ── */
+/* ── BOTTOM NAV MOBILE ── */
 function BottomNav({page,setPage,user,onMenuOpen}){
-  // Pega permissões do usuário e monta nav dinâmico
   const perms=user.perms||DEFAULT_PERMS[user.role]||["dash"];
   const allItems=ALL_MODULES.filter(m=>perms.includes(m.k)).map(m=>({k:m.k,icon:m.icon,label:m.l.split(" ")[0]}));
-
-  // Mostra os 4 primeiros itens + botão Menu
   const visible=allItems.slice(0,5);
   const items=[...visible,{k:"__menu",icon:"☰",label:"Menu"}];
 
-  return <div style={{position:"fixed",bottom:0,left:0,right:0,background:C.surf,borderTop:`1px solid ${C.bdr}`,display:"flex",zIndex:100,paddingBottom:"env(safe-area-inset-bottom)"}}>
-    {items.map(it=>(
-      <div key={it.k} onClick={()=>it.k==="__menu"?onMenuOpen():setPage(it.k)}
-        style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",padding:"8px 2px 6px",cursor:"pointer",
-          color:page===it.k?C.gold:C.muted,
-          borderTop:page===it.k?`2px solid ${C.gold}`:"2px solid transparent"}}>
-        <span style={{fontSize:19,lineHeight:1}}>{it.icon}</span>
-        <span style={{fontSize:8,marginTop:2,fontWeight:page===it.k?700:400,textAlign:"center",maxWidth:46,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.label}</span>
-      </div>
-    ))}
+  return <div style={{
+    position:"fixed",
+    bottom:0,
+    left:0,
+    right:0,
+    background:"linear-gradient(180deg,rgba(20,20,22,.92),rgba(8,8,8,.98))",
+    borderTop:`1px solid ${C.bdr}`,
+    display:"flex",
+    zIndex:100,
+    paddingBottom:"env(safe-area-inset-bottom)",
+    boxShadow:"0 -14px 35px rgba(0,0,0,.48)",
+    backdropFilter:"blur(14px)"
+  }}>
+    {items.map(it=>{
+      const active=page===it.k;
+      return <div key={it.k} onClick={()=>it.k==="__menu"?onMenuOpen():setPage(it.k)}
+        style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",padding:"9px 2px 7px",cursor:"pointer",
+          color:active?C.gold:C.muted,
+          borderTop:active?`2px solid ${C.gold}`:"2px solid transparent",
+          background:active?"rgba(209,0,0,.10)":"transparent",
+          transition:"all .2s ease"}}>
+        <span style={{fontSize:20,lineHeight:1,filter:active?"drop-shadow(0 0 8px rgba(209,0,0,.85))":"none"}}>{it.icon}</span>
+        <span style={{fontSize:8,marginTop:3,fontWeight:active?900:600,textAlign:"center",maxWidth:48,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.label}</span>
+      </div>;
+    })}
   </div>;
 }
 
 
+/* ── DASHBOARD ── */
 /* ── DASHBOARD ── */
 function Dashboard({stock,tstock,users,os,returns,logs,setPage,isMobile,currentUser,pendSol,veiculos=[],abastecimentos=[]}){
   const isTec=currentUser?.role==="tecnico";
