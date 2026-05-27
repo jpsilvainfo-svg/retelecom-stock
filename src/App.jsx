@@ -30,7 +30,19 @@ const C={
   shadow:"0 18px 45px rgba(0,0,0,.45)",
   glow:"0 0 28px rgba(209,0,0,.20)"
 };
-const PIE=["#d10000","#ff1a1a","#666666","#999999","#3a3a3a"];
+const PIE=["#d10000","#ff9800","#ffd54f","#00c853","#2196f3","#9c27b0","#9e9e9e","#607d8b"];
+const catColor=(name,i)=>{
+  const n=String(name||"").toLowerCase();
+  if(n.includes("equip"))return "#d10000";
+  if(n.includes("cabo"))return "#2196f3";
+  if(n.includes("conector"))return "#00c853";
+  if(n.includes("caixa"))return "#ff9800";
+  if(n.includes("acess"))return "#ffd54f";
+  if(n.includes("ferrament"))return "#9c27b0";
+  if(n.includes("prevent"))return "#00bcd4";
+  return PIE[i%PIE.length];
+};
+const consumptionColor=(pct)=> pct>=75?"#d10000":pct>=50?"#ff9800":"#00c853";
 const ALL_MODULES=[
   {k:"dash",l:"Dashboard",icon:"🏠",group:"geral"},
   {k:"os",l:"Ordens de Serviço",icon:"🔧",group:"operacional"},
@@ -762,7 +774,7 @@ function Dashboard({stock,tstock,users,os,returns,logs,setPage,isMobile,currentU
               <ResponsiveContainer width="100%" height={160}>
                 <PieChart>
                   <Pie data={catData} dataKey="value" cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={3}>
-                    {catData.map((_,i)=><Cell key={i} fill={PIE[i%PIE.length]}/>)}
+                    {catData.map((d,i)=><Cell key={i} fill={catColor(d.name,i)}/>)}
                   </Pie>
                   <Tooltip contentStyle={{background:C.card,border:`1px solid ${C.bdr}`,borderRadius:6,fontSize:12}}/>
                 </PieChart>
@@ -775,7 +787,7 @@ function Dashboard({stock,tstock,users,os,returns,logs,setPage,isMobile,currentU
             {catData.map((d,i)=>(
               <div key={d.name} style={{display:"flex",justifyContent:"space-between",fontSize:11,marginTop:5}}>
                 <div style={{display:"flex",alignItems:"center",gap:5}}>
-                  <div style={{width:7,height:7,borderRadius:"50%",background:PIE[i%PIE.length]}}/>
+                  <div style={{width:7,height:7,borderRadius:"50%",background:catColor(d.name,i)}}/>
                   <span style={{color:C.txt2}}>{d.name}</span>
                 </div>
                 <span style={{color:C.muted,fontFamily:"'JetBrains Mono',monospace"}}>{Math.round(d.value/totalQty*100)}%</span>
@@ -784,20 +796,34 @@ function Dashboard({stock,tstock,users,os,returns,logs,setPage,isMobile,currentU
           </Card>
           <Card style={{padding:18}}>
             <div style={{fontSize:14,fontWeight:700,color:C.txt,marginBottom:14}}>Técnicos - Consumo</div>
-            {techUsage.map((t,i)=>(
-              <div key={t.name} style={{marginBottom:10}}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+            {techUsage.map((t,i)=>{
+              const pct=Math.round((t.value/maxU)*100);
+              const c=consumptionColor(pct);
+              return <div key={`${t.name}-${i}`} style={{marginBottom:12}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
                     <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted,minWidth:16}}>{i+1}</span>
-                    <span style={{fontSize:13,color:C.txt,fontWeight:500}}>{t.name}</span>
+                    <span style={{fontSize:13,color:C.txt,fontWeight:700}}>{t.name}</span>
                   </div>
-                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:C.gold,fontWeight:700}}>{fmt(t.value)}</span>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:10,fontWeight:900,color:c,letterSpacing:".06em"}}>{pct>=75?"ALTO":pct>=50?"MÉDIO":"OK"}</span>
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:c,fontWeight:900}}>{fmt(t.value)}</span>
+                  </div>
                 </div>
-                <div style={{height:6,background:C.bdr,borderRadius:3}}>
-                  <div style={{height:"100%",width:`${(t.value/maxU)*100}%`,background:i===0?C.gold:"#555",borderRadius:3}}/>
+                <div style={{height:8,background:"rgba(255,255,255,.08)",borderRadius:999,overflow:"hidden",boxShadow:"inset 0 0 10px rgba(0,0,0,.45)"}}>
+                  <div style={{
+                    height:"100%",
+                    width:`${pct}%`,
+                    background:"linear-gradient(90deg,#00c853 0%,#ffd54f 52%,#ff9800 72%,#d10000 100%)",
+                    borderRadius:999,
+                    boxShadow:`0 0 14px ${c}88`
+                  }}/>
                 </div>
-              </div>
-            ))}
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:C.muted2,marginTop:3}}>
+                  <span>Baixo</span><span>Médio</span><span>Alto</span>
+                </div>
+              </div>;
+            })}
           </Card>
         </div>
         {alertasOleo.length>0&&<Card style={{padding:0,overflow:"hidden",borderLeft:`3px solid ${alertasOleo.some(a=>a.urgente)?C.red:C.ylw}`}}>
@@ -1776,7 +1802,7 @@ function RelPage({stock,os,returns,users,nf,isMobile,currentUser}){
           <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:12}}>Por Categoria</div>
           <ResponsiveContainer width="100%" height={200}>
             <PieChart><Pie data={catData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`} labelLine={false} fontSize={10}>
-              {catData.map((_,i)=><Cell key={i} fill={PIE[i%PIE.length]}/>)}
+              {catData.map((d,i)=><Cell key={i} fill={catColor(d.name,i)}/>)}
             </Pie><Tooltip contentStyle={{background:C.card,border:`1px solid ${C.bdr}`,borderRadius:6,fontSize:12}}/></PieChart>
           </ResponsiveContainer>
         </Card>
