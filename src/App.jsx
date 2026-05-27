@@ -1532,7 +1532,7 @@ function NFPage({nf,setNf,stock,setStock,addLog,currentUser,isMobile}){
 }
 
 /* ── RELATÓRIOS ── */
-function RelPage({stock,os,returns,users,nf,isMobile,currentUser}){
+function RelPage({stock,os,returns,users,nf,isMobile,currentUser,abastecimentos=[],manutOS=[],veiculos=[]}){
   const isTec=currentUser?.role==="tecnico";
   const[tab,setTab]=useState("estoque");
 
@@ -1598,6 +1598,15 @@ function RelPage({stock,os,returns,users,nf,isMobile,currentUser}){
   const maxT=techData[0]?.value||1;
 
   const totalNFGasto=viewNF.reduce((a,n)=>a+(n.total||0),0);
+
+  // ── Variáveis de frota (adicionadas para o resumo) ──
+  const fmtMoeda=(n)=>"R$ "+new Intl.NumberFormat("pt-BR",{minimumFractionDigits:2}).format(n??0);
+  const viewAbastAdmin=abastecimentos.filter(a=>inRange(a.dtAbast));
+  const viewManutAdmin=manutOS.filter(o=>inRange(o.dtEntrada||o.date||""));
+  const totalCombFrota=viewAbastAdmin.reduce((s,a)=>s+(parseFloat(a.valor)||0),0);
+  const totalManutFrota=viewManutAdmin.reduce((s,o)=>s+(o.pecas?.reduce((ps,p)=>ps+(parseFloat(p.valor)||0)*(parseInt(p.qtd)||1),0)||0),0);
+  const totalGeralFrota=totalCombFrota+totalManutFrota;
+  const fotosFrota=viewAbastAdmin.filter(a=>a.foto);
   const LOGO_URL=window.location.origin+"/logo-stocktel.png";
   const periodoLabel=dtInicio===dtFim?`${dtInicio.split("-").reverse().join("/")}`:
     `${dtInicio.split("-").reverse().join("/")} a ${dtFim.split("-").reverse().join("/")}`;
@@ -4703,7 +4712,7 @@ function AppInner(){
     dev:<DevPage {...p}/>,
     sol:<SolicitacaoPage solicitacoes={solicitacoes} setSolicitacoes={setSolicitacoes} stock={stock} setStock={setStock} tstock={tstock} setTstock={setTstock} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
     nf:<NFPage nf={nf} setNf={setNf} stock={stock} setStock={setStock} addLog={addLog} currentUser={user} isMobile={isMobile}/>,
-    rel:<RelPage stock={stock} os={os} returns={returns} users={users} nf={nf} isMobile={isMobile} currentUser={user}/>,
+    rel:<RelPage stock={stock} os={os} returns={returns} users={users} nf={nf} isMobile={isMobile} currentUser={user} abastecimentos={abastecimentos} manutOS={manutOS} veiculos={veiculos}/>,
     email:<AdminRelPage nf={nf} stock={stock} os={os} returns={returns} tstock={tstock} users={users} solicitacoes={solicitacoes} isMobile={isMobile} addLog={addLog} veiculos={veiculos} abastecimentos={abastecimentos} manutOS={manutOS}/>,
     cat:<CatPage cats={cats} setCats={setCats} isMobile={isMobile}/>,
     produtos:<ProdutosPage produtos={produtos} setProdutos={setProdutos} cats={cats} isMobile={isMobile}/>,
