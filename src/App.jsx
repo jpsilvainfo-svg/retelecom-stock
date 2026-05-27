@@ -251,6 +251,7 @@ function LoginPage({users,onLogin}){
   const[login,setLogin]=useState("");
   const[pass,setPass]=useState("");
   const[err,setErr]=useState("");
+  const[pdfNota,setPdfNota]=useState(null);
   const isMobile=useIsMobile();
 
   const go=()=>{const u=users.find(u=>u.login===login&&u.pass===pass);if(u)onLogin(u);else setErr("Login ou senha inválidos.");};
@@ -1193,7 +1194,16 @@ function NFPage({nf,setNf,stock,setStock,addLog,currentUser,isMobile}){
     setFormNM({code:"",name:"",cat:"Equipamentos",unit:"un",min:"0"});
   };
 
-  const abrirModal=()=>{setForm({num:"",supplier:"",date:"",obs:""});setItems([]);setErr("");setNovoMat(null);setModal(true);};
+  const carregarPdfNota=(file)=>{
+    if(!file){setPdfNota(null);return;}
+    if(file.type!=="application/pdf"&&!file.name.toLowerCase().endsWith(".pdf")){setErr("Anexe apenas arquivo PDF da nota fiscal.");return;}
+    const reader=new FileReader();
+    reader.onload=()=>setPdfNota({name:file.name,size:file.size,type:file.type||"application/pdf",data:reader.result});
+    reader.onerror=()=>setErr("Não foi possível carregar o PDF da nota fiscal.");
+    reader.readAsDataURL(file);
+  };
+
+  const abrirModal=()=>{setForm({num:"",supplier:"",date:"",obs:""});setItems([]);setErr("");setNovoMat(null);setPdfNota(null);setModal(true);};
 
   const save=()=>{
     if(!form.num.trim()){setErr("Informe o número da NF.");return;}
@@ -1202,6 +1212,7 @@ function NFPage({nf,setNf,stock,setStock,addLog,currentUser,isMobile}){
     const total=validItems.reduce((a,r)=>a+(parseFloat(r.val)||0),0);
     setNf(p=>[{id:uid(),num:form.num.trim(),supplier:form.supplier.trim(),date:form.date,obs:form.obs,
       items:validItems.map(r=>({sid:r.sid,qty:parseInt(r.qty),val:parseFloat(r.val)||0})),
+      pdfNota,
       total,registeredBy:currentUser.name,registeredAt:now()},...p]);
     setStock(p=>p.map(s=>{const it=validItems.find(r=>r.sid===s.id);return it?{...s,qty:s.qty+parseInt(it.qty)}:s;}));
     addLog(currentUser.name,"Entrada","NF: "+form.num.trim()+" · "+form.supplier.trim()+" · "+validItems.length+" item(s)");
@@ -1242,6 +1253,12 @@ function NFPage({nf,setNf,stock,setStock,addLog,currentUser,isMobile}){
                 );})}
               </div>
               {n.obs&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>📝 {n.obs}</div>}
+              {n.pdfNota?.data&&<div style={{marginTop:8}}>
+                <a href={n.pdfNota.data} target="_blank" rel="noreferrer" download={n.pdfNota.name||`NF-${n.num}.pdf`}
+                  style={{display:"inline-flex",alignItems:"center",gap:6,background:`${C.red}22`,border:`1px solid ${C.red}55`,color:C.red,padding:"6px 10px",borderRadius:7,fontSize:11,fontWeight:700,textDecoration:"none"}}>
+                  📎 Ver/Baixar PDF da compra {n.pdfNota.name?`· ${n.pdfNota.name}`:""}
+                </a>
+              </div>}
             </div>
             <div style={{textAlign:"right",flexShrink:0}}>
               <div style={{fontSize:10,color:C.muted}}>TOTAL</div>
@@ -1273,6 +1290,20 @@ function NFPage({nf,setNf,stock,setStock,addLog,currentUser,isMobile}){
             <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10,marginTop:10}}>
               <Inp label="Data da Compra" value={form.date} onChange={v=>setForm(f=>({...f,date:v}))} type="date"/>
               <Inp label="Observação" value={form.obs} onChange={v=>setForm(f=>({...f,obs:v}))} placeholder="Opcional"/>
+            </div>
+          </div>
+
+          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".08em",marginBottom:10}}>📎 ANEXO DA COMPRA</div>
+            <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+              <label style={{display:"inline-flex",alignItems:"center",gap:8,background:`${C.gold}18`,border:`1px dashed ${C.gold}`,borderRadius:8,padding:"10px 14px",color:C.gold,fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                📄 Anexar NF em PDF
+                <input type="file" accept="application/pdf,.pdf" onChange={e=>carregarPdfNota(e.target.files?.[0])} style={{display:"none"}}/>
+              </label>
+              {pdfNota?<div style={{display:"flex",alignItems:"center",gap:8,background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"8px 10px"}}>
+                <span style={{fontSize:12,color:C.txt2}}>✅ {pdfNota.name}</span>
+                <button onClick={()=>setPdfNota(null)} style={{background:C.redD,color:C.red,border:"none",borderRadius:6,width:24,height:24,cursor:"pointer"}}>✕</button>
+              </div>:<span style={{fontSize:11,color:C.muted}}>Opcional: anexe o PDF referente à compra/nota fiscal.</span>}
             </div>
           </div>
 
