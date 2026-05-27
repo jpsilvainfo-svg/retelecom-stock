@@ -1,88 +1,35 @@
-.gridKPIs {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-  margin-bottom: 20px;
+
+.card{
+  background:#111;
+  border:1px solid #2c2c2c;
+  border-radius:18px;
+  padding:22px;
+  transition:.25s;
+  position:relative;
+  overflow:hidden;
 }
 
-.kpiCard {
-  position: relative;
-  overflow: hidden;
-  background: linear-gradient(145deg, rgba(255,255,255,.06), rgba(255,255,255,.025));
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: var(--radius);
-  padding: 20px;
-  transition: var(--transition);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 20px 40px rgba(0,0,0,.25);
+.card:hover{
+  transform:translateY(-4px);
+  box-shadow:0 0 25px rgba(209,0,0,.25);
+  border-color:#d10000;
 }
 
-.kpiCard::after {
-  content: "";
-  position: absolute;
-  inset: auto -30px -50px auto;
-  width: 130px;
-  height: 130px;
-  background: radial-gradient(circle, var(--red-glow), transparent 70%);
+.card h2{
+  margin:0;
+  color:#fff;
+  font-size:34px;
 }
 
-.kpiCard:hover {
-  transform: translateY(-4px);
-  border-color: rgba(209,0,0,.45);
-  box-shadow: 0 0 26px var(--red-glow), 0 22px 45px rgba(0,0,0,.35);
+.card span{
+  color:#b8b8b8;
+  font-size:14px;
 }
 
-.kpiIcon {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  background: rgba(209,0,0,.16);
-  color: var(--red-hover);
-  margin-bottom: 14px;
-}
-
-.kpiCard span {
-  color: var(--text-secondary);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  font-weight: 800;
-}
-
-.kpiCard h2 {
-  margin: 8px 0 0;
-  font-size: 32px;
-  color: var(--text);
-  letter-spacing: -.04em;
-}
-
-.kpiCard small {
-  color: var(--muted);
-  display: block;
-  margin-top: 4px;
-}
-
-.stock-card {
-  background: rgba(28,28,28,.78);
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: var(--radius);
-  padding: 20px;
-  box-shadow: 0 22px 45px rgba(0,0,0,.25);
-}
-
-@media(max-width: 1100px) {
-  .gridKPIs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media(max-width: 640px) {
-  .gridKPIs {
-    grid-template-columns: 1fr;
-  }
-
-  .kpiCard {
-    padding: 18px;
-  }
+.line{
+  height:40px;
+  margin-top:12px;
+  border-radius:8px;
+  background:linear-gradient(90deg,#d10000,#ff3b3b);
+  opacity:.8;
 }
