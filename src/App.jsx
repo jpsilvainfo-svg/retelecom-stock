@@ -3294,9 +3294,6 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
   const viewAbast=isTec?abastecimentos.filter(a=>a.tecnicoId===currentUser.id):abastecimentos;
   const viewCheck=isTec?checkouts.filter(c=>c.tecnicoId===currentUser.id):checkouts;
 
-  const totalGastoComb=viewAbastFilt.reduce((a,x)=>a+(parseFloat(x.valor)||0),0);
-  const totalLitros=viewAbastFilt.reduce((a,x)=>a+(parseFloat(x.litros)||0),0);
-
   // ── File handlers ──
   const handleFotoVeic=(idx,e)=>{const f=e.target.files[0];if(!f)return;if(f.size>3*1024*1024){alert("Máx 3MB");return;}const r=new FileReader();r.onload=ev=>setFormVeic(fv=>({...fv,fotos:fv.fotos.map((ft,i)=>i===idx?ev.target.result:ft)}));r.readAsDataURL(f);};
   const handleDocPDF=(e)=>{const f=e.target.files[0];if(!f)return;if(f.size>5*1024*1024){alert("Máx 5MB");return;}const r=new FileReader();r.onload=ev=>setFormVeic(fv=>({...fv,docPDF:ev.target.result}));r.readAsDataURL(f);};
@@ -3374,6 +3371,8 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
   // Filtered views
   const viewAbastFilt=viewAbast.filter(a=>inFrotaRange(a.dtAbast));
   const viewCheckFilt=viewCheck.filter(c=>inFrotaRange(c.dtCheck));
+  const totalGastoComb=viewAbastFilt.reduce((a,x)=>a+(parseFloat(x.valor)||0),0);
+  const totalLitros=viewAbastFilt.reduce((a,x)=>a+(parseFloat(x.litros)||0),0);
 
   if(!tab||!tabList.find(t=>t.k===tab)) {
     // reset to first available tab
