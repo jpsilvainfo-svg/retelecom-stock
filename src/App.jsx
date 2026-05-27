@@ -1,4 +1,4 @@
-// StockTel v1.3 BUILD-20260526-0836 STABLE
+// StockTel v1.6 BUILD-20260526-2139 RELATORIO-ADMIN-FROTA-TODOS-CARROS
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
 import * as XLSX from "xlsx";
@@ -2276,7 +2276,7 @@ function AdminRelPage({nf,stock,os,returns,tstock,users,solicitacoes,isMobile,ad
       if(!map[id])map[id]={id,placa:v.placa||"—",modelo:v.modelo||"Sem veículo",combustivel:0,manutencao:0,total:0,qtdAbast:0,qtdManut:0,fotos:0};
       map[id].manutencao+=custoManut(o); map[id].qtdManut+=1; map[id].fotos+=(o.fotos||o.fotosComprovante||o.fotosServico||[]).filter(Boolean).length;
     });
-    return Object.values(map).map(v=>({...v,total:v.combustivel+v.manutencao})).filter(v=>v.total>0||v.qtdAbast>0||v.qtdManut>0).sort((a,b)=>b.total-a.total);
+    return Object.values(map).map(v=>({...v,total:v.combustivel+v.manutencao})).sort((a,b)=>b.total-a.total);
   },[veiculos,viewAbastAdmin,viewManutAdmin]);
 
   // ── Gera PDF Profissional ──
