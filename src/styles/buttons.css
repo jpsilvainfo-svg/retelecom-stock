@@ -1,0 +1,30 @@
+.btn {
+  border: 0;
+  border-radius: 12px;
+  padding: 11px 16px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btn-primary {
+  color: #fff;
+  background: linear-gradient(135deg, var(--red), var(--red-dark));
+  box-shadow: 0 0 18px var(--red-glow);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(135deg, var(--red-hover), var(--red));
+}
+
+.btn-ghost {
+  color: var(--text-secondary);
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.08);
+}
+
+.btn-ghost:hover {
+  color: var(--text);
+  border-color: rgba(209,0,0,.35);
+}

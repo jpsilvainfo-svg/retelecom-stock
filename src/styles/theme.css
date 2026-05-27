@@ -1,0 +1,56 @@
+:root {
+  --bg: #0f0f10;
+  --bg-soft: #121214;
+  --sidebar: #141414;
+  --card: #1c1c1c;
+  --card-hover: #252525;
+  --border: #2e2e2e;
+
+  --red: #d10000;
+  --red-hover: #ff1a1a;
+  --red-dark: #8b0000;
+  --red-glow: rgba(209, 0, 0, 0.25);
+
+  --green: #43a047;
+  --yellow: #fb8c00;
+  --blue: #1e88e5;
+
+  --text: #ffffff;
+  --text-secondary: #b3b3b3;
+  --muted: #777777;
+
+  --radius: 16px;
+  --transition: all .25s ease;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(209,0,0,.12), transparent 35%),
+    radial-gradient(circle at bottom right, rgba(209,0,0,.08), transparent 35%),
+    var(--bg);
+  color: var(--text);
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #111;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 999px;
+}

@@ -1,0 +1,57 @@
+.stocktel-app {
+  min-height: 100vh;
+  display: flex;
+  background: transparent;
+}
+
+.stocktel-main {
+  flex: 1;
+  min-width: 0;
+  padding: 22px;
+}
+
+.stocktel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.stocktel-title h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.stocktel-title p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.stocktel-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.stocktel-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+@media(max-width: 768px) {
+  .stocktel-main {
+    padding: 16px 14px 90px;
+  }
+
+  .stocktel-header {
+    align-items: flex-start;
+    gap: 12px;
+    flex-direction: column;
+  }
+
+  .stocktel-title h1 {
+    font-size: 20px;
+  }
+}

@@ -1,24 +1,8 @@
-/* src/styles/global.css */
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
-*{box-sizing:border-box;margin:0;padding:0;}
-html{font-size:16px;}
-body{background:#141414;font-family:'Inter',sans-serif;-webkit-text-size-adjust:100%;}
-::-webkit-scrollbar{width:4px;height:4px;}
-::-webkit-scrollbar-track{background:#1c1c1c;}
-::-webkit-scrollbar-thumb{background:#333;border-radius:4px;}
-button{cursor:pointer;border:none;font-family:'Inter',sans-serif;}
-input,select,textarea{font-family:'Inter',sans-serif;border:none;outline:none;}
-@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-@keyframes slideUp{from{opacity:0;transform:translateY(100%)}to{opacity:1;transform:none}}
-@keyframes spin{to{transform:rotate(360deg)}}
-@keyframes slideLeft{from{opacity:0;transform:translateX(-100%)}to{opacity:1;transform:none}}
-.fi{animation:fadeIn .2s ease}
-.su{animation:slideUp .25s ease}
-.sl{animation:slideLeft .25s ease}
-
-
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* Utilities */
-.fi { animation: fadeIn 0.2s ease; }
+@import "./theme.css";
+@import "./layout.css";
+@import "./sidebar.css";
+@import "./cards.css";
+@import "./tables.css";
+@import "./buttons.css";
+@import "./mobile.css";
+@import "./animations.css";
