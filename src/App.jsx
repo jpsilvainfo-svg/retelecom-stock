@@ -61,7 +61,8 @@ const ALL_MODULES=[
   {k:"log",l:"Logs do Sistema",icon:"📋",group:"admin"},
   {k:"ajuda",l:"Ajuda / Docs",icon:"❓",group:"admin"},
   {k:"manut",l:"Manutenção",icon:"🔩",group:"mecanico"},
-  {k:"ponto",l:"Ponto Eletrônico",icon:"🕐",group:"operacional"}
+  {k:"ponto",l:"Ponto Eletrônico",icon:"🕐",group:"operacional"},
+  {k:"diag",l:"Diagnóstico do Sistema",icon:"🛡️",group:"admin"}
 ];
 const DEFAULT_PERMS={
   superadmin:ALL_MODULES.map(m=>m.k),
@@ -654,6 +655,255 @@ function BottomNav({page,setPage,user,onMenuOpen}){
 }
 
 
+/* ── DIAGNÓSTICO DO SISTEMA ── */
+const DIAG_MODULES=[
+  {key:"re_stock",label:"Estoque Base",icon:"📦"},
+  {key:"re_tstock",label:"Estoque Técnico",icon:"🎒"},
+  {key:"re_os",label:"Ordens de Serviço",icon:"🔧"},
+  {key:"re_pontos",label:"Ponto Eletrônico",icon:"🕐"},
+  {key:"re_veiculos",label:"Frota",icon:"🚗"},
+  {key:"re_abast",label:"Abastecimentos",icon:"⛽"},
+  {key:"re_returns",label:"Devoluções",icon:"↩️"},
+  {key:"re_nf",label:"Entradas NF",icon:"📥"},
+  {key:"re_users",label:"Usuários",icon:"👥"},
+  {key:"re_sol",label:"Solicitações",icon:"📋"},
+  {key:"re_logs",label:"Logs",icon:"🗒️"},
+  {key:"re_checkouts",label:"Checklist Frota",icon:"✅"},
+  {key:"re_pneus",label:"Pneus",icon:"🔄"},
+  {key:"re_docs_veic",label:"Docs Veículos",icon:"📄"},
+  {key:"re_manut_os",label:"Manutenção OS",icon:"🔩"},
+  {key:"re_escalas",label:"Escalas",icon:"📅"},
+  {key:"re_folgas",label:"Folgas",icon:"🌴"},
+  {key:"re_cats",label:"Categorias",icon:"🏷️"},
+  {key:"re_produtos",label:"Produtos",icon:"🔩"},
+];
+
+function DiagnosticoPage({currentUser,isMobile}){
+  const isAdm=currentUser?.role==="admin"||currentUser?.role==="superadmin";
+  const[connStatus,setConnStatus]=useState("idle");// idle|checking|ok|error
+  const[ping,setPing]=useState(null);
+  const[results,setResults]=useState([]);
+  const[checking,setChecking]=useState(false);
+  const[syncing,setSyncing]=useState(false);
+  const[syncingKey,setSyncingKey]=useState(null);
+  const[syncLog,setSyncLog]=useState([]);
+  const[showLog,setShowLog]=useState(false);
+  const[lastCheck,setLastCheck]=useState(null);
+
+  if(!isAdm)return<div style={{padding:40,textAlign:"center",color:C.red,fontSize:15,fontWeight:700}}>🔒 Acesso restrito a administradores.</div>;
+
+  const testConn=async()=>{
+    setConnStatus("checking");
+    const t0=Date.now();
+    try{
+      const r=await sbGet("re_stock");
+      setPing(Date.now()-t0);
+      setConnStatus(r!==null?"ok":"warn");
+    }catch{setConnStatus("error");setPing(null);}
+  };
+
+  const checkAll=async()=>{
+    setChecking(true);
+    setConnStatus("checking");
+    const t0=Date.now();
+    const rows=[];
+    for(const mod of DIAG_MODULES){
+      let localCount=0,localTs="0",localRaw=null;
+      try{localRaw=localStorage.getItem(mod.key);localTs=localStorage.getItem(mod.key+"__ts")||"0";const d=localRaw?JSON.parse(localRaw):null;localCount=Array.isArray(d)?d.length:(d&&typeof d==="object"?1:0);}catch{}
+      try{
+        const remote=await sbGet(mod.key);
+        const remoteCount=remote?( Array.isArray(remote.value)?remote.value.length:(remote.value&&typeof remote.value==="object"?1:0) ):0;
+        const remoteTs=remote?.updated_at||"0";
+        let st="ok";
+        if(!remote||remote.value===null)st="sem_dados";
+        else if(localTs>remoteTs)st="desatualizado";
+        rows.push({...mod,localCount,remoteCount,localTs,remoteTs,st});
+      }catch{rows.push({...mod,localCount,remoteCount:0,localTs,remoteTs:"?",st:"erro"});}
+    }
+    setPing(Date.now()-t0);
+    setConnStatus("ok");
+    setResults(rows);
+    setLastCheck(new Date().toLocaleString("pt-BR"));
+    setChecking(false);
+  };
+
+  const syncOne=async(mod)=>{
+    setSyncingKey(mod.key);
+    try{
+      const raw=localStorage.getItem(mod.key);
+      if(!raw){setSyncLog(p=>[{key:mod.key,label:mod.label,result:"sem_dados_local",ts:new Date().toLocaleTimeString("pt-BR")},...p]);setSyncingKey(null);return;}
+      const data=JSON.parse(raw);
+      const ok=await sbSet(mod.key,data);
+      if(ok){const ts=new Date().toISOString();localStorage.setItem(mod.key+"__ts",ts);}
+      setSyncLog(p=>[{key:mod.key,label:mod.label,result:ok?"ok":"erro",ts:new Date().toLocaleTimeString("pt-BR")},...p]);
+    }catch{setSyncLog(p=>[{key:mod.key,label:mod.label,result:"erro",ts:new Date().toLocaleTimeString("pt-BR")},...p]);}
+    setSyncingKey(null);
+    setShowLog(true);
+  };
+
+  const syncAll=async()=>{
+    setSyncing(true);setSyncLog([]);setShowLog(true);
+    for(const mod of DIAG_MODULES){
+      setSyncingKey(mod.key);
+      try{
+        const raw=localStorage.getItem(mod.key);
+        if(!raw){setSyncLog(p=>[...p,{key:mod.key,label:mod.label,result:"skip",ts:new Date().toLocaleTimeString("pt-BR")}]);continue;}
+        const data=JSON.parse(raw);
+        const ok=await sbSet(mod.key,data);
+        if(ok){const ts=new Date().toISOString();localStorage.setItem(mod.key+"__ts",ts);}
+        setSyncLog(p=>[...p,{key:mod.key,label:mod.label,result:ok?"ok":"erro",ts:new Date().toLocaleTimeString("pt-BR")}]);
+      }catch{setSyncLog(p=>[...p,{key:mod.key,label:mod.label,result:"erro",ts:new Date().toLocaleTimeString("pt-BR")}]);}
+    }
+    setSyncingKey(null);setSyncing(false);
+    await checkAll();
+  };
+
+  const stColor={ok:C.grn,desatualizado:C.ylw,sem_dados:C.muted,erro:C.red,checking:"#60a5fa"};
+  const stLabel={ok:"✅ Sincronizado",desatualizado:"⚠️ Desatualizado",sem_dados:"⬜ Sem dados remoto",erro:"❌ Erro",checking:"⏳..."};
+  const logColor={ok:C.grn,erro:C.red,skip:C.muted,sem_dados_local:C.ylw};
+
+  const okCount=results.filter(r=>r.st==="ok").length;
+  const errCount=results.filter(r=>r.st==="erro").length;
+  const desat=results.filter(r=>r.st==="desatualizado").length;
+
+  return<div style={{display:"flex",flexDirection:"column",gap:16}}>
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+      <div>
+        <div style={{fontSize:isMobile?17:22,fontWeight:800,color:C.txt,display:"flex",alignItems:"center",gap:8}}>🛡️ Diagnóstico do Sistema</div>
+        <div style={{fontSize:11,color:C.muted,marginTop:2}}>Painel exclusivo para administradores · Acesso restrito</div>
+      </div>
+      {lastCheck&&<div style={{fontSize:11,color:C.muted,background:C.surf,padding:"4px 10px",borderRadius:6,border:`1px solid ${C.bdr}`}}>Última verificação: {lastCheck}</div>}
+    </div>
+
+    {/* Status conexão */}
+    <Card style={{padding:isMobile?14:20,display:"flex",flexDirection:isMobile?"column":"row",alignItems:isMobile?"flex-start":"center",justifyContent:"space-between",gap:14,borderLeft:`4px solid ${connStatus==="ok"?C.grn:connStatus==="error"?C.red:connStatus==="checking"?"#60a5fa":C.bdr}`}}>
+      <div style={{display:"flex",alignItems:"center",gap:14}}>
+        <div style={{width:48,height:48,borderRadius:12,background:`${connStatus==="ok"?C.grn:connStatus==="error"?C.red:C.gold}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>
+          {connStatus==="ok"?"🟢":connStatus==="error"?"🔴":connStatus==="checking"?"⏳":"⚫"}
+        </div>
+        <div>
+          <div style={{fontSize:13,fontWeight:700,color:C.txt}}>Conexão com Supabase</div>
+          <div style={{fontSize:12,color:connStatus==="ok"?C.grn:connStatus==="error"?C.red:C.muted,fontWeight:600,marginTop:2}}>
+            {connStatus==="ok"?`Conectado · ${ping}ms`:connStatus==="error"?"Falha na conexão":connStatus==="checking"?"Verificando...":"Não testado"}
+          </div>
+          <div style={{fontSize:10,color:C.muted,marginTop:1}}>enwlwudxtxpebxqfzkku.supabase.co</div>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <Btn size="sm" color="ghost" outline onClick={testConn} disabled={connStatus==="checking"}>🔌 Testar Conexão</Btn>
+        <Btn size="sm" color="gold" onClick={checkAll} disabled={checking||syncing}>{checking?"⏳ Verificando...":"🔍 Verificar Todos"}</Btn>
+        <Btn size="sm" color="grn" onClick={syncAll} disabled={syncing||checking}>{syncing?"⏳ Sincronizando...":"☁️ Forçar Sincronização"}</Btn>
+      </div>
+    </Card>
+
+    {/* Resumo */}
+    {results.length>0&&<div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
+      {[
+        {label:"TOTAL MÓDULOS",value:results.length,icon:"🗃️",color:C.gold},
+        {label:"SINCRONIZADOS",value:okCount,icon:"✅",color:C.grn},
+        {label:"DESATUALIZADOS",value:desat,icon:"⚠️",color:C.ylw},
+        {label:"COM ERRO",value:errCount,icon:"❌",color:errCount>0?C.red:C.muted},
+      ].map((s,i)=>(
+        <Card key={i} style={{padding:"14px 16px",display:"flex",gap:10,alignItems:"center"}}>
+          <span style={{fontSize:22}}>{s.icon}</span>
+          <div>
+            <div style={{fontSize:8,fontWeight:700,color:C.muted,letterSpacing:".06em"}}>{s.label}</div>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:22,fontWeight:800,color:s.color}}>{s.value}</div>
+          </div>
+        </Card>
+      ))}
+    </div>}
+
+    {/* Tabela de módulos */}
+    {results.length>0&&<Card style={{padding:0,overflow:"hidden"}}>
+      <div style={{padding:"12px 18px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{fontSize:13,fontWeight:700,color:C.txt}}>Status por Módulo</span>
+        <span style={{fontSize:11,color:C.muted}}>{results.length} módulos verificados</span>
+      </div>
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse"}}>
+          <thead>
+            <tr style={{background:`${C.surf}88`}}>
+              {["MÓDULO","LOCAL","REMOTO","ÚLT. SYNC LOCAL","STATUS","AÇÃO"].map(h=>(
+                <th key={h} style={{padding:"8px 14px",textAlign:"left",fontSize:9,fontWeight:700,color:C.muted,letterSpacing:".06em",borderBottom:`1px solid ${C.bdr}`,whiteSpace:"nowrap"}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {results.map(r=>(
+              <tr key={r.key} style={{borderBottom:`1px solid ${C.bdr}18`,background:syncingKey===r.key?`${C.gold}11`:"transparent"}}>
+                <td style={{padding:"10px 14px",whiteSpace:"nowrap"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:16}}>{r.icon}</span>
+                    <div>
+                      <div style={{fontSize:12,fontWeight:600,color:C.txt}}>{r.label}</div>
+                      <div style={{fontSize:10,color:C.muted,fontFamily:"'JetBrains Mono',monospace"}}>{r.key}</div>
+                    </div>
+                  </div>
+                </td>
+                <td style={{padding:"10px 14px"}}>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:C.gold,fontSize:16}}>{r.localCount}</span>
+                  <span style={{fontSize:10,color:C.muted,marginLeft:4}}>registros</span>
+                </td>
+                <td style={{padding:"10px 14px"}}>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,color:r.remoteCount>0?C.blue:C.muted,fontSize:16}}>{r.remoteCount}</span>
+                  <span style={{fontSize:10,color:C.muted,marginLeft:4}}>registros</span>
+                </td>
+                <td style={{padding:"10px 14px"}}>
+                  <span style={{fontSize:10,color:C.muted,fontFamily:"'JetBrains Mono',monospace"}}>{r.localTs==="0"?"—":new Date(r.localTs).toLocaleString("pt-BR")}</span>
+                </td>
+                <td style={{padding:"10px 14px",whiteSpace:"nowrap"}}>
+                  <span style={{fontSize:11,fontWeight:700,color:stColor[r.st]||C.muted}}>{stLabel[r.st]||r.st}</span>
+                </td>
+                <td style={{padding:"10px 14px"}}>
+                  <Btn size="xs" color="ghost" outline onClick={()=>syncOne(r)} disabled={syncing||!!syncingKey}>
+                    {syncingKey===r.key?"⏳":"☁️ Sync"}
+                  </Btn>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>}
+
+    {/* Log de sincronização */}
+    {syncLog.length>0&&<Card style={{padding:0,overflow:"hidden"}}>
+      <div style={{padding:"10px 16px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}} onClick={()=>setShowLog(p=>!p)}>
+        <span style={{fontSize:13,fontWeight:700,color:C.txt}}>📋 Log de Sincronização ({syncLog.length})</span>
+        <span style={{fontSize:11,color:C.muted}}>{showLog?"▲ Recolher":"▼ Expandir"}</span>
+      </div>
+      {showLog&&<div style={{maxHeight:240,overflowY:"auto"}}>
+        {syncLog.map((l,i)=>(
+          <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 16px",borderBottom:`1px solid ${C.bdr}18`,background:i%2===0?"transparent":`${C.surf}44`}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{color:logColor[l.result]||C.muted,fontSize:14}}>{l.result==="ok"?"✅":l.result==="erro"?"❌":l.result==="skip"?"⬛":"⚠️"}</span>
+              <span style={{fontSize:12,color:C.txt}}>{l.label}</span>
+              <span style={{fontSize:10,color:C.muted,fontFamily:"'JetBrains Mono',monospace"}}>{l.key}</span>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:11,fontWeight:700,color:logColor[l.result]||C.muted}}>{l.result==="ok"?"Enviado":l.result==="erro"?"Falhou":l.result==="skip"?"Pulado":"Sem dado local"}</span>
+              <span style={{fontSize:10,color:C.muted}}>{l.ts}</span>
+            </div>
+          </div>
+        ))}
+      </div>}
+    </Card>}
+
+    {/* Estado inicial */}
+    {results.length===0&&!checking&&<Card style={{padding:40,textAlign:"center"}}>
+      <div style={{fontSize:40,marginBottom:12}}>🔬</div>
+      <div style={{fontSize:15,fontWeight:700,color:C.txt,marginBottom:8}}>Painel de Diagnóstico</div>
+      <div style={{fontSize:13,color:C.muted,marginBottom:20,maxWidth:400,margin:"0 auto 20px"}}>Clique em "Verificar Todos" para testar a conexão e checar o status de sincronização de cada módulo do sistema.</div>
+      <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
+        <Btn color="gold" onClick={checkAll}>🔍 Verificar Todos</Btn>
+        <Btn color="grn" outline onClick={syncAll}>☁️ Forçar Sincronização Completa</Btn>
+      </div>
+    </Card>}
+  </div>;
+}
+
 /* ── DASHBOARD ── */
 /* ── DASHBOARD ── */
 function Dashboard({stock,tstock,users,os,returns,logs,setPage,isMobile,currentUser,pendSol,veiculos=[],abastecimentos=[]}){
@@ -837,7 +1087,7 @@ function Dashboard({stock,tstock,users,os,returns,logs,setPage,isMobile,currentU
         <Card style={{padding:14}}>
           <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:12}}>Ações Rápidas</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            {[{icon:"📥",label:"Nova Entrada (NF)",p:"nf"},{icon:"🚀",label:"Liberar Material",p:"dist"},{icon:"↩️",label:"Devoluções",p:"dev"},{icon:"🔧",label:"Nova OS",p:"os"},{icon:"📦",label:"Ver Estoque",p:"estoque"},{icon:"📊",label:"Relatórios",p:"rel"}].map((a,i)=>(
+            {[{icon:"📥",label:"Nova Entrada (NF)",p:"nf"},{icon:"🚀",label:"Liberar Material",p:"dist"},{icon:"↩️",label:"Devoluções",p:"dev"},{icon:"🔧",label:"Nova OS",p:"os"},{icon:"📦",label:"Ver Estoque",p:"estoque"},{icon:"🛡️",label:"Diagnóstico",p:"diag"}].map((a,i)=>(
               <div key={i} onClick={()=>setPage(a.p)} style={{display:"flex",alignItems:"center",gap:10,padding:"12px",background:C.surf,borderRadius:10,cursor:"pointer",border:`1px solid ${C.bdr}`}}>
                 <span style={{fontSize:22}}>{a.icon}</span>
                 <span style={{fontSize:12,color:C.txt2,lineHeight:1.3,fontWeight:500}}>{a.label}</span>
@@ -972,7 +1222,7 @@ function Dashboard({stock,tstock,users,os,returns,logs,setPage,isMobile,currentU
           <Card style={{padding:18}}>
             <div style={{fontSize:14,fontWeight:700,color:C.txt,marginBottom:14}}>Ações Rápidas</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-              {[{icon:"📥",label:"Nova Entrada",p:"nf"},{icon:"🚀",label:"Liberar Material",p:"dist"},{icon:"↩️",label:"Devolução",p:"dev"},{icon:"🔧",label:"Nova OS",p:"os"},{icon:"📦",label:"Estoque Base",p:"estoque"},{icon:"📊",label:"Relatórios",p:"rel"}].map((a,i)=>(
+              {[{icon:"📥",label:"Nova Entrada",p:"nf"},{icon:"🚀",label:"Liberar Material",p:"dist"},{icon:"↩️",label:"Devolução",p:"dev"},{icon:"🔧",label:"Nova OS",p:"os"},{icon:"📦",label:"Estoque Base",p:"estoque"},{icon:"🛡️",label:"Diagnóstico",p:"diag"}].map((a,i)=>(
                 <div key={i} onClick={()=>setPage(a.p)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5,padding:"12px 6px",background:C.surf,borderRadius:8,cursor:"pointer",border:`1px solid ${C.bdr}`,textAlign:"center"}}>
                   <span style={{fontSize:20}}>{a.icon}</span>
                   <span style={{fontSize:10,color:C.muted2,lineHeight:1.3}}>{a.label}</span>
@@ -6381,6 +6631,7 @@ function AppInner(){
     ponto:<PontoPage pontos={pontos} setPontos={setPontos} pontoConfig={pontoConfig} setPontoConfig={setPontoConfig} pontoSolicits={pontoSolicits} setPontoSolicits={setPontoSolicits} escalas={escalas} setEscalas={setEscalas} folgas={folgas} setFolgas={setFolgas} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} showToast={showToast}/>,
     frota:<FrotaPage veiculos={veiculos} setVeiculos={setVeiculos} abastecimentos={abastecimentos} setAbastecimentos={setAbastecimentos} checkouts={checkouts} setCheckouts={setCheckouts} pneus={pneus} setPneus={setPneus} docsVeic={docsVeic} setDocsVeic={setDocsVeic} manutOS={manutOS} manutSols={manutSols} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
     manut:<ManutencaoPage manutSols={manutSols} setManutSols={setManutSols} manutOS={manutOS} setManutOS={setManutOS} veiculos={veiculos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} abastecimentos={abastecimentos} pneus={pneus}/>,
+    diag:<DiagnosticoPage currentUser={user} isMobile={isMobile}/>,
   };
 
   return <div style={{height:"100dvh",background:C.bg,color:C.txt,display:"flex",overflow:"hidden"}}>
