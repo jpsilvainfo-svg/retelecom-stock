@@ -61,14 +61,15 @@ const ALL_MODULES=[
   {k:"log",l:"Logs do Sistema",icon:"📋",group:"admin"},
   {k:"ajuda",l:"Ajuda / Docs",icon:"❓",group:"admin"},
   {k:"manut",l:"Manutenção",icon:"🔩",group:"mecanico"},
+  {k:"ponto",l:"Ponto Eletrônico",icon:"🕐",group:"operacional"}
 ];
 const DEFAULT_PERMS={
   superadmin:ALL_MODULES.map(m=>m.k),
   admin:ALL_MODULES.map(m=>m.k),
-  estoque:["dash","os","estoque","kit","dist","dev","sol","rel","ajuda"],
-  tecnico:["dash","os","frota","kit","dev","sol","rel","ajuda"],
+  estoque:["dash","os","estoque","kit","dist","dev","sol","rel","ajuda","ponto"],
+  tecnico:["dash","os","frota","kit","dev","sol","rel","ajuda","ponto"],
   financeiro:["dash","nf","rel","email","os","dev","log","ajuda"],
-  mecanico:["dash","manut","frota","ajuda"],
+  mecanico:["dash","manut","frota","ajuda","ponto"],
   superadmin:ALL_MODULES.map(m=>m.k),
 };
 const MASTER_LOGIN="stocktelmaster";
@@ -5120,6 +5121,589 @@ function HelpPage({currentUser,isMobile}){
   </div>;
 }
 
+
+/* ── PONTO ELETRÔNICO ── */
+function PontoPage({pontos,setPontos,pontoConfig,setPontoConfig,pontoSolicits,setPontoSolicits,users,currentUser,addLog,isMobile,showToast}){
+  const isAdm=["admin","superadmin"].includes(currentUser.role);
+  const hoje=new Date().toISOString().slice(0,10);
+
+  // ── Haversine ──
+  const haversine=(lat1,lng1,lat2,lng2)=>{
+    const R=6371000,toRad=d=>d*Math.PI/180;
+    const dLat=toRad(lat2-lat1),dLng=toRad(lng2-lng1);
+    const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+    return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  };
+
+  // ── Estado local ──
+  const[geoLoading,setGeoLoading]=useState(false);
+  const[geoErro,setGeoErro]=useState("");
+  const[tab,setTab]=useState(isAdm?"admin":"meu");
+  const[modalSolicit,setModalSolicit]=useState(false);
+  const[motivoSolicit,setMotivoSolicit]=useState("");
+  const[tipoSolicit,setTipoSolicit]=useState("");
+  const[modalConfig,setModalConfig]=useState(false);
+  const[formConfig,setFormConfig]=useState({...pontoConfig});
+  const[filtroUser,setFiltroUser]=useState("");
+  const[filtroDt,setFiltroDt]=useState(hoje);
+  const[modalEdit,setModalEdit]=useState(null);
+
+  // ── Helpers ──
+  const TIPOS={
+    entrada:   {l:"Entrada",      icon:"🟢",geo:true,  cor:C.grn},
+    saida_almoco:{l:"Saída Almoço",icon:"🟡",geo:false, cor:C.ylw},
+    volta_almoco:{l:"Volta Almoço",icon:"🔵",geo:false, cor:C.blue},
+    saida:     {l:"Saída",        icon:"🔴",geo:true,  cor:C.red},
+  };
+  const SEQUENCIA=["entrada","saida_almoco","volta_almoco","saida"];
+
+  const pontosHoje=(uid)=>pontos.filter(p=>p.funcionarioId===uid&&p.dt.startsWith(hoje));
+  const ultimoTipo=(uid)=>{
+    const ph=pontosHoje(uid);
+    if(!ph.length)return null;
+    return ph[ph.length-1].tipo;
+  };
+  const proximoTipo=(uid)=>{
+    const u=ultimoTipo(uid);
+    if(!u)return "entrada";
+    const idx=SEQUENCIA.indexOf(u);
+    if(idx>=SEQUENCIA.length-1)return null;
+    return SEQUENCIA[idx+1];
+  };
+  const fmtHora=(isoStr)=>{
+    if(!isoStr)return "--:--";
+    const d=new Date(isoStr);
+    return d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+  };
+  const calcHoras=(uid)=>{
+    const ph=pontosHoje(uid);
+    const ent=ph.find(p=>p.tipo==="entrada");
+    const sai=ph.find(p=>p.tipo==="saida");
+    if(!ent||!sai)return null;
+    const ms=new Date(sai.dt)-new Date(ent.dt);
+    const alm_s=ph.find(p=>p.tipo==="saida_almoco");
+    const alm_v=ph.find(p=>p.tipo==="volta_almoco");
+    let almMs=0;
+    if(alm_s&&alm_v) almMs=new Date(alm_v.dt)-new Date(alm_s.dt);
+    const trabMs=ms-almMs;
+    const h=Math.floor(trabMs/3600000),m=Math.floor((trabMs%3600000)/60000);
+    return `${h}h${m.toString().padStart(2,"0")}m`;
+  };
+
+  // ── Bater ponto (com geo quando necessário) ──
+  const baterPonto=(tipo)=>{
+    const cfg=pontoConfig;
+    const precisaGeo=TIPOS[tipo].geo;
+    if(!precisaGeo){
+      // Salva sem geo
+      const reg={id:uid(),funcionarioId:currentUser.id,funcionarioNome:currentUser.name,tipo,dt:new Date().toISOString(),lat:null,lng:null,distancia:null,localValido:true,aprovado:true};
+      setPontos(p=>[...p,reg]);
+      addLog(currentUser.name,"Ponto",`${TIPOS[tipo].l} registrada`);
+      showToast(`${TIPOS[tipo].icon} ${TIPOS[tipo].l} registrada!`,"success");
+      return;
+    }
+    // Precisa de geo
+    if(!cfg.lat||!cfg.lng){
+      showToast("Geolocalização da empresa não configurada. Contate o administrador.","error");
+      return;
+    }
+    if(!navigator.geolocation){
+      showToast("Navegador não suporta geolocalização.","error");
+      return;
+    }
+    setGeoLoading(true);
+    setGeoErro("");
+    navigator.geolocation.getCurrentPosition(
+      (pos)=>{
+        setGeoLoading(false);
+        const {latitude:ulat,longitude:ulng,accuracy}=pos.coords;
+        const dist=haversine(parseFloat(cfg.lat),parseFloat(cfg.lng),ulat,ulng);
+        const valido=dist<=parseFloat(cfg.raio);
+        if(valido){
+          const reg={id:uid(),funcionarioId:currentUser.id,funcionarioNome:currentUser.name,tipo,dt:new Date().toISOString(),lat:ulat,lng:ulng,distancia:Math.round(dist),localValido:true,aprovado:true,accuracy:Math.round(accuracy)};
+          setPontos(p=>[...p,reg]);
+          addLog(currentUser.name,"Ponto",`${TIPOS[tipo].l} — ${Math.round(dist)}m da empresa`);
+          showToast(`${TIPOS[tipo].icon} ${TIPOS[tipo].l} registrada! (${Math.round(dist)}m da empresa)`,"success");
+        } else {
+          setGeoErro(`Você está a ${Math.round(dist)}m da empresa. Limite: ${cfg.raio}m. Solicite aprovação manual.`);
+          setTipoSolicit(tipo);
+          showToast(`Fora do raio permitido (${Math.round(dist)}m). Solicite aprovação.`,"warning");
+        }
+      },
+      (err)=>{
+        setGeoLoading(false);
+        const msgs={1:"Permissão de localização negada.",2:"Posição indisponível.",3:"Tempo esgotado."};
+        const msg=msgs[err.code]||"Erro de geolocalização.";
+        setGeoErro(msg+" Solicite aprovação manual se necessário.");
+        setTipoSolicit(tipo);
+        showToast(msg,"error");
+      },
+      {enableHighAccuracy:true,timeout:10000,maximumAge:0}
+    );
+  };
+
+  const enviarSolicit=()=>{
+    if(!motivoSolicit.trim()){showToast("Descreva o motivo.","warning");return;}
+    const sol={id:uid(),funcionarioId:currentUser.id,funcionarioNome:currentUser.name,tipo:tipoSolicit,dt:new Date().toISOString(),motivo:motivoSolicit.trim(),status:"pendente",adminNotif:true};
+    setPontoSolicits(p=>[...p,sol]);
+    addLog(currentUser.name,"Ponto Solicitação",`${TIPOS[tipoSolicit]?.l||tipoSolicit} — ${motivoSolicit.slice(0,40)}`);
+    showToast("Solicitação enviada! O administrador será notificado.","success");
+    setModalSolicit(false);setMotivoSolicit("");setTipoSolicit("");setGeoErro("");
+  };
+
+  const aprovarSolicit=(sol,aprovar)=>{
+    // Aprova: cria registro de ponto; rejeita: apenas atualiza status
+    if(aprovar){
+      const reg={id:uid(),funcionarioId:sol.funcionarioId,funcionarioNome:sol.funcionarioNome,tipo:sol.tipo,dt:sol.dt,lat:null,lng:null,distancia:null,localValido:false,aprovado:true,aprovadoPor:currentUser.name,solicitacaoId:sol.id};
+      setPontos(p=>[...p,reg]);
+    }
+    setPontoSolicits(p=>p.map(s=>s.id===sol.id?{...s,status:aprovar?"aprovado":"rejeitado",resolvidoPor:currentUser.name,resolvidoEm:new Date().toISOString()}:s));
+    addLog(currentUser.name,"Ponto Admin",`Solicitação ${aprovar?"aprovada":"rejeitada"}: ${sol.funcionarioNome} — ${TIPOS[sol.tipo]?.l}`);
+    showToast(`Solicitação ${aprovar?"aprovada":"rejeitada"}!`,aprovar?"success":"warning");
+  };
+
+  const salvarConfig=()=>{
+    if(!formConfig.lat||!formConfig.lng){showToast("Informe latitude e longitude.","warning");return;}
+    setPontoConfig({...formConfig});
+    setModalConfig(false);
+    showToast("Configuração salva!","success");
+    addLog(currentUser.name,"Ponto Config",`Raio: ${formConfig.raio}m | Empresa: ${formConfig.nome}`);
+  };
+
+  const getMinhaLocalizacao=()=>{
+    if(!navigator.geolocation){showToast("Navegador não suporta geo.","error");return;}
+    navigator.geolocation.getCurrentPosition(
+      pos=>{ setFormConfig(f=>({...f,lat:pos.coords.latitude.toFixed(7),lng:pos.coords.longitude.toFixed(7)})); showToast("Localização obtida!","success"); },
+      ()=>showToast("Não foi possível obter localização.","error"),
+      {enableHighAccuracy:true,timeout:8000}
+    );
+  };
+
+  // Pendentes para notif
+  const solicsPendentes=pontoSolicits.filter(s=>s.status==="pendente");
+  const meuProximo=proximoTipo(currentUser.id);
+  const meusPontosHoje=pontosHoje(currentUser.id);
+
+  // Usuários com acesso ao ponto
+  const usersComPonto=users.filter(u=>["tecnico","mecanico","estoque","admin","superadmin"].includes(u.role));
+
+  return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
+    {/* Header */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+      <div>
+        <h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>🕐 Ponto Eletrônico</h1>
+        <p style={{fontSize:12,color:C.muted}}>
+          {new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})}
+        </p>
+      </div>
+      {isAdm&&<div style={{display:"flex",gap:8}}>
+        {solicsPendentes.length>0&&<div style={{background:C.redD,border:`1px solid ${C.red}55`,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,color:C.red}}>
+          🔔 {solicsPendentes.length} solicit.
+        </div>}
+        <Btn size="sm" color="ghost" outline onClick={()=>{setFormConfig({...pontoConfig});setModalConfig(true);}}>⚙️ Configurar</Btn>
+      </div>}
+    </div>
+
+    {/* Tabs */}
+    <div style={{display:"flex",borderBottom:`1px solid ${C.bdr}`,gap:0}}>
+      {[
+        {k:"meu",l:"🕐 Meu Ponto"},
+        ...(isAdm?[{k:"admin",l:`📋 Gestão${solicsPendentes.length>0?` (${solicsPendentes.length})`:""}`,},{k:"config_view",l:"📊 Resumo Equipe"}]:[]),
+      ].map(t=>(
+        <div key={t.k} onClick={()=>setTab(t.k)} style={{padding:"9px 16px",cursor:"pointer",fontSize:13,fontWeight:600,borderBottom:`2px solid ${tab===t.k?C.gold:"transparent"}`,color:tab===t.k?C.gold:C.muted,whiteSpace:"nowrap"}}>{t.l}</div>
+      ))}
+    </div>
+
+    {/* ── MEU PONTO ── */}
+    {tab==="meu"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+
+      {/* Relógio */}
+      <Card style={{padding:20,textAlign:"center",background:"linear-gradient(135deg,#161616,#1a1a1a)"}}>
+        <RelogioAtual/>
+        <div style={{fontSize:12,color:C.muted,marginTop:6}}>
+          {meuProximo?`Próximo: ${TIPOS[meuProximo]?.l}`:meusPontosHoje.find(p=>p.tipo==="saida")?"✅ Jornada encerrada":"Sem pontos hoje"}
+        </div>
+        {meusPontosHoje.length>0&&calcHoras(currentUser.id)&&(
+          <div style={{marginTop:8,display:"inline-block",background:`${C.grn}22`,border:`1px solid ${C.grn}44`,borderRadius:8,padding:"4px 14px",fontSize:13,fontWeight:700,color:C.grn}}>
+            ⏱ Trabalhadas: {calcHoras(currentUser.id)}
+          </div>
+        )}
+      </Card>
+
+      {/* Botões de ponto */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        {SEQUENCIA.map(tipo=>{
+          const info=TIPOS[tipo];
+          const jaBateu=meusPontosHoje.some(p=>p.tipo===tipo);
+          const ehProximo=meuProximo===tipo;
+          const bloqueado=!ehProximo||jaBateu;
+          const reg=meusPontosHoje.find(p=>p.tipo===tipo);
+          return <div key={tipo} onClick={()=>{if(!bloqueado&&!geoLoading)baterPonto(tipo);}}
+            style={{padding:16,borderRadius:12,border:`2px solid ${jaBateu?info.cor:ehProximo?`${info.cor}88`:C.bdr2}`,
+              background:jaBateu?`${info.cor}18`:ehProximo?`${info.cor}10`:"transparent",
+              cursor:bloqueado?"not-allowed":"pointer",opacity:bloqueado&&!jaBateu?0.45:1,
+              transition:"all 0.2s",display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+            <div style={{fontSize:28}}>{info.icon}</div>
+            <div style={{fontSize:13,fontWeight:700,color:jaBateu?info.cor:ehProximo?info.cor:C.muted}}>{info.l}</div>
+            {jaBateu&&reg&&<div style={{fontSize:11,color:info.cor,fontFamily:"'JetBrains Mono',monospace",fontWeight:700}}>{fmtHora(reg.dt)}</div>}
+            {jaBateu&&reg&&reg.distancia!==null&&<div style={{fontSize:10,color:C.muted}}>{reg.distancia}m</div>}
+            {ehProximo&&!jaBateu&&!geoLoading&&<div style={{fontSize:10,color:info.cor,fontWeight:600}}>Toque para registrar</div>}
+            {ehProximo&&!jaBateu&&geoLoading&&<div style={{fontSize:10,color:C.ylw}}>📡 Buscando localização...</div>}
+          </div>;
+        })}
+      </div>
+
+      {/* Erro geo + solicitar */}
+      {geoErro&&<Card style={{padding:14,border:`1px solid ${C.red}55`,background:C.redD}}>
+        <div style={{fontSize:13,color:C.red,fontWeight:600,marginBottom:10}}>⚠️ {geoErro}</div>
+        <Btn color="gold" onClick={()=>{setModalSolicit(true);}}>📝 Solicitar Aprovação Manual</Btn>
+      </Card>}
+
+      {/* Histórico do dia */}
+      {meusPontosHoje.length>0&&<Card style={{padding:0,overflow:"hidden"}}>
+        <div style={{padding:"10px 16px",background:C.surf,borderBottom:`1px solid ${C.bdr}`,fontSize:12,fontWeight:700,color:C.gold}}>📋 Registros de Hoje</div>
+        {meusPontosHoje.map((p,i)=>(
+          <div key={p.id} style={{padding:"10px 16px",borderBottom:i<meusPontosHoje.length-1?`1px solid ${C.bdr}18`:"none",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:18}}>{TIPOS[p.tipo]?.icon}</span>
+              <div>
+                <div style={{fontSize:13,fontWeight:600,color:C.txt}}>{TIPOS[p.tipo]?.l}</div>
+                <div style={{fontSize:10,color:C.muted,fontFamily:"'JetBrains Mono',monospace"}}>{fmtHora(p.dt)}</div>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              {p.localValido?<Bdg color="grn">✅ Válido</Bdg>:<Bdg color="ylw">⚠️ Manual</Bdg>}
+              {p.distancia!==null&&<span style={{fontSize:11,color:C.muted}}>{p.distancia}m</span>}
+              {p.aprovadoPor&&<span style={{fontSize:10,color:C.muted}}>por {p.aprovadoPor}</span>}
+            </div>
+          </div>
+        ))}
+      </Card>}
+
+      {/* Histórico semana */}
+      <Card style={{padding:16}}>
+        <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:12}}>📅 Histórico da Semana</div>
+        {(()=>{
+          const dias=[];
+          for(let i=6;i>=0;i--){
+            const d=new Date();d.setDate(d.getDate()-i);
+            const ds=d.toISOString().slice(0,10);
+            const dp=pontos.filter(p=>p.funcionarioId===currentUser.id&&p.dt.startsWith(ds));
+            if(dp.length>0||i===0) dias.push({ds,dp,d});
+          }
+          return dias.map(({ds,dp,d})=>{
+            const ent=dp.find(p=>p.tipo==="entrada");
+            const sai=dp.find(p=>p.tipo==="saida");
+            const isHoje=ds===hoje;
+            return <div key={ds} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.bdr}18`}}>
+              <div>
+                <div style={{fontSize:12,fontWeight:isHoje?700:400,color:isHoje?C.gold:C.txt}}>
+                  {d.toLocaleDateString("pt-BR",{weekday:"short",day:"2-digit",month:"2-digit"})}
+                  {isHoje&&<Bdg color="gold" style={{marginLeft:6}}>Hoje</Bdg>}
+                </div>
+              </div>
+              <div style={{display:"flex",gap:8,fontSize:11,fontFamily:"'JetBrains Mono',monospace",color:C.muted}}>
+                {ent?<span style={{color:C.grn}}>▶ {fmtHora(ent.dt)}</span>:<span>▶ --:--</span>}
+                {sai?<span style={{color:C.red}}>■ {fmtHora(sai.dt)}</span>:<span>■ --:--</span>}
+                {ent&&sai&&<span style={{color:C.grn,fontWeight:700}}>⏱{calcHoras(currentUser.id)||"?"}</span>}
+                {dp.length===0&&<span style={{color:C.muted}}>Sem registros</span>}
+              </div>
+            </div>;
+          });
+        })()}
+      </Card>
+    </div>}
+
+    {/* ── GESTÃO ADMIN ── */}
+    {tab==="admin"&&isAdm&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+
+      {/* Solicitações pendentes */}
+      {solicsPendentes.length>0&&<div>
+        <div style={{fontSize:13,fontWeight:700,color:C.red,marginBottom:8}}>🔔 Solicitações Pendentes ({solicsPendentes.length})</div>
+        {solicsPendentes.map(s=>(
+          <Card key={s.id} style={{padding:14,marginBottom:8,border:`1px solid ${C.red}44`,background:C.redD}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginBottom:6}}>
+                  <span style={{fontWeight:700,color:C.txt}}>{s.funcionarioNome}</span>
+                  <Bdg color="red">{TIPOS[s.tipo]?.l}</Bdg>
+                  <span style={{fontSize:11,color:C.muted,fontFamily:"'JetBrains Mono',monospace"}}>{new Date(s.dt).toLocaleString("pt-BR")}</span>
+                </div>
+                <div style={{fontSize:12,color:C.txt2,background:C.surf,borderRadius:6,padding:"6px 10px"}}>📝 {s.motivo}</div>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0}}>
+                <Btn size="xs" color="grn" onClick={()=>aprovarSolicit(s,true)}>✅ Aprovar</Btn>
+                <Btn size="xs" color="red" outline onClick={()=>aprovarSolicit(s,false)}>✕ Rejeitar</Btn>
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>}
+
+      {/* Filtros */}
+      <Card style={{padding:14}}>
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10}}>
+          <Sel label="Funcionário" value={filtroUser} onChange={setFiltroUser}
+            options={[{value:"",label:"— Todos —"},...usersComPonto.map(u=>({value:u.id,label:`${u.name} (${u.role})`}))]}/>
+          <Inp label="Data" value={filtroDt} onChange={setFiltroDt} type="date"/>
+        </div>
+      </Card>
+
+      {/* Lista de registros */}
+      {(()=>{
+        const filtered=pontos.filter(p=>
+          p.dt.startsWith(filtroDt)&&
+          (filtroUser?p.funcionarioId===filtroUser:true)
+        ).sort((a,b)=>new Date(b.dt)-new Date(a.dt));
+        if(!filtered.length) return <Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted}}>Nenhum registro para este filtro.</span></Card>;
+        return <Card style={{padding:0,overflow:"hidden"}}>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <THead cols={["Funcionário","Tipo","Horário","Local","Dist.","Status",""]}/>
+              <tbody>
+                {filtered.map(p=>(
+                  <TRow key={p.id} cells={[
+                    <span style={{fontWeight:600,color:C.txt,fontSize:12}}>{p.funcionarioNome}</span>,
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <span>{TIPOS[p.tipo]?.icon}</span>
+                      <span style={{fontSize:12,color:TIPOS[p.tipo]?.cor}}>{TIPOS[p.tipo]?.l}</span>
+                    </div>,
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:C.txt}}>{fmtHora(p.dt)}</span>,
+                    p.lat?<span style={{fontSize:10,color:C.muted}}>{parseFloat(p.lat).toFixed(4)},{parseFloat(p.lng).toFixed(4)}</span>:<span style={{color:C.muted,fontSize:11}}>—</span>,
+                    p.distancia!==null?<span style={{fontSize:12,color:p.distancia<=parseInt(pontoConfig.raio)?C.grn:C.red}}>{p.distancia}m</span>:<span style={{color:C.muted}}>—</span>,
+                    p.localValido?<Bdg color="grn">✅ Geo</Bdg>:p.aprovado?<Bdg color="ylw">👤 Manual</Bdg>:<Bdg color="red">❌</Bdg>,
+                    isAdm?<button onClick={()=>setModalEdit(p)} style={{background:"transparent",border:"none",cursor:"pointer",color:C.muted,fontSize:14}}>✏️</button>:null,
+                  ]}/>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>;
+      })()}
+
+      {/* Histórico de solicitações */}
+      {pontoSolicits.filter(s=>s.status!=="pendente").length>0&&<>
+        <div style={{fontSize:13,fontWeight:700,color:C.txt,marginTop:4}}>📋 Histórico de Solicitações</div>
+        {pontoSolicits.filter(s=>s.status!=="pendente").slice(0,10).map(s=>(
+          <Card key={s.id} style={{padding:12,marginBottom:6}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+              <div>
+                <span style={{fontWeight:600,color:C.txt,fontSize:12}}>{s.funcionarioNome}</span>
+                <span style={{color:C.muted,fontSize:11,marginLeft:8}}>{TIPOS[s.tipo]?.l} · {new Date(s.dt).toLocaleDateString("pt-BR")}</span>
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <Bdg color={s.status==="aprovado"?"grn":"red"}>{s.status==="aprovado"?"✅ Aprovado":"❌ Rejeitado"}</Bdg>
+                {s.resolvidoPor&&<span style={{fontSize:10,color:C.muted}}>por {s.resolvidoPor}</span>}
+              </div>
+            </div>
+            <div style={{fontSize:11,color:C.muted,marginTop:4}}>📝 {s.motivo}</div>
+          </Card>
+        ))}
+      </>}
+    </div>}
+
+    {/* ── RESUMO EQUIPE ── */}
+    {tab==="config_view"&&isAdm&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{fontSize:13,fontWeight:700,color:C.txt}}>📊 Resumo de Hoje — {new Date().toLocaleDateString("pt-BR")}</div>
+      {usersComPonto.map(u=>{
+        const ph=pontosHoje(u.id);
+        const ent=ph.find(p=>p.tipo==="entrada");
+        const sai=ph.find(p=>p.tipo==="saida");
+        const almS=ph.find(p=>p.tipo==="saida_almoco");
+        const almV=ph.find(p=>p.tipo==="volta_almoco");
+        const hTrab=calcHoras(u.id);
+        return <Card key={u.id} style={{padding:14,borderLeft:`3px solid ${ph.length>0?C.grn:C.bdr2}`}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:36,height:36,borderRadius:"50%",background:`${C.gold}22`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,color:C.gold,fontSize:14}}>
+                {u.name.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{u.name}</div>
+                <div style={{fontSize:11,color:C.muted}}>{u.role}</div>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+              <div style={{display:"flex",gap:6,fontSize:12,fontFamily:"'JetBrains Mono',monospace"}}>
+                <span style={{color:ent?C.grn:C.muted}}>▶ {ent?fmtHora(ent.dt):"--:--"}</span>
+                <span style={{color:almS?C.ylw:C.muted}}>☀ {almS?fmtHora(almS.dt):"--:--"}</span>
+                <span style={{color:almV?C.blue:C.muted}}>↩ {almV?fmtHora(almV.dt):"--:--"}</span>
+                <span style={{color:sai?C.red:C.muted}}>■ {sai?fmtHora(sai.dt):"--:--"}</span>
+              </div>
+              {hTrab&&<Bdg color="grn">⏱ {hTrab}</Bdg>}
+              {!ent&&<Bdg color="red">Ausente</Bdg>}
+              {ent&&!sai&&<Bdg color="ylw">Em jornada</Bdg>}
+              {ent&&sai&&<Bdg color="grn">Encerrado</Bdg>}
+            </div>
+          </div>
+        </Card>;
+      })}
+    </div>}
+
+    {/* ── MODAL SOLICITAR APROVAÇÃO ── */}
+    {modalSolicit&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
+      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,width:"100%",maxWidth:480,maxHeight:"80vh",display:"flex",flexDirection:"column",position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
+        <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+          <div>
+            <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>📝 Solicitar Aprovação Manual</h2>
+            <p style={{fontSize:11,color:C.muted,marginTop:2}}>Tipo: {TIPOS[tipoSolicit]?.l}</p>
+          </div>
+          <button onClick={()=>setModalSolicit(false)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,border:"none",cursor:"pointer"}}>✕</button>
+        </div>
+        <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:12}}>
+          <div style={{background:`${C.ylw}18`,border:`1px solid ${C.ylw}44`,borderRadius:8,padding:"10px 14px",fontSize:12,color:C.ylw}}>
+            ⚠️ A geolocalização não pôde ser verificada. O administrador irá analisar e aprovar sua solicitação.
+          </div>
+          <div>
+            <label style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",display:"block",marginBottom:6}}>Motivo da solicitação *</label>
+            <textarea value={motivoSolicit} onChange={e=>setMotivoSolicit(e.target.value)} rows={4}
+              placeholder="Ex: Estava no cliente, GPS sem sinal, visitando fornecedor, problema de internet..."
+              style={{width:"100%",background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"10px 14px",color:C.txt,fontSize:13,resize:"vertical",fontFamily:"'Inter',sans-serif"}}/>
+          </div>
+          <div style={{fontSize:11,color:C.muted,background:C.surf,borderRadius:8,padding:"10px 14px"}}>
+            📋 Registro: {TIPOS[tipoSolicit]?.l} · {new Date().toLocaleString("pt-BR")}<br/>
+            👤 Funcionário: {currentUser.name}
+          </div>
+        </div>
+        <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,flexShrink:0,display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <Btn color="ghost" outline onClick={()=>setModalSolicit(false)}>Cancelar</Btn>
+          <Btn color="gold" onClick={enviarSolicit}>📨 Enviar Solicitação</Btn>
+        </div>
+      </div>
+    </div>}
+
+    {/* ── MODAL CONFIG GEO ── */}
+    {modalConfig&&isAdm&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
+      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,width:"100%",maxWidth:520,maxHeight:"88vh",display:"flex",flexDirection:"column",position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
+        <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+          <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>⚙️ Configuração — Ponto Eletrônico</h2>
+          <button onClick={()=>setModalConfig(false)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,border:"none",cursor:"pointer"}}>✕</button>
+        </div>
+        <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:14}}>
+          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:"uppercase",marginBottom:12}}>🏢 DADOS DA EMPRESA</div>
+            <Inp label="Nome da Empresa" value={formConfig.nome||""} onChange={v=>setFormConfig(f=>({...f,nome:v}))} placeholder="Ex: ReTelecom Ltda"/>
+          </div>
+          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:"uppercase"}}>📍 LOCALIZAÇÃO</div>
+              <Btn size="xs" color="gold" onClick={getMinhaLocalizacao}>📡 Usar minha posição atual</Btn>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <Inp label="Latitude *" value={formConfig.lat||""} onChange={v=>setFormConfig(f=>({...f,lat:v}))} placeholder="-22.9068"/>
+              <Inp label="Longitude *" value={formConfig.lng||""} onChange={v=>setFormConfig(f=>({...f,lng:v}))} placeholder="-43.1729"/>
+            </div>
+            {formConfig.lat&&formConfig.lng&&<div style={{marginTop:10,padding:"8px 12px",background:C.card,borderRadius:8,fontSize:11,color:C.muted}}>
+              🗺️ Ver no mapa:
+              <a href={`https://www.google.com/maps?q=${formConfig.lat},${formConfig.lng}`} target="_blank" rel="noreferrer"
+                style={{color:C.gold,marginLeft:6,textDecoration:"underline"}}>Google Maps ↗</a>
+            </div>}
+          </div>
+          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:"uppercase",marginBottom:12}}>📏 RAIO DE TOLERÂNCIA</div>
+            <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:10}}>
+              {[50,100,150,200,300,500].map(r=>(
+                <div key={r} onClick={()=>setFormConfig(f=>({...f,raio:r}))}
+                  style={{padding:"6px 14px",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:600,
+                    border:`1.5px solid ${parseInt(formConfig.raio)===r?C.gold:C.bdr2}`,
+                    background:parseInt(formConfig.raio)===r?`${C.gold}22`:"transparent",
+                    color:parseInt(formConfig.raio)===r?C.gold:C.muted}}>
+                  {r}m
+                </div>
+              ))}
+            </div>
+            <Inp label="Ou digite o raio (metros)" value={String(formConfig.raio)} onChange={v=>setFormConfig(f=>({...f,raio:parseInt(v)||100}))} type="number" placeholder="150"/>
+            <div style={{marginTop:10,padding:"8px 12px",background:`${C.gold}15`,borderRadius:8,fontSize:11,color:C.gold}}>
+              💡 Raio recomendado: 100-200m para empresas urbanas. Use 300-500m se houver variação de GPS.
+            </div>
+          </div>
+          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:"uppercase",marginBottom:10}}>📋 REGRAS</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8,fontSize:12,color:C.txt2}}>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <span style={{color:C.grn}}>✅</span> Entrada — geolocalização obrigatória
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <span style={{color:C.ylw}}>🌐</span> Saída almoço — qualquer local
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <span style={{color:C.blue}}>🌐</span> Volta almoço — qualquer local
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <span style={{color:C.grn}}>✅</span> Saída — geolocalização obrigatória
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,flexShrink:0,display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <Btn color="ghost" outline onClick={()=>setModalConfig(false)}>Cancelar</Btn>
+          <Btn color="gold" onClick={salvarConfig}>✅ Salvar Configuração</Btn>
+        </div>
+      </div>
+    </div>}
+
+    {/* ── MODAL EDITAR REGISTRO (ADMIN) ── */}
+    {modalEdit&&isAdm&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:12,width:"100%",maxWidth:420,display:"flex",flexDirection:"column"}}>
+        <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>✏️ Editar Registro</h2>
+          <button onClick={()=>setModalEdit(null)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16,border:"none",cursor:"pointer"}}>✕</button>
+        </div>
+        <div style={{padding:"16px 20px",display:"flex",flexDirection:"column",gap:12}}>
+          <div style={{fontSize:12,color:C.muted,background:C.surf,borderRadius:8,padding:"8px 12px"}}>
+            👤 {modalEdit.funcionarioNome} · {TIPOS[modalEdit.tipo]?.l} · {new Date(modalEdit.dt).toLocaleString("pt-BR")}
+          </div>
+          <EditarHora reg={modalEdit} onSave={(novaHora)=>{
+            setPontos(p=>p.map(x=>x.id===modalEdit.id?{...x,dt:novaHora,editadoPor:currentUser.name,editadoEm:new Date().toISOString()}:x));
+            addLog(currentUser.name,"Ponto Edição",`${modalEdit.funcionarioNome} — ${TIPOS[modalEdit.tipo]?.l} → ${new Date(novaHora).toLocaleTimeString("pt-BR")}`);
+            showToast("Registro editado com log de auditoria.","success");
+            setModalEdit(null);
+          }} onDelete={()=>{
+            if(!window.confirm("Excluir este registro? A ação será logada."))return;
+            setPontos(p=>p.filter(x=>x.id!==modalEdit.id));
+            addLog(currentUser.name,"Ponto Exclusão",`${modalEdit.funcionarioNome} — ${TIPOS[modalEdit.tipo]?.l} excluído`);
+            showToast("Registro excluído.","warning");
+            setModalEdit(null);
+          }}/>
+        </div>
+      </div>
+    </div>}
+  </div>;
+}
+
+/* Relógio em tempo real */
+function RelogioAtual(){
+  const[hora,setHora]=useState(new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",second:"2-digit"}));
+  useEffect(()=>{
+    const t=setInterval(()=>setHora(new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",second:"2-digit"})),1000);
+    return ()=>clearInterval(t);
+  },[]);
+  return <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:42,fontWeight:800,color:"#ffffff",letterSpacing:2}}>{hora}</div>;
+}
+
+/* Editor de hora (admin) */
+function EditarHora({reg,onSave,onDelete}){
+  const dtLocal=new Date(reg.dt);
+  const[data,setData]=useState(dtLocal.toISOString().slice(0,10));
+  const[hora,setHora]=useState(dtLocal.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}).replace(":",":"));
+  const salvar=()=>{
+    const iso=new Date(`${data}T${hora}:00`).toISOString();
+    onSave(iso);
+  };
+  return <div style={{display:"flex",flexDirection:"column",gap:10}}>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+      <Inp label="Data" value={data} onChange={setData} type="date"/>
+      <Inp label="Hora" value={hora} onChange={setHora} type="time"/>
+    </div>
+    {reg.editadoPor&&<div style={{fontSize:11,color:"#f0a50088",background:"#f0a50011",borderRadius:6,padding:"6px 10px"}}>⚠️ Editado por {reg.editadoPor} em {new Date(reg.editadoEm).toLocaleString("pt-BR")}</div>}
+    <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+      <Btn size="sm" color="red" outline onClick={onDelete}>🗑 Excluir</Btn>
+      <Btn size="sm" color="gold" onClick={salvar}>✅ Salvar</Btn>
+    </div>
+  </div>;
+}
+
+
 /* ── APP ── */
 function AppInner(){
   // ── TODOS OS HOOKS PRIMEIRO (regra do React) ──
@@ -5140,6 +5724,9 @@ function AppInner(){
   const[veiculos,setVeiculos]=useLS("re_veiculos",[]);
   const[abastecimentos,setAbastecimentos]=useLS("re_abast",[]);
   const[checkouts,setCheckouts]=useLS("re_checkouts",[]);
+  const[pontos,setPontos]=useLS("re_pontos",[]);
+  const[pontoConfig,setPontoConfig]=useLS("re_ponto_config",{lat:"",lng:"",raio:150,nome:"Empresa"});
+  const[pontoSolicits,setPontoSolicits]=useLS("re_ponto_solicits",[]);
   const[pneus,setPneus]=useLS("re_pneus",[]);
   const[docsVeic,setDocsVeic]=useLS("re_docs_veic",[]);
   const[manutSols,setManutSols]=useLS("re_manut_sols",[]);
@@ -5301,6 +5888,7 @@ function AppInner(){
     usr:<UsrPage users={users} setUsers={setUsers} addLog={addLog} currentUser={user} isMobile={isMobile}/>,
     log:<LogPage logs={logs} isMobile={isMobile}/>,
     ajuda:<HelpPage currentUser={user} isMobile={isMobile}/>,
+    ponto:<PontoPage pontos={pontos} setPontos={setPontos} pontoConfig={pontoConfig} setPontoConfig={setPontoConfig} pontoSolicits={pontoSolicits} setPontoSolicits={setPontoSolicits} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} showToast={showToast}/>,
     frota:<FrotaPage veiculos={veiculos} setVeiculos={setVeiculos} abastecimentos={abastecimentos} setAbastecimentos={setAbastecimentos} checkouts={checkouts} setCheckouts={setCheckouts} pneus={pneus} setPneus={setPneus} docsVeic={docsVeic} setDocsVeic={setDocsVeic} manutOS={manutOS} manutSols={manutSols} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
     manut:<ManutencaoPage manutSols={manutSols} setManutSols={setManutSols} manutOS={manutOS} setManutOS={setManutOS} veiculos={veiculos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} abastecimentos={abastecimentos} pneus={pneus}/>,
   };
