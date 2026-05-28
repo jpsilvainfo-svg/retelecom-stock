@@ -1,6 +1,6 @@
 // src/hooks/useLS.js
 import { useState, useEffect } from "react";
-import { sbGet, sbSet } from "../lib/supabase";
+import { sbGet, sbSet } from "../supabase";
 
 const tsKey = k => `${k}__ts`;
 
