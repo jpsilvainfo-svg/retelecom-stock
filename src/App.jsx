@@ -1,5 +1,5 @@
 // StockTel v1.6 FIXED-20260527 — visual premium + main/render corrigido
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
 import * as XLSX from "xlsx";
 import { sbGet, sbSet } from "./supabase.js";
@@ -70,10 +70,7 @@ const DEFAULT_PERMS={
   tecnico:["dash","os","frota","kit","dev","sol","rel","ajuda","ponto"],
   financeiro:["dash","nf","rel","email","os","dev","log","ajuda"],
   mecanico:["dash","manut","frota","ajuda","ponto"],
-  superadmin:ALL_MODULES.map(m=>m.k),
 };
-const MASTER_LOGIN="stocktelmaster";
-const MASTER_PASS="ST@fMa@wKQX2026!";
 const uid=()=>crypto.randomUUID();
 const now=()=>new Date().toLocaleString("pt-BR");
 const today=()=>new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})+" - "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
@@ -675,6 +672,18 @@ function Dashboard({stock,tstock,users,os,returns,logs,setPage,isMobile,currentU
   const lc={saida:C.gold,entrada:C.grn,dev:C.ylw,aprovada:C.grn};
   const li={saida:"→",entrada:"↓",dev:"↺",aprovada:"✓"};
 
+  const alertasOleo=useMemo(()=>{
+    if(!veiculos||veiculos.length===0)return[];
+    return veiculos.filter(v=>v.status==="ativo").map(v=>{
+      const regs=abastecimentos.filter(a=>a.veiculoId===v.id&&parseInt(a.odometro)>0);
+      const kmAtual=regs.length>0?Math.max(...regs.map(a=>parseInt(a.odometro)||0)):parseInt(v.kmCadastro)||0;
+      const kmBase=parseInt(v.kmCadastro)||0;
+      const proxima=Math.ceil((kmAtual-kmBase+1)/10000)*10000+kmBase;
+      const faltam=proxima-kmAtual;
+      return{...v,kmAtual,faltam,urgente:faltam<=500,alerta:faltam<=2000};
+    }).filter(v=>v.alerta).sort((a,b)=>a.faltam-b.faltam);
+  },[veiculos,abastecimentos]);
+
   // ── DASHBOARD DO TÉCNICO ──
   if(isTec) return <div className="fi" style={{display:"flex",flexDirection:"column",gap:isMobile?14:20}}>
     {/* Cards do técnico */}
@@ -755,17 +764,6 @@ function Dashboard({stock,tstock,users,os,returns,logs,setPage,isMobile,currentU
   </div>;
 
   // ── DASHBOARD ADMIN/ESTOQUE ──
-  const alertasOleo=useMemo(()=>{
-    if(!veiculos||veiculos.length===0)return[];
-    return veiculos.filter(v=>v.status==="ativo").map(v=>{
-      const regs=abastecimentos.filter(a=>a.veiculoId===v.id&&parseInt(a.odometro)>0);
-      const kmAtual=regs.length>0?Math.max(...regs.map(a=>parseInt(a.odometro)||0)):parseInt(v.kmCadastro)||0;
-      const kmBase=parseInt(v.kmCadastro)||0;
-      const proxima=Math.ceil((kmAtual-kmBase+1)/10000)*10000+kmBase;
-      const faltam=proxima-kmAtual;
-      return{...v,kmAtual,faltam,urgente:faltam<=500,alerta:faltam<=2000};
-    }).filter(v=>v.alerta).sort((a,b)=>a.faltam-b.faltam);
-  },[veiculos,abastecimentos]);
   return <div className="fi" style={{display:"flex",flexDirection:"column",gap:isMobile?14:20}}>
     <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:isMobile?10:16}}>
       {[
@@ -1711,6 +1709,28 @@ function RelPage({stock,os,returns,users,nf,isMobile,currentUser,abastecimentos=
   const totalManutFrota=viewManutAdmin.reduce((s,o)=>s+(o.pecas?.reduce((ps,p)=>ps+(parseFloat(p.valor)||0)*(parseInt(p.qtd)||1),0)||0),0);
   const totalGeralFrota=totalCombFrota+totalManutFrota;
   const fotosFrota=viewAbastAdmin.filter(a=>a.foto);
+  const gastosFrotaPorVeiculo=(()=>{
+    const map={};
+    veiculos.forEach(v=>{map[v.id]={id:v.id,placa:v.placa,modelo:v.modelo,combustivel:0,manutencao:0,total:0,qtdAbast:0,qtdManut:0,fotos:0};});
+    viewAbastAdmin.forEach(a=>{
+      const v=veiculos.find(x=>x.id===a.veiculoId)||{};
+      const id=a.veiculoId||"sem";
+      if(!map[id])map[id]={id,placa:v.placa||"-",modelo:v.modelo||"Sem veiculo",combustivel:0,manutencao:0,total:0,qtdAbast:0,qtdManut:0,fotos:0};
+      map[id].combustivel+=parseFloat(a.valor)||0;
+      map[id].qtdAbast+=1;
+      if(a.foto)map[id].fotos+=1;
+    });
+    viewManutAdmin.forEach(o=>{
+      const v=veiculos.find(x=>x.id===o.veiculoId)||{};
+      const id=o.veiculoId||"sem";
+      const manut=(o.pecas?.reduce((ps,p)=>ps+(parseFloat(p.valor)||0)*(parseInt(p.qtd)||1),0)||0)+(parseFloat(o.valorMaoObra)||0)+(parseFloat(o.valorTotal)||0)+(parseFloat(o.custo)||0);
+      if(!map[id])map[id]={id,placa:v.placa||"-",modelo:v.modelo||"Sem veiculo",combustivel:0,manutencao:0,total:0,qtdAbast:0,qtdManut:0,fotos:0};
+      map[id].manutencao+=manut;
+      map[id].qtdManut+=1;
+      map[id].fotos+=(o.fotos||o.fotosComprovante||o.fotosServico||[]).filter(Boolean).length;
+    });
+    return Object.values(map).map(v=>({...v,total:v.combustivel+v.manutencao})).filter(v=>v.total>0||v.qtdAbast>0||v.qtdManut>0||v.fotos>0).sort((a,b)=>b.total-a.total);
+  })();
   const LOGO_URL=window.location.origin+"/logo-stocktel.png";
   const periodoLabel=dtInicio===dtFim?`${dtInicio.split("-").reverse().join("/")}`:
     `${dtInicio.split("-").reverse().join("/")} a ${dtFim.split("-").reverse().join("/")}`;
