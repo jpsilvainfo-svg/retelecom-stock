@@ -657,220 +657,338 @@ const DIAG_MODULES=[
 /* ── IA DO SISTEMA ── */
 function IAPage({currentUser,isMobile,stock=[],tstock=[],os=[],returns=[],users=[],logs=[],solicitacoes=[],veiculos=[],pontos=[]}){
   const isAdm=currentUser?.role==="admin"||currentUser?.role==="superadmin";
-  const[msgs,setMsgs]=useState([{role:"assistant",content:"Olá! Sou a **IA do StockTel** 🤖\n\nTenho acesso completo aos dados do sistema e posso ajudar com:\n- 📊 Análise de estoque e alertas críticos\n- 🔧 Diagnóstico de problemas e OS pendentes\n- 👥 Informações sobre usuários e técnicos\n- 🚗 Status da frota\n- 🛡️ Manutenção e sugestões de melhorias\n\nO que você precisa?"}]);
+  const WELCOME="Olá! Sou a **IA do StockTel** 🤖\n\nSou autônoma — posso **diagnosticar e resolver problemas** do sistema sozinha, sem ajuda externa.\n\n🛠️ **O que posso fazer:**\n- Diagnosticar falhas de sincronização e corrigir\n- Analisar integridade dos dados e reparar\n- Forçar sincronização de módulos específicos\n- Gerar relatórios completos de saúde do sistema\n- Responder perguntas sobre estoque, OS, frota e mais\n\nDigite qualquer problema ou use as ações rápidas abaixo.";
+  const[msgs,setMsgs]=useState([{role:"assistant",content:WELCOME,ui:true}]);
   const[input,setInput]=useState("");
   const[loading,setLoading]=useState(false);
+  const[loadingStep,setLoadingStep]=useState("");
   const[error,setError]=useState(null);
-  const[apiOk,setApiOk]=useState(null);// null=não testado, true/false
+  const[apiOk,setApiOk]=useState(null);
+  const[actionLog,setActionLog]=useState([]);
   const chatRef=useRef(null);
   const inputRef=useRef(null);
 
-  useEffect(()=>{if(chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},[msgs]);
+  useEffect(()=>{if(chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},[msgs,loading]);
 
-  // Contexto do sistema para a IA
-  const buildContext=()=>{
-    const lowStock=stock.filter(s=>s.qty<=s.min);
-    const critStock=stock.filter(s=>s.qty<=s.min*0.6);
-    const pendOS=os.filter(o=>o.status!=="finalizada");
-    const pendRet=returns.filter(r=>r.status==="pending");
-    const pendSol=solicitacoes.filter(s=>s.status==="pending");
-    const techsAtivos=users.filter(u=>u.role==="tecnico");
-    const veicAtivos=veiculos.filter(v=>v.status==="ativo");
-    return `
-=== DADOS DO SISTEMA STOCKTEL (${new Date().toLocaleString("pt-BR")}) ===
+  const logAction=(icon,text,color=C.muted)=>setActionLog(p=>[{icon,text,color,ts:new Date().toLocaleTimeString("pt-BR")},...p.slice(0,29)]);
 
-📦 ESTOQUE:
-- Total de itens cadastrados: ${stock.length}
-- Total de unidades em estoque: ${stock.reduce((a,s)=>a+s.qty,0)}
-- Itens com estoque baixo: ${lowStock.length} (${lowStock.map(s=>`${s.name}: ${s.qty}/${s.min}`).join(", ")||"nenhum"})
-- Itens críticos (≤60% do mínimo): ${critStock.length} (${critStock.map(s=>`${s.name}: ${s.qty}`).join(", ")||"nenhum"})
-- Estoque com técnicos: ${tstock.reduce((a,t)=>a+t.qty,0)} unidades
-
-🔧 ORDENS DE SERVIÇO:
-- Total de OS: ${os.length}
-- OS pendentes: ${pendOS.length}
-- Últimas OS: ${os.slice(0,3).map(o=>`${o.os} (${o.client})`).join(", ")||"nenhuma"}
-
-👥 USUÁRIOS E TÉCNICOS:
-- Total usuários: ${users.length}
-- Técnicos ativos: ${techsAtivos.length} (${techsAtivos.map(u=>u.name.split(" ")[0]).join(", ")||"nenhum"})
-
-↩️ DEVOLUÇÕES:
-- Pendentes: ${pendRet.length}
-- Solicitações pendentes: ${pendSol.length}
-
-🚗 FROTA:
-- Veículos cadastrados: ${veiculos.length}
-- Veículos ativos: ${veicAtivos.length}
-
-📋 LOGS RECENTES:
-${logs.slice(0,5).map(l=>`- ${l.date}: ${l.action} — ${l.detail}`).join("\n")||"Nenhum log"}
-
-📍 PONTO ELETRÔNICO:
-- Registros de ponto: ${pontos.length}
-`;
+  // ── Ferramentas que a IA pode executar ──
+  const TOOLS={
+    get_diagnostics:async()=>{
+      logAction("🔍","Coletando diagnóstico completo do sistema...",C.blue);
+      const q=queueGet();
+      const qKeys=Object.keys(q);
+      const localKeys=["re_stock","re_tstock","re_os","re_pontos","re_veiculos","re_abast","re_returns","re_nf","re_users","re_sol","re_logs","re_checkouts","re_cats","re_produtos"];
+      const missing=localKeys.filter(k=>!localStorage.getItem(k));
+      const lowStock=stock.filter(s=>s.qty<=s.min);
+      const critStock=stock.filter(s=>s.qty<=s.min*0.6);
+      const orphanTstock=tstock.filter(t=>!stock.find(s=>s.id===t.sid));
+      const dupIds=(arr)=>{const ids=arr.map(x=>x.id);return ids.filter((id,i)=>ids.indexOf(id)!==i);};
+      return JSON.stringify({
+        timestamp:new Date().toLocaleString("pt-BR"),
+        sync:{queue_size:qKeys.length,pending_keys:qKeys,missing_local:missing},
+        stock:{total:stock.length,low:lowStock.length,critical:critStock.length,critical_items:critStock.map(s=>({name:s.name,qty:s.qty,min:s.min}))},
+        integrity:{orphan_tstock:orphanTstock.length,dup_stock_ids:dupIds(stock),dup_os_ids:dupIds(os),dup_user_ids:dupIds(users)},
+        os:{total:os.length,pending:os.filter(o=>o.status!=="finalizada").length},
+        returns:{pending:returns.filter(r=>r.status==="pending").length},
+        users:{total:users.length,techs:users.filter(u=>u.role==="tecnico").length},
+        fleet:{total:veiculos.length,active:veiculos.filter(v=>v.status==="ativo").length},
+        pontos:{total:pontos.length},
+      });
+    },
+    force_sync:async({key})=>{
+      const KEYS=["re_stock","re_tstock","re_os","re_pontos","re_veiculos","re_abast","re_returns","re_nf","re_users","re_sol","re_logs","re_checkouts","re_cats","re_produtos"];
+      const targets=key?[key]:KEYS;
+      logAction("☁️",`Sincronizando ${key||"todos os módulos"}...`,C.blue);
+      const results=[];
+      for(const k of targets){
+        const raw=localStorage.getItem(k);
+        if(!raw){results.push({key:k,result:"sem_dados_local"});continue;}
+        try{
+          const res=await sbSet(k,JSON.parse(raw));
+          if(res.ok){localStorage.setItem(k+"__ts",new Date().toISOString());logAction("✅",`${k} sincronizado`,C.grn);}
+          else{logAction("❌",`${k} falhou: ${res.error}`,C.red);}
+          results.push({key:k,result:res.ok?"ok":"erro",error:res.error});
+        }catch(e){results.push({key:k,result:"erro",error:e.message});}
+      }
+      const ok=results.filter(r=>r.result==="ok").length;
+      return JSON.stringify({synced:ok,failed:results.filter(r=>r.result==="erro").length,skipped:results.filter(r=>r.result==="sem_dados_local").length,details:results});
+    },
+    clear_sync_queue:async()=>{
+      logAction("🗑️","Limpando fila de retry travada...",C.ylw);
+      const q=queueGet();const size=Object.keys(q).length;
+      try{localStorage.removeItem("__sync_queue");window.dispatchEvent(new Event("sync-queue-change"));}catch{}
+      logAction("✅",`Fila limpa (${size} itens removidos)`,C.grn);
+      return JSON.stringify({cleared:size,status:"ok"});
+    },
+    fix_data_integrity:async()=>{
+      logAction("🔧","Verificando e corrigindo integridade dos dados...",C.blue);
+      const fixes=[];
+      // 1. Remove tstock órfão
+      const orphans=tstock.filter(t=>!stock.find(s=>s.id===t.sid));
+      if(orphans.length>0){logAction("🔧",`${orphans.length} registros órfãos de estoque técnico detectados`,C.ylw);fixes.push(`${orphans.length} tstock órfãos identificados (requer ação manual no módulo Kit)`);}
+      // 2. Verifica IDs duplicados nos dados locais
+      const checkDups=(key,label)=>{
+        try{const raw=localStorage.getItem(key);if(!raw)return;const arr=JSON.parse(raw);if(!Array.isArray(arr))return;const ids=arr.map(x=>x.id);const dups=ids.filter((id,i)=>ids.indexOf(id)!==i);if(dups.length>0)fixes.push(`${label}: ${dups.length} IDs duplicados detectados`);}catch{}
+      };
+      checkDups("re_stock","Estoque");checkDups("re_os","OS");checkDups("re_users","Usuários");checkDups("re_veiculos","Frota");
+      // 3. Verifica chaves corrompidas
+      const allKeys=["re_stock","re_tstock","re_os","re_pontos","re_veiculos","re_abast","re_returns","re_nf","re_users","re_sol","re_logs","re_cats","re_produtos"];
+      for(const k of allKeys){try{const raw=localStorage.getItem(k);if(raw)JSON.parse(raw);}catch{fixes.push(`Chave ${k} corrompida no localStorage`);logAction("⚠️",`${k} corrompido`,C.red);}}
+      logAction(fixes.length===0?"✅":"⚠️",fixes.length===0?"Nenhum problema encontrado":`${fixes.length} problema(s) detectado(s)`,fixes.length===0?C.grn:C.ylw);
+      return JSON.stringify({issues_found:fixes.length,fixes,status:fixes.length===0?"ok":"needs_attention"});
+    },
+    clear_corrupted_key:async({key})=>{
+      logAction("🗑️",`Limpando chave corrompida: ${key}`,C.ylw);
+      try{localStorage.removeItem(key);localStorage.removeItem(key+"__ts");logAction("✅",`${key} limpo com sucesso`,C.grn);return JSON.stringify({key,status:"cleared"});}
+      catch(e){return JSON.stringify({key,status:"erro",error:e.message});}
+    },
+    get_full_report:async()=>{
+      logAction("📊","Gerando relatório completo de saúde...",C.blue);
+      return JSON.stringify({
+        timestamp:new Date().toLocaleString("pt-BR"),
+        stock_health:{total_items:stock.length,total_units:stock.reduce((a,s)=>a+s.qty,0),low_stock:stock.filter(s=>s.qty<=s.min).map(s=>({name:s.name,current:s.qty,min:s.min})),critical:stock.filter(s=>s.qty<=s.min*0.6).map(s=>({name:s.name,current:s.qty,min:s.min}))},
+        operations:{open_os:os.filter(o=>o.status!=="finalizada").length,pending_returns:returns.filter(r=>r.status==="pending").length,pending_requests:solicitacoes.filter(s=>s.status==="pending").length},
+        team:{users:users.length,technicians:users.filter(u=>u.role==="tecnico").map(u=>({name:u.name,items_in_kit:tstock.filter(t=>t.uid===u.id).reduce((a,t)=>a+t.qty,0)}))},
+        fleet:{total:veiculos.length,active:veiculos.filter(v=>v.status==="ativo").length},
+        recent_activity:logs.slice(0,10).map(l=>({date:l.date,action:l.action,detail:l.detail})),
+      });
+    },
   };
 
-  const SYSTEM_PROMPT=`Você é a IA oficial do StockTel, um sistema de gestão de estoque para telecomunicações. Você foi criada para ajudar administradores a gerenciar o sistema, diagnosticar problemas e realizar manutenções.
+  // ── Context do sistema ──
+  const buildContext=()=>`
+=== SISTEMA STOCKTEL — SNAPSHOT ${new Date().toLocaleString("pt-BR")} ===
+Estoque: ${stock.length} itens | ${stock.reduce((a,s)=>a+s.qty,0)} unidades | ${stock.filter(s=>s.qty<=s.min).length} baixos | ${stock.filter(s=>s.qty<=s.min*0.6).length} críticos
+OS: ${os.length} total | ${os.filter(o=>o.status!=="finalizada").length} abertas
+Devoluções: ${returns.filter(r=>r.status==="pending").length} pendentes
+Solicitações: ${solicitacoes.filter(s=>s.status==="pending").length} pendentes
+Usuários: ${users.length} | Técnicos: ${users.filter(u=>u.role==="tecnico").length}
+Frota: ${veiculos.length} veículos | ${veiculos.filter(v=>v.status==="ativo").length} ativos
+Ponto: ${pontos.length} registros
+Fila de sync: ${Object.keys(queueGet()).length} pendentes
+`;
 
-Regras:
+  const SYSTEM_PROMPT=`Você é a IA autônoma do StockTel — sistema de gestão de estoque para telecomunicações.
+Você tem ferramentas reais para diagnosticar e RESOLVER problemas do sistema automaticamente.
+
+REGRAS:
 - Responda SEMPRE em português brasileiro
-- Seja direto, objetivo e profissional
-- Use emojis para organizar respostas
-- Se identificar problemas críticos, destaque com ⚠️ ou 🔴
-- Sugira ações concretas quando relevante
-- Você tem acesso aos dados reais do sistema (fornecidos no contexto)
-- Para problemas técnicos de código/sync, sugira usar o Painel de Diagnóstico (🛡️)
+- Seja proativo: ao detectar um problema, USE as ferramentas para corrigi-lo automaticamente
+- Ao receber um problema de sync → chame force_sync
+- Ao detectar dados corrompidos → chame fix_data_integrity ou clear_corrupted_key
+- Ao ver fila travada → chame clear_sync_queue
+- Sempre chame get_diagnostics primeiro para ter contexto completo
+- Use get_full_report para relatórios abrangentes
+- Após resolver, confirme o que foi feito e o resultado
+- Use emojis para organizar, destaque ⚠️ problemas críticos
 
 ${buildContext()}`;
+
+  // ── Motor de tool calling (loop automático) ──
+  const callAPI=async(apiMsgs)=>{
+    const res=await fetch("/api/ai",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:apiMsgs})});
+    if(!res.ok){const d=await res.json();throw new Error(d.error||"Erro na API");}
+    return await res.json();
+  };
 
   const sendMsg=async(text)=>{
     const msg=text||input.trim();
     if(!msg||loading)return;
-    setInput("");
-    setError(null);
-    const newMsgs=[...msgs,{role:"user",content:msg}];
-    setMsgs(newMsgs);
-    setLoading(true);
+    setInput("");setError(null);
+    const userMsg={role:"user",content:msg};
+    const newUiMsgs=[...msgs,userMsg];
+    setMsgs(newUiMsgs);
+    setLoading(true);setLoadingStep("IA analisando...");
+
+    // Histórico de API (sem msgs de UI especiais)
+    let apiHistory=[
+      {role:"system",content:SYSTEM_PROMPT},
+      ...newUiMsgs.filter(m=>!m.ui).map(m=>({role:m.role,content:m.content}))
+    ];
+
     try{
-      const res=await fetch("/api/ai",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          messages:[
-            {role:"system",content:SYSTEM_PROMPT},
-            ...newMsgs.map(m=>({role:m.role,content:m.content}))
-          ]
-        })
-      });
-      const data=await res.json();
-      if(!res.ok||data.error){
-        setError(data.error||"Erro ao conectar com a IA");
-        setApiOk(false);
-      }else{
-        setMsgs(p=>[...p,{role:"assistant",content:data.reply}]);
+      let iterations=0;
+      while(iterations<6){// max 6 chamadas por turno
+        iterations++;
+        const data=await callAPI(apiHistory);
         setApiOk(true);
+
+        if(data.tool_calls){
+          // IA quer executar ferramentas
+          const assistantMsg={role:"assistant",content:null,tool_calls:data.tool_calls};
+          apiHistory=[...apiHistory,assistantMsg];
+
+          const toolResults=[];
+          for(const tc of data.tool_calls){
+            const fname=tc.function.name;
+            const fargs=JSON.parse(tc.function.arguments||"{}");
+            setLoadingStep(`Executando: ${fname.replace(/_/g," ")}...`);
+            // Mostra na UI que a IA está agindo
+            setMsgs(p=>[...p,{role:"tool_action",icon:"⚙️",content:`Executando **${fname.replace(/_/g," ")}**${fargs.key?` em ${fargs.key}`:""}...`}]);
+            let result="{}";
+            if(TOOLS[fname]){try{result=await TOOLS[fname](fargs);}catch(e){result=JSON.stringify({error:e.message});}}
+            else{result=JSON.stringify({error:"Ferramenta não encontrada"});}
+            toolResults.push({role:"tool",tool_call_id:tc.id,content:result});
+          }
+          apiHistory=[...apiHistory,...toolResults];
+          setLoadingStep("IA processando resultados...");
+        } else if(data.reply){
+          // Resposta final de texto
+          setMsgs(p=>[...p,{role:"assistant",content:data.reply}]);
+          break;
+        } else {break;}
       }
     }catch(e){
-      setError("Erro de conexão: "+e.message);
+      setError(e.message);
       setApiOk(false);
     }
-    setLoading(false);
+    setLoading(false);setLoadingStep("");
     setTimeout(()=>inputRef.current?.focus(),100);
   };
 
   const QUICK_ACTIONS=[
-    {icon:"📊",label:"Analisar estoque crítico",msg:"Analise o estoque atual e me dê um relatório completo dos itens críticos e o que precisa ser reposto com urgência."},
-    {icon:"🔍",label:"Diagnóstico geral",msg:"Faça um diagnóstico completo do sistema: estoque, OS pendentes, devoluções, frota e identifique os principais problemas."},
-    {icon:"👥",label:"Relatório de técnicos",msg:"Gere um relatório sobre os técnicos: quem tem mais materiais em posse, OS abertas e devoluções pendentes."},
-    {icon:"🚀",label:"Sugestões de melhoria",msg:"Com base nos dados atuais do sistema, quais são as principais melhorias e ações que devo tomar?"},
-    {icon:"⚠️",label:"Alertas e riscos",msg:"Liste todos os alertas e riscos do sistema agora: estoque crítico, OS atrasadas, devoluções pendentes há muito tempo."},
-    {icon:"🛠️",label:"Plano de manutenção",msg:"Crie um plano de manutenção para o sistema com as ações prioritárias que devo executar hoje."},
+    {icon:"🔍",label:"Auto-diagnóstico",msg:"Faça um diagnóstico completo e automático do sistema e corrija tudo que encontrar de errado."},
+    {icon:"☁️",label:"Sincronizar tudo",msg:"Sincronize todos os dados locais para a nuvem agora e me dê um relatório do resultado."},
+    {icon:"🔧",label:"Reparar integridade",msg:"Verifique e repare automaticamente todos os problemas de integridade de dados do sistema."},
+    {icon:"📊",label:"Relatório completo",msg:"Gere um relatório completo de saúde do sistema com métricas, alertas e recomendações prioritárias."},
+    {icon:"⚠️",label:"Estoque crítico",msg:"Identifique todos os itens em estado crítico de estoque e sugira ações imediatas."},
+    {icon:"🗑️",label:"Limpar fila travada",msg:"Verifique se a fila de sincronização está travada e limpe se necessário."},
   ];
 
-  // Renderiza markdown simples (negrito, listas, emojis)
   const renderMsg=(text)=>{
-    const lines=text.split("\n");
-    return lines.map((line,i)=>{
-      const bold=line.replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>");
-      const isLi=line.trim().startsWith("-")||line.trim().startsWith("•");
-      return<div key={i} style={{marginBottom:isLi?2:4,paddingLeft:isLi?8:0,color:C.txt2,fontSize:13,lineHeight:1.6}} dangerouslySetInnerHTML={{__html:bold}}/>;
+    if(!text)return null;
+    return text.split("\n").map((line,i)=>{
+      const html=line.replace(/\*\*(.*?)\*\*/g,"<strong style='color:#fff'>$1</strong>").replace(/`(.*?)`/g,"<code style='background:#1a1a1a;padding:1px 5px;border-radius:3px;font-size:11px;color:#d1a800'>$1</code>");
+      const isLi=line.trim().startsWith("-")||line.trim().match(/^\d+\./);
+      return<div key={i} style={{marginBottom:isLi?3:5,paddingLeft:isLi?10:0,color:C.txt2,fontSize:13,lineHeight:1.65}} dangerouslySetInnerHTML={{__html:html||"&nbsp;"}}/>;
     });
   };
 
   if(!isAdm)return<div style={{padding:40,textAlign:"center",color:C.red,fontSize:15,fontWeight:700}}>🔒 Acesso restrito a administradores.</div>;
 
-  return<div style={{display:"flex",flexDirection:"column",gap:16,height:"100%"}}>
+  const syncPending=Object.keys(queueGet()).length;
+
+  return<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <style>{`@keyframes pulse{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+
     {/* Header */}
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
       <div>
-        <div style={{fontSize:isMobile?17:22,fontWeight:800,color:C.txt,display:"flex",alignItems:"center",gap:10}}>
-          <span style={{fontSize:28}}>🤖</span> IA do Sistema
-          {apiOk===true&&<span style={{fontSize:11,background:`${C.grn}22`,color:C.grn,padding:"2px 8px",borderRadius:20,fontWeight:600}}>● Online</span>}
-          {apiOk===false&&<span style={{fontSize:11,background:`${C.red}22`,color:C.red,padding:"2px 8px",borderRadius:20,fontWeight:600}}>● Offline</span>}
+        <div style={{fontSize:isMobile?17:21,fontWeight:800,color:C.txt,display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:26}}>🤖</span> IA Autônoma do Sistema
+          {apiOk===true&&<span style={{fontSize:10,background:`${C.grn}22`,color:C.grn,padding:"2px 10px",borderRadius:20,fontWeight:700,border:`1px solid ${C.grn}44`}}>● ONLINE</span>}
+          {apiOk===false&&<span style={{fontSize:10,background:`${C.red}22`,color:C.red,padding:"2px 10px",borderRadius:20,fontWeight:700,border:`1px solid ${C.red}44`}}>● OFFLINE</span>}
         </div>
-        <div style={{fontSize:11,color:C.muted,marginTop:2}}>Assistente inteligente · Acesso restrito a administradores · Powered by Llama 3.3 70B</div>
+        <div style={{fontSize:11,color:C.muted,marginTop:2}}>Diagnóstico e reparo autônomo · Admin only · Llama 3.3 70B via Groq</div>
       </div>
-      <Btn size="sm" color="ghost" outline onClick={()=>setMsgs([{role:"assistant",content:"Conversa reiniciada! Como posso ajudar?"}])}>🗑️ Limpar chat</Btn>
+      <Btn size="sm" color="ghost" outline onClick={()=>{setMsgs([{role:"assistant",content:WELCOME,ui:true}]);setActionLog([]);setError(null);}}>🗑️ Novo chat</Btn>
     </div>
 
-    {/* Status do sistema em cards */}
-    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(5,1fr)",gap:8}}>
+    {/* KPIs rápidos */}
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(3,1fr)":"repeat(6,1fr)",gap:8}}>
       {[
-        {icon:"📦",label:"Itens",value:stock.length,sub:`${stock.filter(s=>s.qty<=s.min).length} baixos`,color:stock.filter(s=>s.qty<=s.min*0.6).length>0?C.red:C.gold},
-        {icon:"🔧",label:"OS",value:os.length,sub:`${os.filter(o=>o.status!=="finalizada").length} pend.`,color:C.blue},
-        {icon:"👥",label:"Técnicos",value:users.filter(u=>u.role==="tecnico").length,sub:"ativos",color:C.grn},
-        {icon:"↩️",label:"Devoluções",value:returns.filter(r=>r.status==="pending").length,sub:"pendentes",color:returns.filter(r=>r.status==="pending").length>0?C.ylw:C.grn},
-        {icon:"🚗",label:"Frota",value:veiculos.filter(v=>v.status==="ativo").length,sub:"veículos",color:C.gold},
+        {icon:"📦",v:stock.length,label:"Itens",color:C.gold},
+        {icon:"🔴",v:stock.filter(s=>s.qty<=s.min*0.6).length,label:"Críticos",color:stock.filter(s=>s.qty<=s.min*0.6).length>0?C.red:C.grn},
+        {icon:"🔧",v:os.filter(o=>o.status!=="finalizada").length,label:"OS Abertas",color:C.blue},
+        {icon:"↩️",v:returns.filter(r=>r.status==="pending").length,label:"Devoluções",color:C.ylw},
+        {icon:"🚗",v:veiculos.filter(v=>v.status==="ativo").length,label:"Frota",color:C.gold},
+        {icon:"⚡",v:syncPending,label:"Sync Pend.",color:syncPending>0?C.ylw:C.grn},
       ].map((s,i)=>(
-        <Card key={i} style={{padding:"10px 14px",display:"flex",gap:8,alignItems:"center"}}>
-          <span style={{fontSize:20}}>{s.icon}</span>
-          <div>
-            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:18,fontWeight:800,color:s.color,lineHeight:1}}>{s.value}</div>
-            <div style={{fontSize:9,color:C.muted}}>{s.label} · {s.sub}</div>
-          </div>
+        <Card key={i} style={{padding:"10px 12px",textAlign:"center"}}>
+          <div style={{fontSize:16}}>{s.icon}</div>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:20,fontWeight:800,color:s.color}}>{s.v}</div>
+          <div style={{fontSize:9,color:C.muted}}>{s.label}</div>
         </Card>
       ))}
     </div>
 
     {/* Ações rápidas */}
-    <Card style={{padding:14}}>
-      <div style={{fontSize:12,fontWeight:700,color:C.muted,marginBottom:10,letterSpacing:".05em"}}>⚡ AÇÕES RÁPIDAS</div>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+    <Card style={{padding:12}}>
+      <div style={{fontSize:11,fontWeight:700,color:C.muted,marginBottom:8,letterSpacing:".05em"}}>⚡ AÇÕES AUTÔNOMAS</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
         {QUICK_ACTIONS.map((a,i)=>(
           <button key={i} onClick={()=>sendMsg(a.msg)} disabled={loading}
-            style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:8,cursor:"pointer",fontSize:12,color:C.txt2,fontWeight:500,transition:"all .15s",opacity:loading?.5:1}}>
-            <span>{a.icon}</span>{a.label}
+            style={{display:"flex",alignItems:"center",gap:5,padding:"7px 12px",background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:8,cursor:loading?"not-allowed":"pointer",fontSize:11,color:C.txt2,fontWeight:600,opacity:loading?.5:1}}>
+            {a.icon} {a.label}
           </button>
         ))}
       </div>
     </Card>
 
-    {/* Erro de API */}
-    {error&&<div style={{padding:"10px 16px",background:`${C.red}15`,border:`1px solid ${C.red}44`,borderRadius:8,fontSize:12,color:C.red}}>
+    {error&&<div style={{padding:"10px 14px",background:`${C.red}15`,border:`1px solid ${C.red}44`,borderRadius:8,fontSize:12,color:C.red}}>
       ❌ {error}
-      {error.includes("GROQ_API_KEY")&&<div style={{marginTop:6,fontSize:11,color:C.muted}}>Configure a variável <strong>GROQ_API_KEY</strong> no painel do Vercel → Settings → Environment Variables</div>}
+      {error.includes("GROQ_API_KEY")&&<div style={{marginTop:4,fontSize:11,color:C.muted}}>Adicione <strong>GROQ_API_KEY</strong> em Vercel → Settings → Environment Variables e faça redeploy.</div>}
     </div>}
 
-    {/* Chat */}
-    <Card style={{flex:1,padding:0,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:isMobile?300:380}}>
-      <div style={{padding:"10px 16px",borderBottom:`1px solid ${C.bdr}`,fontSize:12,fontWeight:700,color:C.txt}}>💬 Chat com a IA</div>
-      <div ref={chatRef} style={{flex:1,overflowY:"auto",padding:"12px 16px",display:"flex",flexDirection:"column",gap:12}}>
-        {msgs.map((m,i)=>(
-          <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:m.role==="user"?"row-reverse":"row"}}>
-            <div style={{width:32,height:32,borderRadius:"50%",background:m.role==="user"?`${C.blue}33`:`${C.gold}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>
-              {m.role==="user"?"👤":"🤖"}
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":`1fr ${actionLog.length>0?"280px":"0px"}`,gap:12,transition:"all .3s"}}>
+      {/* Chat */}
+      <Card style={{padding:0,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:isMobile?320:420}}>
+        <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.bdr}`,fontSize:12,fontWeight:700,color:C.txt,display:"flex",alignItems:"center",gap:8}}>
+          💬 Chat
+          {loading&&<span style={{fontSize:10,color:C.gold,fontWeight:600}}>{loadingStep}</span>}
+        </div>
+        <div ref={chatRef} style={{flex:1,overflowY:"auto",padding:"12px 14px",display:"flex",flexDirection:"column",gap:10}}>
+          {msgs.map((m,i)=>{
+            if(m.role==="tool_action")return(
+              <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:`${C.blue}10`,border:`1px solid ${C.blue}22`,borderRadius:8}}>
+                <span style={{fontSize:14,animation:"spin 1s linear infinite",display:"inline-block"}}>⚙️</span>
+                <span style={{fontSize:11,color:C.blue}}>{renderMsg(m.content)}</span>
+              </div>
+            );
+            const isUser=m.role==="user";
+            return(
+              <div key={i} style={{display:"flex",gap:8,alignItems:"flex-start",flexDirection:isUser?"row-reverse":"row"}}>
+                <div style={{width:28,height:28,borderRadius:"50%",background:isUser?`${C.blue}33`:`${C.gold}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0,border:`1px solid ${isUser?C.blue:C.gold}33`}}>
+                  {isUser?"👤":"🤖"}
+                </div>
+                <div style={{maxWidth:"82%",background:isUser?`${C.blue}14`:C.surf,border:`1px solid ${isUser?C.blue:C.bdr}33`,borderRadius:isUser?"12px 12px 2px 12px":"12px 12px 12px 2px",padding:"9px 13px"}}>
+                  {renderMsg(m.content)}
+                </div>
+              </div>
+            );
+          })}
+          {loading&&(
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <div style={{width:28,height:28,borderRadius:"50%",background:`${C.gold}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>🤖</div>
+              <div style={{background:C.surf,border:`1px solid ${C.bdr}33`,borderRadius:"12px 12px 12px 2px",padding:"9px 13px",display:"flex",gap:4,alignItems:"center"}}>
+                {[0,1,2].map(j=><div key={j} style={{width:5,height:5,borderRadius:"50%",background:C.gold,animation:`pulse 1.2s ease-in-out ${j*0.2}s infinite`}}/>)}
+                <span style={{fontSize:10,color:C.muted,marginLeft:6}}>{loadingStep||"Processando..."}</span>
+              </div>
             </div>
-            <div style={{maxWidth:"80%",background:m.role==="user"?`${C.blue}18`:C.surf,border:`1px solid ${m.role==="user"?C.blue:C.bdr}33`,borderRadius:m.role==="user"?"12px 12px 2px 12px":"12px 12px 12px 2px",padding:"10px 14px"}}>
-              {renderMsg(m.content)}
-            </div>
-          </div>
-        ))}
-        {loading&&<div style={{display:"flex",gap:10,alignItems:"center"}}>
-          <div style={{width:32,height:32,borderRadius:"50%",background:`${C.gold}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🤖</div>
-          <div style={{background:C.surf,border:`1px solid ${C.bdr}33`,borderRadius:"12px 12px 12px 2px",padding:"10px 14px"}}>
-            <div style={{display:"flex",gap:4,alignItems:"center"}}>
-              {[0,1,2].map(j=><div key={j} style={{width:6,height:6,borderRadius:"50%",background:C.gold,animation:`pulse 1.2s ease-in-out ${j*0.2}s infinite`}}/>)}
-              <span style={{fontSize:11,color:C.muted,marginLeft:4}}>IA pensando...</span>
-            </div>
-          </div>
-        </div>}
-      </div>
-      {/* Input */}
-      <div style={{padding:"10px 14px",borderTop:`1px solid ${C.bdr}`,display:"flex",gap:8}}>
-        <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)}
-          onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMsg();}}}
-          placeholder="Pergunte à IA sobre o sistema... (Enter para enviar)"
-          style={{flex:1,background:C.bg,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"10px 14px",color:C.txt,fontSize:13,outline:"none"}}
-          disabled={loading}
-        />
-        <Btn color="gold" onClick={()=>sendMsg()} disabled={loading||!input.trim()} style={{flexShrink:0}}>
-          {loading?"⏳":"📤 Enviar"}
-        </Btn>
-      </div>
-    </Card>
+          )}
+        </div>
+        <div style={{padding:"8px 12px",borderTop:`1px solid ${C.bdr}`,display:"flex",gap:8}}>
+          <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)}
+            onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMsg();}}}
+            placeholder="Descreva o problema ou faça uma pergunta... (Enter)"
+            style={{flex:1,background:C.bg,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"9px 12px",color:C.txt,fontSize:12,outline:"none"}}
+            disabled={loading}
+          />
+          <Btn color="gold" onClick={()=>sendMsg()} disabled={loading||!input.trim()}>
+            {loading?"⏳":"📤"}
+          </Btn>
+        </div>
+      </Card>
 
-    <style>{`@keyframes pulse{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}`}</style>
+      {/* Log de ações da IA */}
+      {actionLog.length>0&&!isMobile&&(
+        <Card style={{padding:0,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:420}}>
+          <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.bdr}`,fontSize:12,fontWeight:700,color:C.txt}}>⚙️ Log de Ações</div>
+          <div style={{flex:1,overflowY:"auto",padding:"8px"}}>
+            {actionLog.map((l,i)=>(
+              <div key={i} style={{display:"flex",gap:6,alignItems:"flex-start",padding:"6px 8px",borderBottom:`1px solid ${C.bdr}18`,fontSize:11}}>
+                <span>{l.icon}</span>
+                <div style={{flex:1}}>
+                  <div style={{color:l.color||C.txt2,lineHeight:1.4}}>{l.text}</div>
+                  <div style={{color:C.muted2,fontSize:9,marginTop:1}}>{l.ts}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+    </div>
   </div>;
 }
 
