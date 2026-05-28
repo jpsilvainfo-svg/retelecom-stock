@@ -793,51 +793,57 @@ ${buildContext()}`;
   };
 
   const sendMsg=async(text)=>{
-    const msg=text||input.trim();
+    const msg=(text||input).trim();
     if(!msg||loading)return;
     setInput("");setError(null);
-    const userMsg={role:"user",content:msg};
-    const newUiMsgs=[...msgs,userMsg];
-    setMsgs(newUiMsgs);
     setLoading(true);setLoadingStep("IA analisando...");
 
-    // Histórico de API (sem msgs de UI especiais)
+    // Adiciona msg do usuário
+    setMsgs(p=>[...p,{role:"user",content:msg}]);
+
+    // Histórico para a API — construído localmente, sem depender do estado React
+    // Pega apenas msgs de texto do histórico atual (ignora tool_action e ui)
+    const cleanHistory=msgs
+      .filter(m=>!m.ui&&m.role!=="tool_action"&&(m.role==="user"||m.role==="assistant")&&m.content)
+      .map(m=>({role:m.role,content:m.content}));
+
     let apiHistory=[
       {role:"system",content:SYSTEM_PROMPT},
-      ...newUiMsgs.filter(m=>!m.ui).map(m=>({role:m.role,content:m.content}))
+      ...cleanHistory,
+      {role:"user",content:msg}
     ];
 
     try{
-      let iterations=0;
-      while(iterations<6){// max 6 chamadas por turno
-        iterations++;
+      for(let i=0;i<5;i++){
         const data=await callAPI(apiHistory);
         setApiOk(true);
 
-        if(data.tool_calls){
-          // IA quer executar ferramentas
-          const assistantMsg={role:"assistant",content:null,tool_calls:data.tool_calls};
-          apiHistory=[...apiHistory,assistantMsg];
+        if(data.error){throw new Error(data.error);}
 
-          const toolResults=[];
+        if(data.tool_calls&&data.tool_calls.length>0){
+          // IA quer executar ferramentas
+          apiHistory.push({role:"assistant",content:null,tool_calls:data.tool_calls});
+
           for(const tc of data.tool_calls){
             const fname=tc.function.name;
             const fargs=JSON.parse(tc.function.arguments||"{}");
             setLoadingStep(`Executando: ${fname.replace(/_/g," ")}...`);
-            // Mostra na UI que a IA está agindo
-            setMsgs(p=>[...p,{role:"tool_action",icon:"⚙️",content:`Executando **${fname.replace(/_/g," ")}**${fargs.key?` em ${fargs.key}`:""}...`}]);
+            setMsgs(p=>[...p,{role:"tool_action",content:`⚙️ Executando **${fname.replace(/_/g," ")}**${fargs.key?` → ${fargs.key}`:""}...`}]);
             let result="{}";
-            if(TOOLS[fname]){try{result=await TOOLS[fname](fargs);}catch(e){result=JSON.stringify({error:e.message});}}
-            else{result=JSON.stringify({error:"Ferramenta não encontrada"});}
-            toolResults.push({role:"tool",tool_call_id:tc.id,content:result});
+            if(TOOLS[fname]){
+              try{result=await TOOLS[fname](fargs);}
+              catch(e){result=JSON.stringify({error:e.message});}
+            }
+            apiHistory.push({role:"tool",tool_call_id:tc.id,content:result});
           }
-          apiHistory=[...apiHistory,...toolResults];
-          setLoadingStep("IA processando resultados...");
-        } else if(data.reply){
-          // Resposta final de texto
+          setLoadingStep("Processando resultados...");
+
+        }else if(data.reply){
           setMsgs(p=>[...p,{role:"assistant",content:data.reply}]);
           break;
-        } else {break;}
+        }else{
+          break;
+        }
       }
     }catch(e){
       setError(e.message);

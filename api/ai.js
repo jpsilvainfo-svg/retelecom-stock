@@ -96,12 +96,13 @@ export default async function handler(req, res) {
     if (!response.ok) return res.status(response.status).json({ error: data.error?.message || "Erro na API Groq" });
 
     const choice = data.choices[0];
-    // Se a IA quer chamar ferramentas
-    if (choice.finish_reason === "tool_calls") {
-      return res.json({ tool_calls: choice.message.tool_calls, message: choice.message });
+    const msg = choice.message;
+    // Se há tool_calls (independente do finish_reason)
+    if (msg.tool_calls && msg.tool_calls.length > 0) {
+      return res.json({ tool_calls: msg.tool_calls });
     }
     // Resposta de texto normal
-    return res.json({ reply: choice.message.content });
+    return res.json({ reply: msg.content || "" });
   } catch (e) {
     return res.status(500).json({ error: e.message || "Erro interno" });
   }
