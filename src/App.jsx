@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
 import * as XLSX from "xlsx";
-import { sbGet, sbSet } from "./supabase.js";
+import { sbGet, sbSet, sbPing } from "./supabase.js";
 
 const C={
   bg:"#070707",
@@ -694,12 +694,10 @@ function DiagnosticoPage({currentUser,isMobile}){
 
   const testConn=async()=>{
     setConnStatus("checking");
-    const t0=Date.now();
-    try{
-      const r=await sbGet("re_stock");
-      setPing(Date.now()-t0);
-      setConnStatus(r!==null?"ok":"warn");
-    }catch{setConnStatus("error");setPing(null);}
+    const r=await sbPing();
+    setPing(r.ms);
+    setConnStatus(r.ok?"ok":"error");
+    if(!r.ok)setSyncLog(p=>[{key:"conexão",label:"Teste de Conexão",result:"erro",detail:r.error,ts:new Date().toLocaleTimeString("pt-BR")},...p]);
   };
 
   const checkAll=async()=>{
@@ -712,13 +710,13 @@ function DiagnosticoPage({currentUser,isMobile}){
       try{localRaw=localStorage.getItem(mod.key);localTs=localStorage.getItem(mod.key+"__ts")||"0";const d=localRaw?JSON.parse(localRaw):null;localCount=Array.isArray(d)?d.length:(d&&typeof d==="object"?1:0);}catch{}
       try{
         const remote=await sbGet(mod.key);
-        const remoteCount=remote?( Array.isArray(remote.value)?remote.value.length:(remote.value&&typeof remote.value==="object"?1:0) ):0;
+        const remoteCount=remote&&!remote.empty?( Array.isArray(remote.value)?remote.value.length:(remote.value&&typeof remote.value==="object"?1:0) ):0;
         const remoteTs=remote?.updated_at||"0";
         let st="ok";
-        if(!remote||remote.value===null)st="sem_dados";
+        if(!remote||remote.empty||remote.value===null)st="sem_dados";
         else if(localTs>remoteTs)st="desatualizado";
         rows.push({...mod,localCount,remoteCount,localTs,remoteTs,st});
-      }catch{rows.push({...mod,localCount,remoteCount:0,localTs,remoteTs:"?",st:"erro"});}
+      }catch(e){rows.push({...mod,localCount,remoteCount:0,localTs,remoteTs:"?",st:"erro",errMsg:e?.message});}
     }
     setPing(Date.now()-t0);
     setConnStatus("ok");
@@ -728,17 +726,16 @@ function DiagnosticoPage({currentUser,isMobile}){
   };
 
   const syncOne=async(mod)=>{
-    setSyncingKey(mod.key);
+    setSyncingKey(mod.key);setShowLog(true);
     try{
       const raw=localStorage.getItem(mod.key);
-      if(!raw){setSyncLog(p=>[{key:mod.key,label:mod.label,result:"sem_dados_local",ts:new Date().toLocaleTimeString("pt-BR")},...p]);setSyncingKey(null);return;}
+      if(!raw){setSyncLog(p=>[{key:mod.key,label:mod.label,result:"sem_dados_local",detail:"Sem dados locais para enviar",ts:new Date().toLocaleTimeString("pt-BR")},...p]);setSyncingKey(null);return;}
       const data=JSON.parse(raw);
-      const ok=await sbSet(mod.key,data);
-      if(ok){const ts=new Date().toISOString();localStorage.setItem(mod.key+"__ts",ts);}
-      setSyncLog(p=>[{key:mod.key,label:mod.label,result:ok?"ok":"erro",ts:new Date().toLocaleTimeString("pt-BR")},...p]);
-    }catch{setSyncLog(p=>[{key:mod.key,label:mod.label,result:"erro",ts:new Date().toLocaleTimeString("pt-BR")},...p]);}
+      const res=await sbSet(mod.key,data);
+      if(res.ok){const ts=new Date().toISOString();localStorage.setItem(mod.key+"__ts",ts);}
+      setSyncLog(p=>[{key:mod.key,label:mod.label,result:res.ok?"ok":"erro",detail:res.error||null,ts:new Date().toLocaleTimeString("pt-BR")},...p]);
+    }catch(e){setSyncLog(p=>[{key:mod.key,label:mod.label,result:"erro",detail:e?.message||"Erro desconhecido",ts:new Date().toLocaleTimeString("pt-BR")},...p]);}
     setSyncingKey(null);
-    setShowLog(true);
   };
 
   const syncAll=async()=>{
@@ -747,12 +744,12 @@ function DiagnosticoPage({currentUser,isMobile}){
       setSyncingKey(mod.key);
       try{
         const raw=localStorage.getItem(mod.key);
-        if(!raw){setSyncLog(p=>[...p,{key:mod.key,label:mod.label,result:"skip",ts:new Date().toLocaleTimeString("pt-BR")}]);continue;}
+        if(!raw){setSyncLog(p=>[...p,{key:mod.key,label:mod.label,result:"skip",detail:"Sem dados locais",ts:new Date().toLocaleTimeString("pt-BR")}]);continue;}
         const data=JSON.parse(raw);
-        const ok=await sbSet(mod.key,data);
-        if(ok){const ts=new Date().toISOString();localStorage.setItem(mod.key+"__ts",ts);}
-        setSyncLog(p=>[...p,{key:mod.key,label:mod.label,result:ok?"ok":"erro",ts:new Date().toLocaleTimeString("pt-BR")}]);
-      }catch{setSyncLog(p=>[...p,{key:mod.key,label:mod.label,result:"erro",ts:new Date().toLocaleTimeString("pt-BR")}]);}
+        const res=await sbSet(mod.key,data);
+        if(res.ok){const ts=new Date().toISOString();localStorage.setItem(mod.key+"__ts",ts);}
+        setSyncLog(p=>[...p,{key:mod.key,label:mod.label,result:res.ok?"ok":"erro",detail:res.error||null,ts:new Date().toLocaleTimeString("pt-BR")}]);
+      }catch(e){setSyncLog(p=>[...p,{key:mod.key,label:mod.label,result:"erro",detail:e?.message||"Erro desconhecido",ts:new Date().toLocaleTimeString("pt-BR")}]);}
     }
     setSyncingKey(null);setSyncing(false);
     await checkAll();
@@ -877,12 +874,17 @@ function DiagnosticoPage({currentUser,isMobile}){
       {showLog&&<div style={{maxHeight:240,overflowY:"auto"}}>
         {syncLog.map((l,i)=>(
           <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 16px",borderBottom:`1px solid ${C.bdr}18`,background:i%2===0?"transparent":`${C.surf}44`}}>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <span style={{color:logColor[l.result]||C.muted,fontSize:14}}>{l.result==="ok"?"✅":l.result==="erro"?"❌":l.result==="skip"?"⬛":"⚠️"}</span>
-              <span style={{fontSize:12,color:C.txt}}>{l.label}</span>
-              <span style={{fontSize:10,color:C.muted,fontFamily:"'JetBrains Mono',monospace"}}>{l.key}</span>
+            <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
+              <span style={{color:logColor[l.result]||C.muted,fontSize:14,flexShrink:0}}>{l.result==="ok"?"✅":l.result==="erro"?"❌":l.result==="skip"?"⬛":"⚠️"}</span>
+              <div style={{minWidth:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:12,color:C.txt,fontWeight:600}}>{l.label}</span>
+                  <span style={{fontSize:10,color:C.muted,fontFamily:"'JetBrains Mono',monospace"}}>{l.key}</span>
+                </div>
+                {l.detail&&<div style={{fontSize:10,color:C.red,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.detail}</div>}
+              </div>
             </div>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
               <span style={{fontSize:11,fontWeight:700,color:logColor[l.result]||C.muted}}>{l.result==="ok"?"Enviado":l.result==="erro"?"Falhou":l.result==="skip"?"Pulado":"Sem dado local"}</span>
               <span style={{fontSize:10,color:C.muted}}>{l.ts}</span>
             </div>

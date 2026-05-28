@@ -12,7 +12,7 @@ export const useLS = (key, initial) => {
 
   useEffect(() => {
     sbGet(key).then(remote => {
-      if (remote !== null) {
+      if (remote !== null && !remote.empty) {
         const localTs = localStorage.getItem(tsKey(key)) || "0";
         const remoteTs = remote.updated_at || "0";
         // só aplica dado remoto se for mais recente que o salvo localmente
