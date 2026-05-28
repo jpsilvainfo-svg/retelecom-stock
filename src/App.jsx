@@ -1,5 +1,5 @@
 // StockTel v1.6 FIXED-20260527 — visual premium + main/render corrigido
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
 import * as XLSX from "xlsx";
 import { sbGet, sbSet, sbPing } from "./supabase.js";
@@ -62,7 +62,8 @@ const ALL_MODULES=[
   {k:"ajuda",l:"Ajuda / Docs",icon:"❓",group:"admin"},
   {k:"manut",l:"Manutenção",icon:"🔩",group:"mecanico"},
   {k:"ponto",l:"Ponto Eletrônico",icon:"🕐",group:"operacional"},
-  {k:"diag",l:"Diagnóstico do Sistema",icon:"🛡️",group:"admin"}
+  {k:"diag",l:"Diagnóstico do Sistema",icon:"🛡️",group:"admin"},
+  {k:"ia",l:"IA do Sistema",icon:"🤖",group:"admin"}
 ];
 const DEFAULT_PERMS={
   superadmin:ALL_MODULES.map(m=>m.k),
@@ -653,6 +654,226 @@ const DIAG_MODULES=[
   {key:"re_produtos",label:"Produtos",icon:"🔩"},
 ];
 
+/* ── IA DO SISTEMA ── */
+function IAPage({currentUser,isMobile,stock=[],tstock=[],os=[],returns=[],users=[],logs=[],solicitacoes=[],veiculos=[],pontos=[]}){
+  const isAdm=currentUser?.role==="admin"||currentUser?.role==="superadmin";
+  const[msgs,setMsgs]=useState([{role:"assistant",content:"Olá! Sou a **IA do StockTel** 🤖\n\nTenho acesso completo aos dados do sistema e posso ajudar com:\n- 📊 Análise de estoque e alertas críticos\n- 🔧 Diagnóstico de problemas e OS pendentes\n- 👥 Informações sobre usuários e técnicos\n- 🚗 Status da frota\n- 🛡️ Manutenção e sugestões de melhorias\n\nO que você precisa?"}]);
+  const[input,setInput]=useState("");
+  const[loading,setLoading]=useState(false);
+  const[error,setError]=useState(null);
+  const[apiOk,setApiOk]=useState(null);// null=não testado, true/false
+  const chatRef=useRef(null);
+  const inputRef=useRef(null);
+
+  useEffect(()=>{if(chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},[msgs]);
+
+  // Contexto do sistema para a IA
+  const buildContext=()=>{
+    const lowStock=stock.filter(s=>s.qty<=s.min);
+    const critStock=stock.filter(s=>s.qty<=s.min*0.6);
+    const pendOS=os.filter(o=>o.status!=="finalizada");
+    const pendRet=returns.filter(r=>r.status==="pending");
+    const pendSol=solicitacoes.filter(s=>s.status==="pending");
+    const techsAtivos=users.filter(u=>u.role==="tecnico");
+    const veicAtivos=veiculos.filter(v=>v.status==="ativo");
+    return `
+=== DADOS DO SISTEMA STOCKTEL (${new Date().toLocaleString("pt-BR")}) ===
+
+📦 ESTOQUE:
+- Total de itens cadastrados: ${stock.length}
+- Total de unidades em estoque: ${stock.reduce((a,s)=>a+s.qty,0)}
+- Itens com estoque baixo: ${lowStock.length} (${lowStock.map(s=>`${s.name}: ${s.qty}/${s.min}`).join(", ")||"nenhum"})
+- Itens críticos (≤60% do mínimo): ${critStock.length} (${critStock.map(s=>`${s.name}: ${s.qty}`).join(", ")||"nenhum"})
+- Estoque com técnicos: ${tstock.reduce((a,t)=>a+t.qty,0)} unidades
+
+🔧 ORDENS DE SERVIÇO:
+- Total de OS: ${os.length}
+- OS pendentes: ${pendOS.length}
+- Últimas OS: ${os.slice(0,3).map(o=>`${o.os} (${o.client})`).join(", ")||"nenhuma"}
+
+👥 USUÁRIOS E TÉCNICOS:
+- Total usuários: ${users.length}
+- Técnicos ativos: ${techsAtivos.length} (${techsAtivos.map(u=>u.name.split(" ")[0]).join(", ")||"nenhum"})
+
+↩️ DEVOLUÇÕES:
+- Pendentes: ${pendRet.length}
+- Solicitações pendentes: ${pendSol.length}
+
+🚗 FROTA:
+- Veículos cadastrados: ${veiculos.length}
+- Veículos ativos: ${veicAtivos.length}
+
+📋 LOGS RECENTES:
+${logs.slice(0,5).map(l=>`- ${l.date}: ${l.action} — ${l.detail}`).join("\n")||"Nenhum log"}
+
+📍 PONTO ELETRÔNICO:
+- Registros de ponto: ${pontos.length}
+`;
+  };
+
+  const SYSTEM_PROMPT=`Você é a IA oficial do StockTel, um sistema de gestão de estoque para telecomunicações. Você foi criada para ajudar administradores a gerenciar o sistema, diagnosticar problemas e realizar manutenções.
+
+Regras:
+- Responda SEMPRE em português brasileiro
+- Seja direto, objetivo e profissional
+- Use emojis para organizar respostas
+- Se identificar problemas críticos, destaque com ⚠️ ou 🔴
+- Sugira ações concretas quando relevante
+- Você tem acesso aos dados reais do sistema (fornecidos no contexto)
+- Para problemas técnicos de código/sync, sugira usar o Painel de Diagnóstico (🛡️)
+
+${buildContext()}`;
+
+  const sendMsg=async(text)=>{
+    const msg=text||input.trim();
+    if(!msg||loading)return;
+    setInput("");
+    setError(null);
+    const newMsgs=[...msgs,{role:"user",content:msg}];
+    setMsgs(newMsgs);
+    setLoading(true);
+    try{
+      const res=await fetch("/api/ai",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          messages:[
+            {role:"system",content:SYSTEM_PROMPT},
+            ...newMsgs.map(m=>({role:m.role,content:m.content}))
+          ]
+        })
+      });
+      const data=await res.json();
+      if(!res.ok||data.error){
+        setError(data.error||"Erro ao conectar com a IA");
+        setApiOk(false);
+      }else{
+        setMsgs(p=>[...p,{role:"assistant",content:data.reply}]);
+        setApiOk(true);
+      }
+    }catch(e){
+      setError("Erro de conexão: "+e.message);
+      setApiOk(false);
+    }
+    setLoading(false);
+    setTimeout(()=>inputRef.current?.focus(),100);
+  };
+
+  const QUICK_ACTIONS=[
+    {icon:"📊",label:"Analisar estoque crítico",msg:"Analise o estoque atual e me dê um relatório completo dos itens críticos e o que precisa ser reposto com urgência."},
+    {icon:"🔍",label:"Diagnóstico geral",msg:"Faça um diagnóstico completo do sistema: estoque, OS pendentes, devoluções, frota e identifique os principais problemas."},
+    {icon:"👥",label:"Relatório de técnicos",msg:"Gere um relatório sobre os técnicos: quem tem mais materiais em posse, OS abertas e devoluções pendentes."},
+    {icon:"🚀",label:"Sugestões de melhoria",msg:"Com base nos dados atuais do sistema, quais são as principais melhorias e ações que devo tomar?"},
+    {icon:"⚠️",label:"Alertas e riscos",msg:"Liste todos os alertas e riscos do sistema agora: estoque crítico, OS atrasadas, devoluções pendentes há muito tempo."},
+    {icon:"🛠️",label:"Plano de manutenção",msg:"Crie um plano de manutenção para o sistema com as ações prioritárias que devo executar hoje."},
+  ];
+
+  // Renderiza markdown simples (negrito, listas, emojis)
+  const renderMsg=(text)=>{
+    const lines=text.split("\n");
+    return lines.map((line,i)=>{
+      const bold=line.replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>");
+      const isLi=line.trim().startsWith("-")||line.trim().startsWith("•");
+      return<div key={i} style={{marginBottom:isLi?2:4,paddingLeft:isLi?8:0,color:C.txt2,fontSize:13,lineHeight:1.6}} dangerouslySetInnerHTML={{__html:bold}}/>;
+    });
+  };
+
+  if(!isAdm)return<div style={{padding:40,textAlign:"center",color:C.red,fontSize:15,fontWeight:700}}>🔒 Acesso restrito a administradores.</div>;
+
+  return<div style={{display:"flex",flexDirection:"column",gap:16,height:"100%"}}>
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+      <div>
+        <div style={{fontSize:isMobile?17:22,fontWeight:800,color:C.txt,display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:28}}>🤖</span> IA do Sistema
+          {apiOk===true&&<span style={{fontSize:11,background:`${C.grn}22`,color:C.grn,padding:"2px 8px",borderRadius:20,fontWeight:600}}>● Online</span>}
+          {apiOk===false&&<span style={{fontSize:11,background:`${C.red}22`,color:C.red,padding:"2px 8px",borderRadius:20,fontWeight:600}}>● Offline</span>}
+        </div>
+        <div style={{fontSize:11,color:C.muted,marginTop:2}}>Assistente inteligente · Acesso restrito a administradores · Powered by Llama 3.3 70B</div>
+      </div>
+      <Btn size="sm" color="ghost" outline onClick={()=>setMsgs([{role:"assistant",content:"Conversa reiniciada! Como posso ajudar?"}])}>🗑️ Limpar chat</Btn>
+    </div>
+
+    {/* Status do sistema em cards */}
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(5,1fr)",gap:8}}>
+      {[
+        {icon:"📦",label:"Itens",value:stock.length,sub:`${stock.filter(s=>s.qty<=s.min).length} baixos`,color:stock.filter(s=>s.qty<=s.min*0.6).length>0?C.red:C.gold},
+        {icon:"🔧",label:"OS",value:os.length,sub:`${os.filter(o=>o.status!=="finalizada").length} pend.`,color:C.blue},
+        {icon:"👥",label:"Técnicos",value:users.filter(u=>u.role==="tecnico").length,sub:"ativos",color:C.grn},
+        {icon:"↩️",label:"Devoluções",value:returns.filter(r=>r.status==="pending").length,sub:"pendentes",color:returns.filter(r=>r.status==="pending").length>0?C.ylw:C.grn},
+        {icon:"🚗",label:"Frota",value:veiculos.filter(v=>v.status==="ativo").length,sub:"veículos",color:C.gold},
+      ].map((s,i)=>(
+        <Card key={i} style={{padding:"10px 14px",display:"flex",gap:8,alignItems:"center"}}>
+          <span style={{fontSize:20}}>{s.icon}</span>
+          <div>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:18,fontWeight:800,color:s.color,lineHeight:1}}>{s.value}</div>
+            <div style={{fontSize:9,color:C.muted}}>{s.label} · {s.sub}</div>
+          </div>
+        </Card>
+      ))}
+    </div>
+
+    {/* Ações rápidas */}
+    <Card style={{padding:14}}>
+      <div style={{fontSize:12,fontWeight:700,color:C.muted,marginBottom:10,letterSpacing:".05em"}}>⚡ AÇÕES RÁPIDAS</div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        {QUICK_ACTIONS.map((a,i)=>(
+          <button key={i} onClick={()=>sendMsg(a.msg)} disabled={loading}
+            style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:8,cursor:"pointer",fontSize:12,color:C.txt2,fontWeight:500,transition:"all .15s",opacity:loading?.5:1}}>
+            <span>{a.icon}</span>{a.label}
+          </button>
+        ))}
+      </div>
+    </Card>
+
+    {/* Erro de API */}
+    {error&&<div style={{padding:"10px 16px",background:`${C.red}15`,border:`1px solid ${C.red}44`,borderRadius:8,fontSize:12,color:C.red}}>
+      ❌ {error}
+      {error.includes("GROQ_API_KEY")&&<div style={{marginTop:6,fontSize:11,color:C.muted}}>Configure a variável <strong>GROQ_API_KEY</strong> no painel do Vercel → Settings → Environment Variables</div>}
+    </div>}
+
+    {/* Chat */}
+    <Card style={{flex:1,padding:0,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:isMobile?300:380}}>
+      <div style={{padding:"10px 16px",borderBottom:`1px solid ${C.bdr}`,fontSize:12,fontWeight:700,color:C.txt}}>💬 Chat com a IA</div>
+      <div ref={chatRef} style={{flex:1,overflowY:"auto",padding:"12px 16px",display:"flex",flexDirection:"column",gap:12}}>
+        {msgs.map((m,i)=>(
+          <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:m.role==="user"?"row-reverse":"row"}}>
+            <div style={{width:32,height:32,borderRadius:"50%",background:m.role==="user"?`${C.blue}33`:`${C.gold}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>
+              {m.role==="user"?"👤":"🤖"}
+            </div>
+            <div style={{maxWidth:"80%",background:m.role==="user"?`${C.blue}18`:C.surf,border:`1px solid ${m.role==="user"?C.blue:C.bdr}33`,borderRadius:m.role==="user"?"12px 12px 2px 12px":"12px 12px 12px 2px",padding:"10px 14px"}}>
+              {renderMsg(m.content)}
+            </div>
+          </div>
+        ))}
+        {loading&&<div style={{display:"flex",gap:10,alignItems:"center"}}>
+          <div style={{width:32,height:32,borderRadius:"50%",background:`${C.gold}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🤖</div>
+          <div style={{background:C.surf,border:`1px solid ${C.bdr}33`,borderRadius:"12px 12px 12px 2px",padding:"10px 14px"}}>
+            <div style={{display:"flex",gap:4,alignItems:"center"}}>
+              {[0,1,2].map(j=><div key={j} style={{width:6,height:6,borderRadius:"50%",background:C.gold,animation:`pulse 1.2s ease-in-out ${j*0.2}s infinite`}}/>)}
+              <span style={{fontSize:11,color:C.muted,marginLeft:4}}>IA pensando...</span>
+            </div>
+          </div>
+        </div>}
+      </div>
+      {/* Input */}
+      <div style={{padding:"10px 14px",borderTop:`1px solid ${C.bdr}`,display:"flex",gap:8}}>
+        <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)}
+          onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMsg();}}}
+          placeholder="Pergunte à IA sobre o sistema... (Enter para enviar)"
+          style={{flex:1,background:C.bg,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"10px 14px",color:C.txt,fontSize:13,outline:"none"}}
+          disabled={loading}
+        />
+        <Btn color="gold" onClick={()=>sendMsg()} disabled={loading||!input.trim()} style={{flexShrink:0}}>
+          {loading?"⏳":"📤 Enviar"}
+        </Btn>
+      </div>
+    </Card>
+
+    <style>{`@keyframes pulse{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}`}</style>
+  </div>;
+}
+
 function DiagnosticoPage({currentUser,isMobile}){
   const isAdm=currentUser?.role==="admin"||currentUser?.role==="superadmin";
   const[connStatus,setConnStatus]=useState("idle");// idle|checking|ok|error
@@ -1064,7 +1285,7 @@ function Dashboard({stock,tstock,users,os,returns,logs,setPage,isMobile,currentU
         <Card style={{padding:14}}>
           <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:12}}>Ações Rápidas</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            {[{icon:"📥",label:"Nova Entrada (NF)",p:"nf"},{icon:"🚀",label:"Liberar Material",p:"dist"},{icon:"↩️",label:"Devoluções",p:"dev"},{icon:"🔧",label:"Nova OS",p:"os"},{icon:"📦",label:"Ver Estoque",p:"estoque"},{icon:"🛡️",label:"Diagnóstico",p:"diag"}].map((a,i)=>(
+            {[{icon:"📥",label:"Nova Entrada (NF)",p:"nf"},{icon:"🚀",label:"Liberar Material",p:"dist"},{icon:"↩️",label:"Devoluções",p:"dev"},{icon:"🔧",label:"Nova OS",p:"os"},{icon:"🤖",label:"IA do Sistema",p:"ia"},{icon:"🛡️",label:"Diagnóstico",p:"diag"}].map((a,i)=>(
               <div key={i} onClick={()=>setPage(a.p)} style={{display:"flex",alignItems:"center",gap:10,padding:"12px",background:C.surf,borderRadius:10,cursor:"pointer",border:`1px solid ${C.bdr}`}}>
                 <span style={{fontSize:22}}>{a.icon}</span>
                 <span style={{fontSize:12,color:C.txt2,lineHeight:1.3,fontWeight:500}}>{a.label}</span>
@@ -1199,7 +1420,7 @@ function Dashboard({stock,tstock,users,os,returns,logs,setPage,isMobile,currentU
           <Card style={{padding:18}}>
             <div style={{fontSize:14,fontWeight:700,color:C.txt,marginBottom:14}}>Ações Rápidas</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-              {[{icon:"📥",label:"Nova Entrada",p:"nf"},{icon:"🚀",label:"Liberar Material",p:"dist"},{icon:"↩️",label:"Devolução",p:"dev"},{icon:"🔧",label:"Nova OS",p:"os"},{icon:"📦",label:"Estoque Base",p:"estoque"},{icon:"🛡️",label:"Diagnóstico",p:"diag"}].map((a,i)=>(
+              {[{icon:"📥",label:"Nova Entrada",p:"nf"},{icon:"🚀",label:"Liberar Material",p:"dist"},{icon:"↩️",label:"Devolução",p:"dev"},{icon:"🔧",label:"Nova OS",p:"os"},{icon:"🤖",label:"IA do Sistema",p:"ia"},{icon:"🛡️",label:"Diagnóstico",p:"diag"}].map((a,i)=>(
                 <div key={i} onClick={()=>setPage(a.p)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5,padding:"12px 6px",background:C.surf,borderRadius:8,cursor:"pointer",border:`1px solid ${C.bdr}`,textAlign:"center"}}>
                   <span style={{fontSize:20}}>{a.icon}</span>
                   <span style={{fontSize:10,color:C.muted2,lineHeight:1.3}}>{a.label}</span>
@@ -6609,6 +6830,7 @@ function AppInner(){
     frota:<FrotaPage veiculos={veiculos} setVeiculos={setVeiculos} abastecimentos={abastecimentos} setAbastecimentos={setAbastecimentos} checkouts={checkouts} setCheckouts={setCheckouts} pneus={pneus} setPneus={setPneus} docsVeic={docsVeic} setDocsVeic={setDocsVeic} manutOS={manutOS} manutSols={manutSols} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
     manut:<ManutencaoPage manutSols={manutSols} setManutSols={setManutSols} manutOS={manutOS} setManutOS={setManutOS} veiculos={veiculos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} abastecimentos={abastecimentos} pneus={pneus}/>,
     diag:<DiagnosticoPage currentUser={user} isMobile={isMobile}/>,
+    ia:<IAPage currentUser={user} isMobile={isMobile} stock={stock} tstock={tstock} os={os} returns={returns} users={users} logs={logs} solicitacoes={solicitacoes} veiculos={veiculos} pontos={pontos}/>,
   };
 
   return <div style={{height:"100dvh",background:C.bg,color:C.txt,display:"flex",overflow:"hidden"}}>
