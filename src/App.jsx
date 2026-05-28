@@ -78,33 +78,8 @@ const today=()=>new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"2-dig
 const fmt=(n)=>new Intl.NumberFormat("pt-BR").format(n??0);
 const useIsMobile=()=>{const[m,setM]=useState(()=>window.innerWidth<768);useEffect(()=>{const h=()=>setM(window.innerWidth<768);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);return m;};
 
-// Hook que sincroniza estado com Supabase (nuvem) + localStorage (fallback offline)
-const useLS=(key,initial)=>{
-  const[val,setVal]=useState(()=>{
-    try{const s=localStorage.getItem(key);return s?JSON.parse(s):initial;}
-    catch{return initial;}
-  });
-  // Carrega do Supabase ao montar
-  useEffect(()=>{
-    sbGet(key).then(remote=>{
-      if(remote!==null){
-        setVal(remote);
-        try{localStorage.setItem(key,JSON.stringify(remote));}catch{}
-      }
-    }).catch(()=>{
-      // Sem conexão: usa localStorage silenciosamente
-    });
-  },[key]);
-  const set=(v)=>{
-    setVal(prev=>{
-      const next=typeof v==="function"?v(prev):v;
-      try{localStorage.setItem(key,JSON.stringify(next));}catch{}
-      sbSet(key,next).catch(()=>{});
-      return next;
-    });
-  };
-  return[val,set];
-};
+// Hook useLS — importado de hooks/useLS.js (com sync bidirecional e retry automático)
+import { useLS, pushToCloud, queueGet, queueRemove, queueSize } from "./hooks/useLS.js";
 
 const USERS0=[
   {id:"u0",name:"Master StockTel",email:"master@stocktel.com.br",phone:"",cpf:"",login:"stocktelmaster",pass:"ST@fMa@wKQX2026!",role:"superadmin",photo:"",perms:ALL_MODULES.map(m=>m.k),mustChangePassword:false},
