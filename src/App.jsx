@@ -5128,7 +5128,7 @@ function HelpPage({currentUser,isMobile}){
 
 
 /* ── PONTO ELETRÔNICO ── */
-function PontoPage({pontos,setPontos,pontoConfig,setPontoConfig,pontoSolicits,setPontoSolicits,users,currentUser,addLog,isMobile,showToast}){
+function PontoPage({pontos,setPontos,pontoConfig,setPontoConfig,pontoSolicits,setPontoSolicits,escalas=[],setEscalas,folgas=[],setFolgas,users,currentUser,addLog,isMobile,showToast}){
   const isAdm=["admin","superadmin"].includes(currentUser.role);
   const hoje=new Date().toISOString().slice(0,10);
 
@@ -5144,6 +5144,13 @@ function PontoPage({pontos,setPontos,pontoConfig,setPontoConfig,pontoSolicits,se
   const[geoLoading,setGeoLoading]=useState(false);
   const[geoErro,setGeoErro]=useState("");
   const[tab,setTab]=useState(isAdm?"admin":"meu");
+  const[mesEscala,setMesEscala]=useState(new Date().getMonth());
+  const[anoEscala,setAnoEscala]=useState(new Date().getFullYear());
+  const[modalEscala,setModalEscala]=useState(null);
+  const[modalFolga,setModalFolga]=useState(null);
+  const[formEscala,setFormEscala]=useState({userId:"",tipo:"semanal",diasSemana:[],entrada:"08:00",saida:"17:00",obs:""});
+  const[formFolga,setFormFolga]=useState({userId:"",data:"",tipoFolga:"folga",obs:""});
+  const[viewUserId,setViewUserId]=useState("");
   const[modalSolicit,setModalSolicit]=useState(false);
   const[motivoSolicit,setMotivoSolicit]=useState("");
   const[tipoSolicit,setTipoSolicit]=useState("");
@@ -5313,6 +5320,7 @@ function PontoPage({pontos,setPontos,pontoConfig,setPontoConfig,pontoSolicits,se
     <div style={{display:"flex",borderBottom:`1px solid ${C.bdr}`,gap:0}}>
       {[
         {k:"meu",l:"🕐 Meu Ponto"},
+        {k:"escala",l:"📅 Escala & Folgas"},
         ...(isAdm?[{k:"admin",l:`📋 Gestão${solicsPendentes.length>0?` (${solicsPendentes.length})`:""}`,},{k:"config_view",l:"📊 Resumo Equipe"}]:[]),
       ].map(t=>(
         <div key={t.k} onClick={()=>setTab(t.k)} style={{padding:"9px 16px",cursor:"pointer",fontSize:13,fontWeight:600,borderBottom:`2px solid ${tab===t.k?C.gold:"transparent"}`,color:tab===t.k?C.gold:C.muted,whiteSpace:"nowrap"}}>{t.l}</div>
@@ -5545,6 +5553,19 @@ function PontoPage({pontos,setPontos,pontoConfig,setPontoConfig,pontoSolicits,se
       })}
     </div>}
 
+    {/* ── ABA ESCALA & FOLGAS ── */}
+    {tab==="escala"&&<EscalaFolgaTab
+      escalas={escalas} setEscalas={setEscalas}
+      folgas={folgas} setFolgas={setFolgas}
+      users={users} currentUser={currentUser}
+      isAdm={isAdm} isMobile={isMobile}
+      addLog={addLog} showToast={showToast}
+      mesEscala={mesEscala} setMesEscala={setMesEscala}
+      anoEscala={anoEscala} setAnoEscala={setAnoEscala}
+      viewUserId={viewUserId} setViewUserId={setViewUserId}
+    />}
+
+
     {/* ── MODAL SOLICITAR APROVAÇÃO ── */}
     {modalSolicit&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
       <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,width:"100%",maxWidth:480,maxHeight:"80vh",display:"flex",flexDirection:"column",position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
@@ -5676,6 +5697,407 @@ function PontoPage({pontos,setPontos,pontoConfig,setPontoConfig,pontoSolicits,se
   </div>;
 }
 
+
+/* ── ESCALA & FOLGAS ── */
+function EscalaFolgaTab({escalas,setEscalas,folgas,setFolgas,users,currentUser,isAdm,isMobile,addLog,showToast,mesEscala,setMesEscala,anoEscala,setAnoEscala,viewUserId,setViewUserId}){
+  const DIAS_SEMANA=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+  const DIAS_SEMANA_FULL=["Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado"];
+  const MESES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  const TIPOS_FOLGA={folga:{l:"Folga",c:C.ylw,i:"🟡"},ferias:{l:"Férias",c:C.blue,i:"🏖️"},feriado:{l:"Feriado",c:C.gold,i:"🎉"},abono:{l:"Abono",c:C.grn,i:"✅"},atestado:{l:"Atestado",c:C.red,i:"🏥"}};
+
+  const[modalEscala,setModalEscala]=useState(null);
+  const[modalFolga,setModalFolga]=useState(null);
+  const[formEscala,setFormEscala]=useState({userId:"",diasSemana:["Seg","Ter","Qua","Qui","Sex"],entrada:"08:00",saida:"17:00",almEntrada:"12:00",almSaida:"13:00",obs:""});
+  const[formFolga,setFormFolga]=useState({userId:currentUser.id,data:"",tipoFolga:"folga",obs:"",todos:false});
+  const[filtroView,setFiltroView]=useState(viewUserId||currentUser.id);
+
+  const hoje=new Date();
+  const primeiroDia=new Date(anoEscala,mesEscala,1);
+  const ultimoDia=new Date(anoEscala,mesEscala+1,0);
+  const diasNoMes=ultimoDia.getDate();
+  const diaInicioSemana=primeiroDia.getDay();
+
+  const navMes=(dir)=>{
+    let m=mesEscala+dir,a=anoEscala;
+    if(m>11){m=0;a++;}
+    if(m<0){m=11;a--;}
+    setMesEscala(m);setAnoEscala(a);
+  };
+
+  const dtStr=(dia)=>`${anoEscala}-${String(mesEscala+1).padStart(2,"0")}-${String(dia).padStart(2,"0")}`;
+
+  // Escala do usuário: obtém os dias de trabalho
+  const getEscalaUser=(uid)=>escalas.find(e=>e.userId===uid)||null;
+  const isDiaTrabalho=(uid,dia)=>{
+    const e=getEscalaUser(uid);
+    if(!e)return false;
+    const dt=new Date(anoEscala,mesEscala,dia);
+    const nomeDia=DIAS_SEMANA[dt.getDay()];
+    return e.diasSemana?.includes(nomeDia);
+  };
+  const getFolgaDia=(uid,dia)=>{
+    const ds=dtStr(dia);
+    return folgas.find(f=>(f.userId===uid||f.todos)&&f.data===ds)||null;
+  };
+
+  const usersComEscala=users.filter(u=>["tecnico","mecanico","estoque","admin","superadmin","financeiro"].includes(u.role));
+
+  const salvarEscala=()=>{
+    if(!formEscala.userId){showToast("Selecione o funcionário.","warning");return;}
+    if(!formEscala.diasSemana.length){showToast("Selecione ao menos um dia.","warning");return;}
+    const existing=escalas.find(e=>e.userId===formEscala.userId);
+    if(existing){
+      setEscalas(p=>p.map(e=>e.userId===formEscala.userId?{...formEscala,id:existing.id}:e));
+    } else {
+      setEscalas(p=>[...p,{...formEscala,id:uid()}]);
+    }
+    const u=users.find(x=>x.id===formEscala.userId);
+    addLog(currentUser.name,"Escala",`Escala definida: ${u?.name||"?"} — ${formEscala.diasSemana.join(",")} ${formEscala.entrada}–${formEscala.saida}`);
+    showToast("Escala salva com sucesso!","success");
+    setModalEscala(null);
+  };
+
+  const salvarFolga=()=>{
+    if(!formFolga.data){showToast("Selecione a data.","warning");return;}
+    if(!formFolga.userId&&!formFolga.todos){showToast("Selecione o funcionário.","warning");return;}
+    const nova={...formFolga,id:uid(),criadoPor:currentUser.name};
+    setFolgas(p=>[...p,nova]);
+    const u=users.find(x=>x.id===formFolga.userId);
+    addLog(currentUser.name,"Folga",`${TIPOS_FOLGA[formFolga.tipoFolga]?.l}: ${formFolga.todos?"Todos":u?.name||"?"} — ${formFolga.data}`);
+    showToast(`${TIPOS_FOLGA[formFolga.tipoFolga]?.l} registrada!`,"success");
+    setModalFolga(null);
+    setFormFolga({userId:currentUser.id,data:"",tipoFolga:"folga",obs:"",todos:false});
+  };
+
+  const excluirFolga=(id)=>{
+    setFolgas(p=>p.filter(f=>f.id!==id));
+    showToast("Folga removida.","warning");
+  };
+
+  // Calendário em array de semanas
+  const gerarCalendario=()=>{
+    const cells=[];
+    for(let i=0;i<diaInicioSemana;i++) cells.push(null);
+    for(let d=1;d<=diasNoMes;d++) cells.push(d);
+    while(cells.length%7!==0) cells.push(null);
+    const weeks=[];
+    for(let i=0;i<cells.length;i+=7) weeks.push(cells.slice(i,i+7));
+    return weeks;
+  };
+  const semanas=gerarCalendario();
+
+  const userView=users.find(u=>u.id===filtroView)||currentUser;
+  const escalaView=getEscalaUser(filtroView);
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+
+    {/* Filtro de visualização + botões admin */}
+    <Card style={{padding:14}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:12}}>
+        <div style={{flex:1,minWidth:200}}>
+          <Sel label={isAdm?"Ver escala de:":"Funcionário"} value={filtroView} onChange={v=>{setFiltroView(v);setViewUserId(v);}}
+            options={isAdm
+              ?[...usersComEscala.map(u=>({value:u.id,label:`${u.name} (${u.role})`}))]
+              :[{value:currentUser.id,label:currentUser.name}]}/>
+        </div>
+        {isAdm&&<div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <Btn size="sm" color="gold" onClick={()=>{
+            const ex=getEscalaUser(filtroView);
+            setFormEscala(ex?{...ex}:{userId:filtroView,diasSemana:["Seg","Ter","Qua","Qui","Sex"],entrada:"08:00",saida:"17:00",almEntrada:"12:00",almSaida:"13:00",obs:""});
+            setModalEscala("edit");
+          }}>⚙️ Editar Escala</Btn>
+          <Btn size="sm" color="ylw" onClick={()=>{setFormFolga({userId:filtroView,data:"",tipoFolga:"folga",obs:"",todos:false});setModalFolga("new");}}>➕ Registrar Folga</Btn>
+          <Btn size="sm" color="ghost" outline onClick={()=>{setFormFolga({userId:"",data:"",tipoFolga:"feriado",obs:"Feriado Nacional",todos:true});setModalFolga("new");}}>🎉 Feriado</Btn>
+        </div>}
+      </div>
+      {escalaView&&<div style={{marginTop:12,padding:"10px 14px",background:`${C.gold}15`,border:`1px solid ${C.gold}44`,borderRadius:8,display:"flex",gap:14,flexWrap:"wrap",fontSize:12}}>
+        <span style={{fontWeight:700,color:C.gold}}>📅 Escala de {userView?.name}:</span>
+        <span style={{color:C.txt}}>{escalaView.diasSemana?.join(" · ")}</span>
+        <span style={{color:C.grn}}>▶ Entrada: {escalaView.entrada}</span>
+        <span style={{color:C.red}}>■ Saída: {escalaView.saida}</span>
+        {escalaView.almEntrada&&<span style={{color:C.ylw}}>☀ Almoço: {escalaView.almEntrada}–{escalaView.almSaida}</span>}
+      </div>}
+      {!escalaView&&<div style={{marginTop:8,fontSize:12,color:C.muted,textAlign:isAdm?"left":"center"}}>
+        {isAdm?"Nenhuma escala definida para este funcionário. Clique em '⚙️ Editar Escala'.":"Nenhuma escala definida. Contate o administrador."}
+      </div>}
+    </Card>
+
+    {/* Navegação do mês */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <button onClick={()=>navMes(-1)} style={{background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"6px 14px",cursor:"pointer",color:C.txt,fontSize:16}}>‹</button>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:16,fontWeight:700,color:C.txt}}>{MESES[mesEscala]} {anoEscala}</div>
+        <div style={{fontSize:11,color:C.muted,marginTop:2}}>
+          {hoje.getMonth()===mesEscala&&hoje.getFullYear()===anoEscala&&"Mês atual • "}
+          <span style={{cursor:"pointer",color:C.gold,textDecoration:"underline"}} onClick={()=>{setMesEscala(hoje.getMonth());setAnoEscala(hoje.getFullYear());}}>Hoje</span>
+        </div>
+      </div>
+      <button onClick={()=>navMes(1)} style={{background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"6px 14px",cursor:"pointer",color:C.txt,fontSize:16}}>›</button>
+    </div>
+
+    {/* Calendário */}
+    <Card style={{padding:0,overflow:"hidden"}}>
+      {/* Cabeçalho dias semana */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",background:C.surf,borderBottom:`1px solid ${C.bdr}`}}>
+        {DIAS_SEMANA.map((d,i)=>(
+          <div key={d} style={{textAlign:"center",padding:"8px 4px",fontSize:11,fontWeight:700,
+            color:i===0||i===6?C.red:C.muted}}>{d}</div>
+        ))}
+      </div>
+      {/* Semanas */}
+      {semanas.map((sem,si)=>(
+        <div key={si} style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:si<semanas.length-1?`1px solid ${C.bdr}18`:"none"}}>
+          {sem.map((dia,di)=>{
+            if(!dia) return <div key={di} style={{minHeight:64,background:"transparent"}}/>;
+            const dtHoje=hoje.getDate()===dia&&hoje.getMonth()===mesEscala&&hoje.getFullYear()===anoEscala;
+            const isTrabalho=isDiaTrabalho(filtroView,dia);
+            const folga=getFolgaDia(filtroView,dia);
+            const isDS=di===0||di===6;
+            const folgaInfo=folga?TIPOS_FOLGA[folga.tipoFolga]:null;
+
+            // Background
+            let bg="transparent";
+            let border="none";
+            if(dtHoje) border=`2px solid ${C.gold}`;
+            if(folga) bg=`${folgaInfo?.c||C.ylw}18`;
+            else if(isTrabalho&&!isDS) bg=`${C.grn}12`;
+            else if(isDS) bg=`${C.red}06`;
+
+            return <div key={di} style={{minHeight:isMobile?52:64,padding:isMobile?"4px":"6px",
+              background:bg,border,position:"relative",
+              borderLeft:di>0?`1px solid ${C.bdr}18`:"none"}}>
+              {/* Número do dia */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                <span style={{
+                  fontSize:isMobile?11:13,fontWeight:dtHoje?800:400,
+                  color:dtHoje?C.gold:isDS?C.red:C.txt,
+                  background:dtHoje?`${C.gold}22`:"transparent",
+                  borderRadius:dtHoje?20:0,padding:dtHoje?"2px 6px":0
+                }}>{dia}</span>
+                {folga&&<span style={{fontSize:isMobile?12:14}}>{folgaInfo?.i}</span>}
+                {isTrabalho&&!folga&&!isDS&&<span style={{fontSize:10,color:C.grn}}>✓</span>}
+              </div>
+              {/* Info no dia */}
+              {!isMobile&&<div style={{marginTop:3}}>
+                {folga&&<div style={{fontSize:9,color:folgaInfo?.c||C.ylw,fontWeight:700,lineHeight:1.3}}>
+                  {folgaInfo?.l}{folga.todos?" (Todos)":""}
+                </div>}
+                {isTrabalho&&!folga&&!isDS&&<div style={{fontSize:9,color:C.grn,lineHeight:1.3}}>
+                  {escalaView?.entrada}–{escalaView?.saida}
+                </div>}
+              </div>}
+              {/* Excluir folga (admin) */}
+              {isAdm&&folga&&!folga.todos&&<button onClick={()=>excluirFolga(folga.id)}
+                style={{position:"absolute",bottom:2,right:2,background:"transparent",border:"none",cursor:"pointer",color:C.red,fontSize:10,opacity:0.6,lineHeight:1}}>✕</button>}
+              {isAdm&&folga&&folga.todos&&<button onClick={()=>excluirFolga(folga.id)}
+                style={{position:"absolute",bottom:2,right:2,background:"transparent",border:"none",cursor:"pointer",color:C.red,fontSize:10,opacity:0.6,lineHeight:1}}>✕</button>}
+            </div>;
+          })}
+        </div>
+      ))}
+    </Card>
+
+    {/* Legenda */}
+    <div style={{display:"flex",gap:10,flexWrap:"wrap",fontSize:11}}>
+      {[
+        {c:C.grn,l:"Dia de trabalho"},
+        {c:C.ylw,l:"Folga"},
+        {c:C.blue,l:"Férias"},
+        {c:C.gold,l:"Hoje / Feriado"},
+        {c:C.red,l:"Final de semana"},
+      ].map((l,i)=>(
+        <div key={i} style={{display:"flex",alignItems:"center",gap:5}}>
+          <div style={{width:12,height:12,borderRadius:3,background:`${l.c}33`,border:`1px solid ${l.c}66`}}/>
+          <span style={{color:C.muted}}>{l.l}</span>
+        </div>
+      ))}
+    </div>
+
+    {/* Lista de folgas do mês */}
+    {(()=>{
+      const folgasMes=folgas.filter(f=>{
+        const match=f.data.startsWith(`${anoEscala}-${String(mesEscala+1).padStart(2,"0")}`);
+        return match&&(f.userId===filtroView||f.todos);
+      });
+      if(!folgasMes.length) return null;
+      return <Card style={{padding:0,overflow:"hidden"}}>
+        <div style={{padding:"10px 16px",background:C.surf,borderBottom:`1px solid ${C.bdr}`,fontSize:12,fontWeight:700,color:C.gold}}>
+          📋 Folgas/Ausências em {MESES[mesEscala]}
+        </div>
+        {folgasMes.map((f,i)=>{
+          const u=users.find(x=>x.id===f.userId);
+          const ti=TIPOS_FOLGA[f.tipoFolga];
+          return <div key={f.id} style={{padding:"10px 16px",borderBottom:i<folgasMes.length-1?`1px solid ${C.bdr}18`:"none",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:16}}>{ti?.i}</span>
+              <div>
+                <div style={{fontSize:12,fontWeight:600,color:C.txt}}>{f.todos?"Todos os funcionários":(u?.name||"?")}</div>
+                <div style={{fontSize:11,color:C.muted}}>{ti?.l} · {new Date(f.data+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"short",day:"2-digit",month:"2-digit"})}</div>
+                {f.obs&&<div style={{fontSize:10,color:C.muted,fontStyle:"italic"}}>{f.obs}</div>}
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <Bdg color={f.tipoFolga==="ferias"?"blue":f.tipoFolga==="feriado"?"gold":f.tipoFolga==="atestado"?"red":"ylw"}>{ti?.l}</Bdg>
+              {isAdm&&<button onClick={()=>excluirFolga(f.id)} style={{background:C.redD,color:C.red,border:"none",borderRadius:6,padding:"3px 10px",cursor:"pointer",fontSize:11}}>Remover</button>}
+            </div>
+          </div>;
+        })}
+      </Card>;
+    })()}
+
+    {/* Visão geral equipe - admin only */}
+    {isAdm&&<Card style={{padding:0,overflow:"hidden"}}>
+      <div style={{padding:"10px 16px",background:C.surf,borderBottom:`1px solid ${C.bdr}`,fontSize:12,fontWeight:700,color:C.gold}}>
+        👥 Escala da Equipe — {MESES[mesEscala]} {anoEscala}
+      </div>
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",minWidth:500}}>
+          <thead>
+            <tr style={{background:C.surf}}>
+              <td style={{padding:"8px 14px",fontSize:11,fontWeight:700,color:C.muted,borderBottom:`1px solid ${C.bdr}`,minWidth:120}}>Funcionário</td>
+              {Array.from({length:diasNoMes},(_,i)=>{
+                const d=new Date(anoEscala,mesEscala,i+1);
+                const isDS=d.getDay()===0||d.getDay()===6;
+                return <td key={i} style={{padding:"4px 2px",textAlign:"center",fontSize:9,fontWeight:700,
+                  color:isDS?C.red:C.muted,borderBottom:`1px solid ${C.bdr}`,minWidth:24,
+                  background:i+1===hoje.getDate()&&mesEscala===hoje.getMonth()&&anoEscala===hoje.getFullYear()?`${C.gold}22`:"transparent"}}>
+                  {i+1}
+                </td>;
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {usersComEscala.map(u=>(
+              <tr key={u.id} style={{borderBottom:`1px solid ${C.bdr}18`}}>
+                <td style={{padding:"6px 14px",fontSize:11,fontWeight:600,color:C.txt,whiteSpace:"nowrap"}}>
+                  {u.name.split(" ").slice(0,2).join(" ")}
+                </td>
+                {Array.from({length:diasNoMes},(_,i)=>{
+                  const dia=i+1;
+                  const isTrabalho=isDiaTrabalho(u.id,dia);
+                  const folgaDia=getFolgaDia(u.id,dia);
+                  const folgaInfo=folgaDia?TIPOS_FOLGA[folgaDia.tipoFolga]:null;
+                  const d=new Date(anoEscala,mesEscala,dia);
+                  const isDS=d.getDay()===0||d.getDay()===6;
+                  const dtHoje=dia===hoje.getDate()&&mesEscala===hoje.getMonth()&&anoEscala===hoje.getFullYear();
+                  return <td key={i} style={{textAlign:"center",fontSize:12,padding:"4px 2px",
+                    background:dtHoje?`${C.gold}22`:folgaDia?`${folgaInfo?.c}18`:isTrabalho&&!isDS?`${C.grn}18`:isDS?`${C.red}06`:"transparent"}}>
+                    {folgaDia?folgaInfo?.i:isTrabalho&&!isDS?"·":isDS?"":"—"}
+                  </td>;
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{padding:"8px 16px",fontSize:10,color:C.muted,background:C.surf,borderTop:`1px solid ${C.bdr}`,display:"flex",gap:12,flexWrap:"wrap"}}>
+        <span>· = Dia de trabalho</span><span>🟡 Folga</span><span>🏖️ Férias</span><span>🎉 Feriado</span><span>🏥 Atestado</span><span style={{color:C.red}}>Final de semana</span>
+      </div>
+    </Card>}
+
+    {/* ── MODAL EDITAR ESCALA ── */}
+    {modalEscala&&isAdm&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1100,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
+      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,width:"100%",maxWidth:520,maxHeight:"88vh",display:"flex",flexDirection:"column",position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
+        <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+          <div>
+            <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>⚙️ Configurar Escala</h2>
+            <p style={{fontSize:11,color:C.muted,marginTop:2}}>{users.find(u=>u.id===formEscala.userId)?.name||"Funcionário"}</p>
+          </div>
+          <button onClick={()=>setModalEscala(null)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,border:"none",cursor:"pointer",fontSize:16}}>✕</button>
+        </div>
+        <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:14}}>
+          <Sel label="Funcionário *" value={formEscala.userId} onChange={v=>setFormEscala(f=>({...f,userId:v}))}
+            options={[{value:"",label:"— Selecionar —"},...usersComEscala.map(u=>({value:u.id,label:`${u.name} (${u.role})`}))]}/>
+          {/* Dias da semana */}
+          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:"uppercase",marginBottom:12}}>📅 DIAS DE TRABALHO</div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"].map((d,i)=>{
+                const sel=formEscala.diasSemana?.includes(d);
+                const isDS=i===0||i===6;
+                return <div key={d} onClick={()=>{
+                  const arr=formEscala.diasSemana||[];
+                  setFormEscala(f=>({...f,diasSemana:sel?arr.filter(x=>x!==d):[...arr,d]}));
+                }} style={{padding:"8px 14px",borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:13,
+                  border:`2px solid ${sel?isDS?C.red:C.gold:C.bdr2}`,
+                  background:sel?`${isDS?C.red:C.gold}22`:"transparent",
+                  color:sel?isDS?C.red:C.gold:C.muted}}>{d}</div>;
+              })}
+            </div>
+            <div style={{marginTop:10,display:"flex",gap:8}}>
+              <button onClick={()=>setFormEscala(f=>({...f,diasSemana:["Seg","Ter","Qua","Qui","Sex"]}))}
+                style={{background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:6,padding:"5px 12px",cursor:"pointer",color:C.muted,fontSize:11}}>Seg–Sex</button>
+              <button onClick={()=>setFormEscala(f=>({...f,diasSemana:["Seg","Ter","Qua","Qui","Sex","Sáb"]}))}
+                style={{background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:6,padding:"5px 12px",cursor:"pointer",color:C.muted,fontSize:11}}>Seg–Sáb</button>
+              <button onClick={()=>setFormEscala(f=>({...f,diasSemana:[]}))}
+                style={{background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:6,padding:"5px 12px",cursor:"pointer",color:C.red,fontSize:11}}>Limpar</button>
+            </div>
+          </div>
+          {/* Horários */}
+          <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:"uppercase",marginBottom:12}}>🕐 HORÁRIOS</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <Inp label="Entrada" value={formEscala.entrada} onChange={v=>setFormEscala(f=>({...f,entrada:v}))} type="time"/>
+              <Inp label="Saída" value={formEscala.saida} onChange={v=>setFormEscala(f=>({...f,saida:v}))} type="time"/>
+              <Inp label="Saída Almoço" value={formEscala.almEntrada||""} onChange={v=>setFormEscala(f=>({...f,almEntrada:v}))} type="time"/>
+              <Inp label="Volta Almoço" value={formEscala.almSaida||""} onChange={v=>setFormEscala(f=>({...f,almSaida:v}))} type="time"/>
+            </div>
+          </div>
+          <Inp label="Observações" value={formEscala.obs||""} onChange={v=>setFormEscala(f=>({...f,obs:v}))} placeholder="Ex: Turno da manhã, revezamento..."/>
+        </div>
+        <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,flexShrink:0,display:"flex",gap:10,justifyContent:"flex-end"}}>
+          {escalas.find(e=>e.userId===formEscala.userId)&&<Btn size="sm" color="red" outline onClick={()=>{setEscalas(p=>p.filter(e=>e.userId!==formEscala.userId));setModalEscala(null);showToast("Escala removida.","warning");}}>🗑 Remover</Btn>}
+          <Btn color="ghost" outline onClick={()=>setModalEscala(null)}>Cancelar</Btn>
+          <Btn color="gold" onClick={salvarEscala}>✅ Salvar Escala</Btn>
+        </div>
+      </div>
+    </div>}
+
+    {/* ── MODAL REGISTRAR FOLGA ── */}
+    {modalFolga&&isAdm&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:1100,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
+      <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,width:"100%",maxWidth:460,maxHeight:"80vh",display:"flex",flexDirection:"column",position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>
+        <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+          <h2 style={{fontSize:15,fontWeight:700,color:C.txt}}>➕ Registrar Folga / Ausência</h2>
+          <button onClick={()=>setModalFolga(null)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,border:"none",cursor:"pointer",fontSize:16}}>✕</button>
+        </div>
+        <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:12}}>
+          {/* Todos ou individual */}
+          <div style={{display:"flex",gap:8}}>
+            {[{v:false,l:"👤 Funcionário específico"},{v:true,l:"👥 Todos"}].map(opt=>(
+              <div key={String(opt.v)} onClick={()=>setFormFolga(f=>({...f,todos:opt.v,userId:opt.v?"":filtroView}))}
+                style={{flex:1,textAlign:"center",padding:"10px 8px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,
+                  border:`2px solid ${formFolga.todos===opt.v?C.gold:C.bdr2}`,
+                  background:formFolga.todos===opt.v?`${C.gold}22`:"transparent",
+                  color:formFolga.todos===opt.v?C.gold:C.muted}}>{opt.l}</div>
+            ))}
+          </div>
+          {!formFolga.todos&&<Sel label="Funcionário *" value={formFolga.userId} onChange={v=>setFormFolga(f=>({...f,userId:v}))}
+            options={[{value:"",label:"— Selecionar —"},...usersComEscala.map(u=>({value:u.id,label:`${u.name} (${u.role})`}))]}/>}
+          <Inp label="Data *" value={formFolga.data} onChange={v=>setFormFolga(f=>({...f,data:v}))} type="date"/>
+          <div>
+            <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",marginBottom:8}}>Tipo</div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {Object.entries(TIPOS_FOLGA).map(([k,v])=>(
+                <div key={k} onClick={()=>setFormFolga(f=>({...f,tipoFolga:k}))}
+                  style={{padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,
+                    border:`2px solid ${formFolga.tipoFolga===k?v.c:C.bdr2}`,
+                    background:formFolga.tipoFolga===k?`${v.c}22`:"transparent",
+                    color:formFolga.tipoFolga===k?v.c:C.muted}}>{v.i} {v.l}</div>
+              ))}
+            </div>
+          </div>
+          <Inp label="Observações" value={formFolga.obs||""} onChange={v=>setFormFolga(f=>({...f,obs:v}))} placeholder="Motivo, detalhes..."/>
+        </div>
+        <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,flexShrink:0,display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <Btn color="ghost" outline onClick={()=>setModalFolga(null)}>Cancelar</Btn>
+          <Btn color="gold" onClick={salvarFolga}>✅ Registrar</Btn>
+        </div>
+      </div>
+    </div>}
+  </div>;
+}
+
+
 /* Relógio em tempo real */
 function RelogioAtual(){
   const[hora,setHora]=useState(new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",second:"2-digit"}));
@@ -5732,6 +6154,8 @@ function AppInner(){
   const[pontos,setPontos]=useLS("re_pontos",[]);
   const[pontoConfig,setPontoConfig]=useLS("re_ponto_config",{lat:"",lng:"",raio:150,nome:"Empresa"});
   const[pontoSolicits,setPontoSolicits]=useLS("re_ponto_solicits",[]);
+  const[escalas,setEscalas]=useLS("re_escalas",[]);
+  const[folgas,setFolgas]=useLS("re_folgas",[]);
   const[pneus,setPneus]=useLS("re_pneus",[]);
   const[docsVeic,setDocsVeic]=useLS("re_docs_veic",[]);
   const[manutSols,setManutSols]=useLS("re_manut_sols",[]);
@@ -5912,7 +6336,7 @@ function AppInner(){
     usr:<UsrPage users={users} setUsers={setUsers} addLog={addLog} currentUser={user} isMobile={isMobile}/>,
     log:<LogPage logs={logs} isMobile={isMobile}/>,
     ajuda:<HelpPage currentUser={user} isMobile={isMobile}/>,
-    ponto:<PontoPage pontos={pontos} setPontos={setPontos} pontoConfig={pontoConfig} setPontoConfig={setPontoConfig} pontoSolicits={pontoSolicits} setPontoSolicits={setPontoSolicits} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} showToast={showToast}/>,
+    ponto:<PontoPage pontos={pontos} setPontos={setPontos} pontoConfig={pontoConfig} setPontoConfig={setPontoConfig} pontoSolicits={pontoSolicits} setPontoSolicits={setPontoSolicits} escalas={escalas} setEscalas={setEscalas} folgas={folgas} setFolgas={setFolgas} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} showToast={showToast}/>,
     frota:<FrotaPage veiculos={veiculos} setVeiculos={setVeiculos} abastecimentos={abastecimentos} setAbastecimentos={setAbastecimentos} checkouts={checkouts} setCheckouts={setCheckouts} pneus={pneus} setPneus={setPneus} docsVeic={docsVeic} setDocsVeic={setDocsVeic} manutOS={manutOS} manutSols={manutSols} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
     manut:<ManutencaoPage manutSols={manutSols} setManutSols={setManutSols} manutOS={manutOS} setManutOS={setManutOS} veiculos={veiculos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} abastecimentos={abastecimentos} pneus={pneus}/>,
   };
