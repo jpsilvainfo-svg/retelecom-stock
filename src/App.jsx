@@ -3657,7 +3657,7 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
   const FOTOS_LABELS=["Frente","Lado Esquerdo","Lado Direito","Traseira"];
   const FOTOS_ICONS=["â¬†ï¸","â¬…ï¸","âž¡ï¸","â¬‡ï¸"];
   const STATUS_OPTS=["ativo","manutenÃ§Ã£o","inativo"];
-  const STATUS_COLOR={ativo:C.grn,manutenÃ§Ã£o:C.ylw,inativo:C.red};
+  const STATUS_COLOR={ativo:C.grn,"manuten\u00c3\u00a7\u00c3\u00a3o":C.ylw,"manuten\u00e7\u00e3o":C.ylw,inativo:C.red};
   const COMB_OPTS=["gasolina","etanol","diesel","flex","gnv"];
   const COMB_NIVEL=["reserva","1/4","1/2","3/4","cheio"];
   const COMB_COLOR={reserva:C.red,"1/4":C.ylw,"1/2":C.ylw,"3/4":C.grn,cheio:C.grn};
@@ -6461,4 +6461,5 @@ function AppInner(){
 }
 
 export default function App(){return <ErrorBoundary><AppInner/></ErrorBoundary>;}
+
 
