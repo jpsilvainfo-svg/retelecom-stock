@@ -463,7 +463,10 @@ function LoginPage({users,onLogin}){
 
 
 function Sidebar({user,page,setPage,onLogout}){
-  const perms=user.perms||DEFAULT_PERMS[user.role]||["dash"];
+  const basePerms=user.perms||DEFAULT_PERMS[user.role]||["dash"];
+  // Garante que módulos novos do perfil apareçam mesmo em users antigos
+  const roleDefaults=DEFAULT_PERMS[user.role]||[];
+  const perms=[...new Set([...basePerms,...roleDefaults])];
   const nav=ALL_MODULES.filter(m=>perms.includes(m.k)).map(m=>({k:m.k,icon:m.icon,label:m.l,group:m.group}));
   const groupLabels={geral:"GERAL",operacional:"OPERAÇÃO",estoque:"ESTOQUE",relatorios:"RELATÓRIOS",admin:"ADMIN",mecanico:"MECÂNICO"};
   const groups=[...new Set(nav.map(n=>n.group||"geral"))];
@@ -618,7 +621,9 @@ function TopBar({user,pendRet,pendSol,setPage,isMobile,onMenuOpen}){
 /* ── BOTTOM NAV MOBILE ── */
 /* ── BOTTOM NAV MOBILE ── */
 function BottomNav({page,setPage,user,onMenuOpen}){
-  const perms=user.perms||DEFAULT_PERMS[user.role]||["dash"];
+  const basePerms=user.perms||DEFAULT_PERMS[user.role]||["dash"];
+  const roleDefaults=DEFAULT_PERMS[user.role]||[];
+  const perms=[...new Set([...basePerms,...roleDefaults])];
   const allItems=ALL_MODULES.filter(m=>perms.includes(m.k)).map(m=>({k:m.k,icon:m.icon,label:m.l.split(" ")[0]}));
   const visible=allItems.slice(0,5);
   const items=[...visible,{k:"__menu",icon:"☰",label:"Menu"}];
@@ -5782,6 +5787,25 @@ function AppInner(){
         if(!updated.find(u=>u.login===d.login)) updated=[...updated,d];
       });
       return updated.length!==prev.length?updated:prev;
+    });
+  },[]);
+
+  // Migração de permissões — adiciona módulos novos a usuários existentes
+  useEffect(()=>{
+    const ROLES_COM_PONTO=["tecnico","mecanico","estoque","admin","superadmin","financeiro"];
+    setUsers(prev=>{
+      let changed=false;
+      const updated=prev.map(u=>{
+        const rolePerm=ROLES_COM_PONTO.includes(u.role);
+        if(!rolePerm) return u;
+        const perms=u.perms||DEFAULT_PERMS[u.role]||["dash"];
+        if(!perms.includes("ponto")){
+          changed=true;
+          return {...u,perms:[...perms,"ponto"]};
+        }
+        return u;
+      });
+      return changed?updated:prev;
     });
   },[]);
 
