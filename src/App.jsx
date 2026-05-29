@@ -1051,7 +1051,59 @@ function CustomizePage({currentUser,isMobile,customization,setCustomization}){
   const orderedModules=(draft.menuOrder||ALL_MODULES.map(m=>m.k))
     .map(k=>ALL_MODULES.find(m=>m.k===k)).filter(Boolean);
 
-  const TABS=[{k:"marca",label:"🏷️ Marca"},{ k:"menu",label:"📋 Menu"},{ k:"cores",label:"🎨 Cores"}];
+  const TABS=[{k:"marca",label:"🏷️ Marca"},{k:"menu",label:"📋 Menu"},{k:"grupos",label:"🗂️ Submenus"},{k:"cores",label:"🎨 Cores"}];
+
+  // ── Export / Import ──
+  const exportConfig=()=>{
+    const blob=new Blob([JSON.stringify(draft,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;a.download="stocktel-customization.json";a.click();
+    URL.revokeObjectURL(url);
+  };
+  const importConfig=(e)=>{
+    const file=e.target.files?.[0];if(!file)return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      try{const cfg=JSON.parse(ev.target.result);setDraft(cfg);setSaved(false);}
+      catch{alert("Arquivo inválido. Use um JSON exportado pelo sistema.");}
+    };
+    reader.readAsText(file);
+    e.target.value="";
+  };
+
+  // ── Grupos / Submenus ──
+  const groups=draft.menuGroups||[];
+  const addGroup=()=>upd("menuGroups",[...groups,{id:"g"+Date.now(),icon:"📁",label:"Novo Grupo",items:[]}]);
+  const delGroup=(id)=>upd("menuGroups",groups.filter(g=>g.id!==id));
+  const updGroup=(id,k,v)=>upd("menuGroups",groups.map(g=>g.id===id?{...g,[k]:v}:g));
+  const addToGroup=(gid,k)=>{
+    // Remove do grupo anterior se estiver
+    const updated=groups.map(g=>({...g,items:(g.items||[]).filter(i=>i!==k)}));
+    upd("menuGroups",updated.map(g=>g.id===gid?{...g,items:[...(g.items||[]),k]}:g));
+  };
+  const removeFromGroup=(gid,k)=>upd("menuGroups",groups.map(g=>g.id===gid?{...g,items:(g.items||[]).filter(i=>i!==k)}:g));
+  const moveGroupItem=(gid,k,dir)=>{
+    upd("menuGroups",groups.map(g=>{
+      if(g.id!==gid)return g;
+      const items=[...(g.items||[])];
+      const i=items.indexOf(k);if(i<0)return g;
+      const ni=i+dir;if(ni<0||ni>=items.length)return g;
+      [items[i],items[ni]]=[items[ni],items[i]];
+      return{...g,items};
+    }));
+  };
+  const moveGroup=(id,dir)=>{
+    const arr=[...groups];const i=arr.findIndex(g=>g.id===id);if(i<0)return;
+    const ni=i+dir;if(ni<0||ni>=arr.length)return;
+    [arr[i],arr[ni]]=[arr[ni],arr[i]];
+    upd("menuGroups",arr);
+  };
+  // Itens já em algum grupo
+  const inGroups=new Set(groups.flatMap(g=>g.items||[]));
+  // Itens disponíveis para adicionar a grupos (não ocultos)
+  const availItems=(draft.menuOrder||ALL_MODULES.map(m=>m.k))
+    .map(k=>ALL_MODULES.find(m=>m.k===k)).filter(Boolean);
 
   const previewAccent=draft.accentColor||"#d10000";
 
@@ -1064,9 +1116,14 @@ function CustomizePage({currentUser,isMobile,customization,setCustomization}){
         </div>
         <div style={{fontSize:11,color:C.muted,marginTop:2}}>Editor visual · Acesso exclusivo Root · Alterações aplicadas em tempo real</div>
       </div>
-      <div style={{display:"flex",gap:8}}>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <label style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:7,cursor:"pointer",fontSize:12,color:C.txt2,fontWeight:600}}>
+          📂 Importar JSON
+          <input type="file" accept=".json" onChange={importConfig} style={{display:"none"}}/>
+        </label>
+        <Btn size="sm" color="ghost" outline onClick={exportConfig}>⬇️ Exportar JSON</Btn>
         <Btn size="sm" color="ghost" outline onClick={reset}>↩️ Resetar</Btn>
-        <Btn size="sm" color={saved?"grn":"gold"} onClick={save}>{saved?"✅ Salvo!":"💾 Salvar alterações"}</Btn>
+        <Btn size="sm" color={saved?"grn":"gold"} onClick={save}>{saved?"✅ Salvo!":"💾 Salvar"}</Btn>
       </div>
     </div>
 
@@ -1161,6 +1218,77 @@ function CustomizePage({currentUser,isMobile,customization,setCustomization}){
             </div>;
           })}
         </Card>}
+
+        {/* ── ABA GRUPOS / SUBMENUS ── */}
+        {tab==="grupos"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{fontSize:12,color:C.muted}}>Itens <strong style={{color:C.txt}}>sem grupo</strong> aparecem soltos no menu. Itens <strong style={{color:C.txt}}>com grupo</strong> aparecem como submenu.</div>
+            <Btn size="sm" color="gold" onClick={addGroup}>+ Novo Grupo</Btn>
+          </div>
+
+          {groups.length===0&&<Card style={{padding:32,textAlign:"center"}}>
+            <div style={{fontSize:32,marginBottom:8}}>🗂️</div>
+            <div style={{fontSize:13,color:C.muted}}>Nenhum grupo criado. Clique em "+ Novo Grupo" para criar um submenu.</div>
+          </Card>}
+
+          {groups.map((g,gi)=>(
+            <Card key={g.id} style={{padding:0,overflow:"hidden",border:`1px solid ${C.bdr2}`}}>
+              {/* Header do grupo */}
+              <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:C.surf,borderBottom:`1px solid ${C.bdr}`}}>
+                <input value={g.icon} onChange={e=>updGroup(g.id,"icon",e.target.value)}
+                  style={{width:36,textAlign:"center",background:C.bg,border:`1px solid ${C.bdr}`,borderRadius:6,padding:"4px",fontSize:18,color:C.txt,outline:"none"}}/>
+                <input value={g.label} onChange={e=>updGroup(g.id,"label",e.target.value)} placeholder="Nome do grupo"
+                  style={{flex:1,background:C.bg,border:`1px solid ${C.bdr}`,borderRadius:6,padding:"6px 10px",fontSize:13,fontWeight:700,color:C.txt,outline:"none"}}/>
+                <div style={{display:"flex",gap:3}}>
+                  <button onClick={()=>moveGroup(g.id,-1)} disabled={gi===0} style={{width:24,height:24,background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:4,cursor:"pointer",fontSize:10,color:C.muted,opacity:gi===0?.3:1}}>▲</button>
+                  <button onClick={()=>moveGroup(g.id,1)} disabled={gi===groups.length-1} style={{width:24,height:24,background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:4,cursor:"pointer",fontSize:10,color:C.muted,opacity:gi===groups.length-1?.3:1}}>▼</button>
+                  <button onClick={()=>delGroup(g.id)} style={{width:24,height:24,background:`${C.red}22`,border:`1px solid ${C.red}44`,borderRadius:4,cursor:"pointer",fontSize:11,color:C.red}}>✕</button>
+                </div>
+              </div>
+
+              {/* Itens do grupo */}
+              <div style={{padding:"8px 12px",display:"flex",flexDirection:"column",gap:4}}>
+                {(g.items||[]).length===0&&<div style={{fontSize:11,color:C.muted,padding:"8px 4px",fontStyle:"italic"}}>Nenhum item. Adicione abaixo.</div>}
+                {(g.items||[]).map((k,ii)=>{
+                  const mod=ALL_MODULES.find(m=>m.k===k);if(!mod)return null;
+                  const icon=draft.menuIcons?.[k]||mod.icon;
+                  const label=draft.menuLabels?.[k]||mod.l;
+                  return<div key={k} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:C.bg,borderRadius:7,border:`1px solid ${C.bdr}18`}}>
+                    <span style={{fontSize:14}}>{icon}</span>
+                    <span style={{flex:1,fontSize:12,color:C.txt}}>{label}</span>
+                    <span style={{fontSize:9,color:C.muted,fontFamily:"monospace"}}>{k}</span>
+                    <div style={{display:"flex",gap:2}}>
+                      <button onClick={()=>moveGroupItem(g.id,k,-1)} disabled={ii===0} style={{width:20,height:20,background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:3,cursor:"pointer",fontSize:9,color:C.muted,opacity:ii===0?.3:1}}>▲</button>
+                      <button onClick={()=>moveGroupItem(g.id,k,1)} disabled={ii===(g.items||[]).length-1} style={{width:20,height:20,background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:3,cursor:"pointer",fontSize:9,color:C.muted,opacity:ii===(g.items||[]).length-1?.3:1}}>▼</button>
+                      <button onClick={()=>removeFromGroup(g.id,k)} style={{width:20,height:20,background:`${C.red}22`,border:"none",borderRadius:3,cursor:"pointer",fontSize:10,color:C.red}}>✕</button>
+                    </div>
+                  </div>;
+                })}
+                {/* Adicionar item ao grupo */}
+                <select defaultValue="" onChange={e=>{if(e.target.value){addToGroup(g.id,e.target.value);e.target.value="";}}}
+                  style={{marginTop:4,background:C.surf,border:`1px solid ${C.bdr2}`,borderRadius:7,padding:"6px 10px",color:C.txt,fontSize:12,cursor:"pointer",outline:"none"}}>
+                  <option value="">+ Adicionar item ao grupo...</option>
+                  {availItems.filter(m=>!(g.items||[]).includes(m.k)).map(m=>(
+                    <option key={m.k} value={m.k}>{draft.menuIcons?.[m.k]||m.icon} {draft.menuLabels?.[m.k]||m.l} {inGroups.has(m.k)?"(em outro grupo)":""}</option>
+                  ))}
+                </select>
+              </div>
+            </Card>
+          ))}
+
+          {/* Itens soltos (sem grupo) */}
+          {availItems.filter(m=>!inGroups.has(m.k)&&!(draft.menuHidden||[]).includes(m.k)).length>0&&<Card style={{padding:14}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.muted,marginBottom:8}}>ITENS SEM GRUPO (aparecem soltos no menu)</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {availItems.filter(m=>!inGroups.has(m.k)&&!(draft.menuHidden||[]).includes(m.k)).map(m=>(
+                <div key={m.k} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px",background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:6,fontSize:11,color:C.txt2}}>
+                  <span>{draft.menuIcons?.[m.k]||m.icon}</span>
+                  <span>{draft.menuLabels?.[m.k]||m.l}</span>
+                </div>
+              ))}
+            </div>
+          </Card>}
+        </div>}
 
         {/* ── ABA CORES ── */}
         {tab==="cores"&&<Card style={{padding:20}}>
@@ -7005,6 +7133,7 @@ function AppInner(){
     accentColor:"#d10000",sidebarBg:"#101010",
     menuOrder:ALL_MODULES.map(m=>m.k),
     menuLabels:{},menuIcons:{},menuHidden:[],
+    menuGroups:[], // [{id,icon,label,items:[k,...]}]
   });
   const[drawerOpen,setDrawerOpen]=useState(false);
   const isMobile=useIsMobile();
