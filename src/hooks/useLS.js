@@ -5,6 +5,18 @@ import { sbGet, sbSet } from "../supabase";
 const tsKey = k => `${k}__ts`;
 const QUEUE_KEY = "__sync_queue";
 
+// ── Garante que o tipo do valor remoto bate com o tipo esperado ───────────
+function safeValue(remote, initial) {
+  if (remote === null || remote === undefined) return null;
+  // Se o valor inicial é array, o remoto também deve ser array
+  if (Array.isArray(initial) && !Array.isArray(remote)) return null;
+  // Se o valor inicial é objeto (não array), o remoto deve ser objeto
+  if (initial !== null && typeof initial === "object" && !Array.isArray(initial)) {
+    if (typeof remote !== "object" || Array.isArray(remote)) return null;
+  }
+  return remote;
+}
+
 // ── Fila de retry ──────────────────────────────────────────────────────────
 export function queueAdd(key, value) {
   try {
@@ -35,28 +47,36 @@ export function queueSize() {
 
 // ── Envia para Supabase, coloca na fila se falhar ─────────────────────────
 export async function pushToCloud(key, value) {
-  const res = await sbSet(key, value);
-  if (res.ok) {
-    const ts = new Date().toISOString();
-    try { localStorage.setItem(tsKey(key), ts); } catch {}
-    queueRemove(key);
-    window.dispatchEvent(new CustomEvent("sync-ok", { detail: { key } }));
-  } else {
+  try {
+    const res = await sbSet(key, value);
+    if (res.ok) {
+      const ts = new Date().toISOString();
+      try { localStorage.setItem(tsKey(key), ts); } catch {}
+      queueRemove(key);
+      window.dispatchEvent(new CustomEvent("sync-ok", { detail: { key } }));
+    } else {
+      queueAdd(key, value);
+      window.dispatchEvent(new CustomEvent("sync-fail", { detail: { key, error: res.error } }));
+    }
+  } catch {
     queueAdd(key, value);
-    window.dispatchEvent(new CustomEvent("sync-fail", { detail: { key, error: res.error } }));
   }
 }
 
 // ── Hook principal ────────────────────────────────────────────────────────
 export const useLS = (key, initial) => {
   const [val, setVal] = useState(() => {
-    try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : initial; }
-    catch { return initial; }
+    try {
+      const s = localStorage.getItem(key);
+      if (!s) return initial;
+      const parsed = JSON.parse(s);
+      // Garante que o tipo bate com o inicial
+      const safe = safeValue(parsed, initial);
+      return safe !== null ? safe : initial;
+    } catch { return initial; }
   });
 
   // Ao montar: sincronização bidirecional automática
-  // - Se remoto for mais recente → aplica no local
-  // - Se local for mais recente OU nuvem vazia → empurra local para nuvem
   useEffect(() => {
     sbGet(key).then(remote => {
       const localRaw = localStorage.getItem(key);
@@ -64,11 +84,15 @@ export const useLS = (key, initial) => {
 
       if (remote && !remote.empty && remote.value !== null) {
         const remoteTs = remote.updated_at || "0";
+        // Valida tipo antes de aplicar dado remoto
+        const safe = safeValue(remote.value, initial);
+        if (safe === null) return; // tipo incompatível, ignora
+
         if (remoteTs > localTs) {
           // Nuvem mais recente → aplica local
-          setVal(remote.value);
+          setVal(safe);
           try {
-            localStorage.setItem(key, JSON.stringify(remote.value));
+            localStorage.setItem(key, JSON.stringify(safe));
             localStorage.setItem(tsKey(key), remoteTs);
           } catch {}
         } else if (localTs > remoteTs && localRaw) {
@@ -80,14 +104,12 @@ export const useLS = (key, initial) => {
         try { pushToCloud(key, JSON.parse(localRaw)); } catch {}
       }
     }).catch(() => {});
-  }, [key]);
+  }, [key]); // eslint-disable-line
 
   const set = useCallback((v) => {
     setVal(prev => {
       const next = typeof v === "function" ? v(prev) : v;
-      // 1. Salva local imediatamente (UI responsivo)
       try { localStorage.setItem(key, JSON.stringify(next)); } catch {}
-      // 2. Envia para nuvem (com retry automático se falhar)
       pushToCloud(key, next);
       return next;
     });

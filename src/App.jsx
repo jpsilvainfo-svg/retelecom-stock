@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
 import * as XLSX from "xlsx";
 import { sbGet, sbSet, sbPing } from "./supabase.js";
+import { useLS, pushToCloud, queueGet, queueRemove, queueSize } from "./hooks/useLS.js";
 
 const C={
   bg:"#070707",
@@ -79,8 +80,7 @@ const today=()=>new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"2-dig
 const fmt=(n)=>new Intl.NumberFormat("pt-BR").format(n??0);
 const useIsMobile=()=>{const[m,setM]=useState(()=>window.innerWidth<768);useEffect(()=>{const h=()=>setM(window.innerWidth<768);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);return m;};
 
-// Hook useLS — importado de hooks/useLS.js (com sync bidirecional e retry automático)
-import { useLS, pushToCloud, queueGet, queueRemove, queueSize } from "./hooks/useLS.js";
+// useLS importado do topo do arquivo
 
 const USERS0=[
   {id:"u0",name:"Master StockTel",email:"master@stocktel.com.br",phone:"",cpf:"",login:"stocktelmaster",pass:"ST@fMa@wKQX2026!",role:"superadmin",photo:"",perms:ALL_MODULES.map(m=>m.k),mustChangePassword:false},
