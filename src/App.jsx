@@ -660,18 +660,29 @@ const DIAG_MODULES=[
 /* ── IA DO SISTEMA ── */
 function IAPage({currentUser,isMobile,stock=[],tstock=[],os=[],returns=[],users=[],logs=[],solicitacoes=[],veiculos=[],pontos=[]}){
   const isAdm=currentUser?.login==="root";
-  const WELCOME="Olá! Sou a **IA do StockTel** 🤖\n\nSou autônoma — posso **diagnosticar e resolver problemas** do sistema sozinha, sem ajuda externa.\n\n🛠️ **O que posso fazer:**\n- Diagnosticar falhas de sincronização e corrigir\n- Analisar integridade dos dados e reparar\n- Forçar sincronização de módulos específicos\n- Gerar relatórios completos de saúde do sistema\n- Responder perguntas sobre estoque, OS, frota e mais\n\nDigite qualquer problema ou use as ações rápidas abaixo.";
+  const WELCOME="Olá! Sou a **Central Multi-IA do StockTel** 🤖\n\nVocê conversa comigo como uma IA só, mas por trás eu posso usar **Groq**, **OpenRouter Free** e **Gemini** como especialistas, conforme estiverem configurados no Vercel.\n\n🛠️ **O que posso fazer:**\n- Diagnosticar falhas de sincronização e corrigir\n- Analisar integridade dos dados e reparar\n- Usar fallback automático se uma IA estiver lenta ou fora do limite\n- Consultar várias IAs em modo conselho para decisões mais complexas\n- Gerar passos para o root quando a correção automática não for segura\n\nDigite qualquer problema ou use as ações rápidas abaixo.";
   const[msgs,setMsgs]=useState([{role:"assistant",content:WELCOME,ui:true}]);
   const[input,setInput]=useState("");
   const[loading,setLoading]=useState(false);
   const[loadingStep,setLoadingStep]=useState("");
   const[error,setError]=useState(null);
   const[apiOk,setApiOk]=useState(null);
+  const[aiProviders,setAiProviders]=useState([]);
+  const[activeProvider,setActiveProvider]=useState("");
+  const[aiStrategy,setAiStrategy]=useState("fallback");
   const[actionLog,setActionLog]=useState([]);
   const chatRef=useRef(null);
   const inputRef=useRef(null);
 
   useEffect(()=>{if(chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},[msgs,loading]);
+  useEffect(()=>{
+    let alive=true;
+    fetch("/api/ai",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"status"})})
+      .then(r=>r.ok?r.json():Promise.reject(new Error("status_offline")))
+      .then(d=>{if(alive){setAiProviders(d.providers||[]);setApiOk((d.providers||[]).some(p=>p.configured));}})
+      .catch(()=>{if(alive)setApiOk(false);});
+    return()=>{alive=false;};
+  },[]);
 
   const logAction=(icon,text,color=C.muted)=>setActionLog(p=>[{icon,text,color,ts:new Date().toLocaleTimeString("pt-BR")},...p.slice(0,29)]);
 
@@ -789,17 +800,34 @@ REGRAS:
 ${buildContext()}`;
 
   // ── Motor de tool calling (loop automático) ──
-  const callAPI=async(apiMsgs,forceText=false)=>{
+  const callAPI=async(apiMsgs,forceText=false,strategyOverride=null)=>{
     const res=await fetch("/api/ai",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({messages:apiMsgs,force_text:forceText})
+      body:JSON.stringify({messages:apiMsgs,force_text:forceText,strategy:forceText?(strategyOverride||aiStrategy):"fallback"})
     });
     if(!res.ok){const d=await res.json();throw new Error(d.error||"Erro na API");}
     return await res.json();
   };
 
-  const sendMsg=async(text)=>{
+  const refreshAIStatus=async()=>{
+    setLoadingStep("Testando IAs configuradas...");
+    try{
+      const res=await fetch("/api/ai",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"status"})});
+      const data=await res.json();
+      setAiProviders(data.providers||[]);
+      const configured=(data.providers||[]).filter(p=>p.configured);
+      setApiOk(configured.length>0);
+      logAction(configured.length>0?"✅":"⚠️",`${configured.length} IA(s) configurada(s): ${configured.map(p=>p.name).join(", ")||"nenhuma"}`,configured.length>0?C.grn:C.ylw);
+      return configured;
+    }catch(e){
+      setApiOk(false);
+      logAction("❌","Não foi possível consultar o status das IAs",C.red);
+      return [];
+    }
+  };
+
+  const sendMsg=async(text,strategyOverride=null)=>{
     const msg=(text||input).trim();
     if(!msg||loading)return;
     setInput("");setError(null);
@@ -823,8 +851,10 @@ ${buildContext()}`;
       for(let i=0;i<MAX;i++){
         const isLast=i===MAX-1;
         // Na última iteração força texto (sem tools)
-        const data=await callAPI(apiHistory,isLast);
+        const data=await callAPI(apiHistory,isLast,strategyOverride);
         setApiOk(true);
+        if(data.provider){setActiveProvider(data.provider);logAction("🧠",`Resposta via ${data.provider}${data.model?` · ${data.model}`:""}`,C.blue);}
+        if(data.fallback_errors?.length){logAction("⚠️",`Fallback acionado: ${data.fallback_errors.join(" | ")}`,C.ylw);}
 
         if(data.error)throw new Error(data.error);
 
@@ -865,6 +895,7 @@ ${buildContext()}`;
 
   const QUICK_ACTIONS=[
     {icon:"🔍",label:"Auto-diagnóstico",msg:"Faça um diagnóstico completo e automático do sistema e corrija tudo que encontrar de errado."},
+    {icon:"🧠",label:"Conselho Multi-IA",strategy:"council",msg:"Use o modo conselho com várias IAs para avaliar a saúde do sistema, comparar opiniões e me entregar uma decisão final segura para o root."},
     {icon:"☁️",label:"Sincronizar tudo",msg:"Sincronize todos os dados locais para a nuvem agora e me dê um relatório do resultado."},
     {icon:"🔧",label:"Reparar integridade",msg:"Verifique e repare automaticamente todos os problemas de integridade de dados do sistema."},
     {icon:"📊",label:"Relatório completo",msg:"Gere um relatório completo de saúde do sistema com métricas, alertas e recomendações prioritárias."},
@@ -892,14 +923,48 @@ ${buildContext()}`;
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
       <div>
         <div style={{fontSize:isMobile?17:21,fontWeight:800,color:C.txt,display:"flex",alignItems:"center",gap:10}}>
-          <span style={{fontSize:26}}>🤖</span> IA Autônoma do Sistema
+          <span style={{fontSize:26}}>🤖</span> Central Multi-IA do Sistema
           {apiOk===true&&<span style={{fontSize:10,background:`${C.grn}22`,color:C.grn,padding:"2px 10px",borderRadius:20,fontWeight:700,border:`1px solid ${C.grn}44`}}>● ONLINE</span>}
           {apiOk===false&&<span style={{fontSize:10,background:`${C.red}22`,color:C.red,padding:"2px 10px",borderRadius:20,fontWeight:700,border:`1px solid ${C.red}44`}}>● OFFLINE</span>}
         </div>
-        <div style={{fontSize:11,color:C.muted,marginTop:2}}>Diagnóstico e reparo autônomo · Admin only · Llama 3.3 70B via Groq</div>
+        <div style={{fontSize:11,color:C.muted,marginTop:2}}>Orquestrador root-only · Groq + OpenRouter Free + Gemini · fallback automático</div>
       </div>
-      <Btn size="sm" color="ghost" outline onClick={()=>{setMsgs([{role:"assistant",content:WELCOME,ui:true}]);setActionLog([]);setError(null);}}>🗑️ Novo chat</Btn>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <Btn size="sm" color="ghost" outline onClick={refreshAIStatus}>🧪 Testar IAs</Btn>
+        <Btn size="sm" color="ghost" outline onClick={()=>{setMsgs([{role:"assistant",content:WELCOME,ui:true}]);setActionLog([]);setError(null);}}>🗑️ Novo chat</Btn>
+      </div>
     </div>
+
+    {/* Provedores de IA */}
+    <Card style={{padding:12}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:10}}>
+        <div style={{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:".05em"}}>🧠 IAs CONFIGURADAS</div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:10,color:C.muted}}>Estratégia</span>
+          <select value={aiStrategy} onChange={e=>setAiStrategy(e.target.value)}
+            style={{background:C.bg,border:`1px solid ${C.bdr2}`,borderRadius:7,padding:"5px 9px",color:C.txt,fontSize:11}}>
+            <option value="fallback">Fallback rápido</option>
+            <option value="council">Conselho Multi-IA</option>
+          </select>
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(3,1fr)",gap:8}}>
+        {(aiProviders.length?aiProviders:[
+          {id:"groq",name:"Groq",role:"principal rápido + ferramentas",configured:false,model:"GROQ_API_KEY"},
+          {id:"openrouter",name:"OpenRouter Free",role:"fallback gratuito",configured:false,model:"OPENROUTER_API_KEY"},
+          {id:"gemini",name:"Gemini",role:"analista/validador",configured:false,model:"GEMINI_API_KEY"},
+        ]).map(p=>(
+          <div key={p.id} style={{background:activeProvider===p.id?`${C.blue}14`:C.surf,border:`1px solid ${p.configured?C.grn:C.bdr2}44`,borderRadius:8,padding:"10px 12px"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+              <span style={{fontSize:12,fontWeight:800,color:C.txt}}>{p.name}</span>
+              <span style={{fontSize:9,fontWeight:800,color:p.configured?C.grn:C.ylw}}>{p.configured?"ATIVA":"CONFIGURAR"}</span>
+            </div>
+            <div style={{fontSize:10,color:C.muted,marginTop:4}}>{p.role}</div>
+            <div style={{fontSize:10,color:C.muted2,marginTop:4,fontFamily:"'JetBrains Mono',monospace"}}>{p.model}</div>
+          </div>
+        ))}
+      </div>
+    </Card>
 
     {/* KPIs rápidos */}
     <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(3,1fr)":"repeat(6,1fr)",gap:8}}>
@@ -924,7 +989,7 @@ ${buildContext()}`;
       <div style={{fontSize:11,fontWeight:700,color:C.muted,marginBottom:8,letterSpacing:".05em"}}>⚡ AÇÕES AUTÔNOMAS</div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
         {QUICK_ACTIONS.map((a,i)=>(
-          <button key={i} onClick={()=>sendMsg(a.msg)} disabled={loading}
+          <button key={i} onClick={()=>{if(a.strategy)setAiStrategy(a.strategy);sendMsg(a.msg,a.strategy);}} disabled={loading}
             style={{display:"flex",alignItems:"center",gap:5,padding:"7px 12px",background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:8,cursor:loading?"not-allowed":"pointer",fontSize:11,color:C.txt2,fontWeight:600,opacity:loading?.5:1}}>
             {a.icon} {a.label}
           </button>
@@ -934,7 +999,7 @@ ${buildContext()}`;
 
     {error&&<div style={{padding:"10px 14px",background:`${C.red}15`,border:`1px solid ${C.red}44`,borderRadius:8,fontSize:12,color:C.red}}>
       ❌ {error}
-      {error.includes("GROQ_API_KEY")&&<div style={{marginTop:4,fontSize:11,color:C.muted}}>Adicione <strong>GROQ_API_KEY</strong> em Vercel → Settings → Environment Variables e faça redeploy.</div>}
+      {(error.includes("GROQ_API_KEY")||error.includes("OPENROUTER_API_KEY")||error.includes("GEMINI_API_KEY"))&&<div style={{marginTop:4,fontSize:11,color:C.muted}}>Adicione ao menos uma chave em Vercel → Settings → Environment Variables: <strong>GROQ_API_KEY</strong>, <strong>OPENROUTER_API_KEY</strong> ou <strong>GEMINI_API_KEY</strong>.</div>}
     </div>}
 
     <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":`1fr ${actionLog.length>0?"280px":"0px"}`,gap:12,transition:"all .3s"}}>
@@ -1398,8 +1463,8 @@ function DiagnosticoPage({currentUser,isMobile}){
     const t0=Date.now();
     const rows=[];
     for(const mod of DIAG_MODULES){
-      let localCount=0,localTs="0",localRaw=null;
-      try{localRaw=localStorage.getItem(mod.key);localTs=localStorage.getItem(mod.key+"__ts")||"0";const d=localRaw?JSON.parse(localRaw):null;localCount=Array.isArray(d)?d.length:(d&&typeof d==="object"?1:0);}catch{}
+      let localCount=0,localTs="0";
+      try{const localRaw=localStorage.getItem(mod.key);localTs=localStorage.getItem(mod.key+"__ts")||"0";const d=localRaw?JSON.parse(localRaw):null;localCount=Array.isArray(d)?d.length:(d&&typeof d==="object"?1:0);}catch{}
       try{
         const remote=await sbGet(mod.key);
         const remoteCount=remote&&!remote.empty?( Array.isArray(remote.value)?remote.value.length:(remote.value&&typeof remote.value==="object"?1:0) ):0;
