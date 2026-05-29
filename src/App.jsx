@@ -67,10 +67,10 @@ const ALL_MODULES=[
   {k:"ia",l:"IA do Sistema",icon:"🤖",group:"admin"},
   {k:"customize",l:"Personalizar Sistema",icon:"🎨",group:"admin"}
 ];
-// Módulos exclusivos do Root (superadmin) — não aparecem para admin nem outros
+// Módulos exclusivos do usuário ROOT (login="root") — nenhum outro usuário tem acesso
 const ROOT_ONLY=["customize","ia","diag"];
 const DEFAULT_PERMS={
-  superadmin:ALL_MODULES.map(m=>m.k),
+  superadmin:ALL_MODULES.map(m=>m.k).filter(k=>!ROOT_ONLY.includes(k)),
   admin:ALL_MODULES.map(m=>m.k).filter(k=>!ROOT_ONLY.includes(k)),
   estoque:["dash","os","estoque","kit","dist","dev","sol","rel","ajuda","ponto"],
   tecnico:["dash","os","frota","kit","dev","sol","rel","ajuda","ponto"],
@@ -659,7 +659,7 @@ const DIAG_MODULES=[
 
 /* ── IA DO SISTEMA ── */
 function IAPage({currentUser,isMobile,stock=[],tstock=[],os=[],returns=[],users=[],logs=[],solicitacoes=[],veiculos=[],pontos=[]}){
-  const isAdm=currentUser?.role==="admin"||currentUser?.role==="superadmin";
+  const isAdm=currentUser?.login==="root";
   const WELCOME="Olá! Sou a **IA do StockTel** 🤖\n\nSou autônoma — posso **diagnosticar e resolver problemas** do sistema sozinha, sem ajuda externa.\n\n🛠️ **O que posso fazer:**\n- Diagnosticar falhas de sincronização e corrigir\n- Analisar integridade dos dados e reparar\n- Forçar sincronização de módulos específicos\n- Gerar relatórios completos de saúde do sistema\n- Responder perguntas sobre estoque, OS, frota e mais\n\nDigite qualquer problema ou use as ações rápidas abaixo.";
   const[msgs,setMsgs]=useState([{role:"assistant",content:WELCOME,ui:true}]);
   const[input,setInput]=useState("");
@@ -1003,7 +1003,7 @@ ${buildContext()}`;
 
 /* ── PERSONALIZAR SISTEMA ── */
 function CustomizePage({currentUser,isMobile,customization,setCustomization}){
-  const isRoot=currentUser?.role==="superadmin";
+  const isRoot=currentUser?.login==="root";
   const[draft,setDraft]=useState(()=>({...customization}));
   const[saved,setSaved]=useState(false);
   const[tab,setTab]=useState("marca"); // marca | menu | cores
@@ -1364,7 +1364,7 @@ function CustomizePage({currentUser,isMobile,customization,setCustomization}){
 }
 
 function DiagnosticoPage({currentUser,isMobile}){
-  const isAdm=currentUser?.role==="admin"||currentUser?.role==="superadmin";
+  const isAdm=currentUser?.login==="root";
   const[connStatus,setConnStatus]=useState("idle");// idle|checking|ok|error
   const[ping,setPing]=useState(null);
   const[results,setResults]=useState([]);
@@ -7219,14 +7219,14 @@ function AppInner(){
     });
   },[]);
 
-  // Remove módulos root-only das permissões de usuários não-superadmin
+  // Remove módulos root-only de TODOS os usuários exceto o usuário root (login="root")
   useEffect(()=>{
     setUsers(prev=>{
       let changed=false;
       const updated=prev.map(u=>{
-        if(u.role==="superadmin")return u;
+        if(u.login==="root")return u; // só o root mantém
         const perms=(u.perms||[]).filter(p=>!ROOT_ONLY.includes(p));
-        if(perms.length===u.perms?.length)return u;
+        if(perms.length===(u.perms||[]).length)return u;
         changed=true;return{...u,perms};
       });
       return changed?updated:prev;
