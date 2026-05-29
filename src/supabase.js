@@ -6,6 +6,29 @@ const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 
 const sb = createClient(SUPA_URL, SUPA_KEY);
 
+function normalizeRow(data) {
+  if (!data) return null;
+  let value = data.value;
+  let updated_at = data.updated_at;
+
+  // Proteção contra linhas gravadas por engano como retorno inteiro de sbGet:
+  // { value: { empty, value, updated_at }, updated_at }.
+  if (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.prototype.hasOwnProperty.call(value, "empty") &&
+    Object.prototype.hasOwnProperty.call(value, "value") &&
+    Object.prototype.hasOwnProperty.call(value, "updated_at")
+  ) {
+    if (value.empty === true) return { value: null, updated_at: value.updated_at || updated_at, empty: true };
+    updated_at = value.updated_at || updated_at;
+    value = value.value;
+  }
+
+  return { value, updated_at };
+}
+
 export async function sbPing() {
   const t0 = Date.now();
   try {
@@ -25,7 +48,7 @@ export async function sbGet(key) {
       .single();
     if (error?.code === "PGRST116") return { value: null, updated_at: null, empty: true };
     if (error || !data) return null;
-    return { value: data.value, updated_at: data.updated_at };
+    return normalizeRow(data);
   } catch { return null; }
 }
 

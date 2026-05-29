@@ -3,6 +3,16 @@ const DEFAULT_GROQ_MODEL = "llama-3.1-8b-instant";
 const DEFAULT_OPENROUTER_MODEL = "openrouter/free";
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
 
+const cleanEnv = (name) => {
+  const raw = process.env[name];
+  if (!raw) return "";
+  return raw
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .replace(/^Bearer\s+/i, "")
+    .trim();
+};
+
 const tools = [
   {
     type: "function",
@@ -73,7 +83,7 @@ const providerStatus = () => [
     id: "groq",
     name: "Groq",
     role: "principal rápido + ferramentas",
-    configured: Boolean(process.env.GROQ_API_KEY),
+    configured: Boolean(cleanEnv("GROQ_API_KEY")),
     model: process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL,
     supportsTools: true
   },
@@ -81,7 +91,7 @@ const providerStatus = () => [
     id: "openrouter",
     name: "OpenRouter Free",
     role: "fallback gratuito + roteador de modelos",
-    configured: Boolean(process.env.OPENROUTER_API_KEY),
+    configured: Boolean(cleanEnv("OPENROUTER_API_KEY")),
     model: process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL,
     supportsTools: true
   },
@@ -89,7 +99,7 @@ const providerStatus = () => [
     id: "gemini",
     name: "Gemini",
     role: "analista/validador em texto",
-    configured: Boolean(process.env.GEMINI_API_KEY),
+    configured: Boolean(cleanEnv("GEMINI_API_KEY")),
     model: process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL,
     supportsTools: false
   }
@@ -110,7 +120,8 @@ const parseOpenAIResponse = async (response, provider) => {
 };
 
 const callGroq = async ({ messages, forceText }) => {
-  if (!process.env.GROQ_API_KEY) throw new Error("GROQ_API_KEY não configurada.");
+  const apiKey = cleanEnv("GROQ_API_KEY");
+  if (!apiKey) throw new Error("GROQ_API_KEY não configurada.");
   const body = {
     model: process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL,
     messages,
@@ -124,7 +135,7 @@ const callGroq = async ({ messages, forceText }) => {
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+      "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify(body)
@@ -133,7 +144,8 @@ const callGroq = async ({ messages, forceText }) => {
 };
 
 const callOpenRouter = async ({ messages, forceText }) => {
-  if (!process.env.OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY não configurada.");
+  const apiKey = cleanEnv("OPENROUTER_API_KEY");
+  if (!apiKey) throw new Error("OPENROUTER_API_KEY não configurada.");
   const body = {
     model: process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL,
     messages,
@@ -148,7 +160,7 @@ const callOpenRouter = async ({ messages, forceText }) => {
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json",
       "HTTP-Referer": process.env.APP_URL || "https://retelecom-stock.vercel.app",
       "X-Title": "StockTel Multi-IA"
@@ -172,9 +184,10 @@ const toGeminiContents = (messages) => {
 };
 
 const callGemini = async ({ messages }) => {
-  if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY não configurada.");
+  const apiKey = cleanEnv("GEMINI_API_KEY");
+  if (!apiKey) throw new Error("GEMINI_API_KEY não configurada.");
   const model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
