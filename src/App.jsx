@@ -789,8 +789,12 @@ REGRAS:
 ${buildContext()}`;
 
   // ── Motor de tool calling (loop automático) ──
-  const callAPI=async(apiMsgs)=>{
-    const res=await fetch("/api/ai",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:apiMsgs})});
+  const callAPI=async(apiMsgs,forceText=false)=>{
+    const res=await fetch("/api/ai",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({messages:apiMsgs,force_text:forceText})
+    });
     if(!res.ok){const d=await res.json();throw new Error(d.error||"Erro na API");}
     return await res.json();
   };
@@ -801,11 +805,8 @@ ${buildContext()}`;
     setInput("");setError(null);
     setLoading(true);setLoadingStep("IA analisando...");
 
-    // Adiciona msg do usuário
     setMsgs(p=>[...p,{role:"user",content:msg}]);
 
-    // Histórico para a API — construído localmente, sem depender do estado React
-    // Pega apenas msgs de texto do histórico atual (ignora tool_action e ui)
     const cleanHistory=msgs
       .filter(m=>!m.ui&&m.role!=="tool_action"&&(m.role==="user"||m.role==="assistant")&&m.content)
       .map(m=>({role:m.role,content:m.content}));
@@ -816,37 +817,43 @@ ${buildContext()}`;
       {role:"user",content:msg}
     ];
 
+    const MAX=4;
     try{
-      for(let i=0;i<5;i++){
-        const data=await callAPI(apiHistory);
+      let replied=false;
+      for(let i=0;i<MAX;i++){
+        const isLast=i===MAX-1;
+        // Na última iteração força texto (sem tools)
+        const data=await callAPI(apiHistory,isLast);
         setApiOk(true);
 
-        if(data.error){throw new Error(data.error);}
+        if(data.error)throw new Error(data.error);
 
-        if(data.tool_calls&&data.tool_calls.length>0){
-          // IA quer executar ferramentas
+        if(!isLast&&data.tool_calls&&data.tool_calls.length>0){
           apiHistory.push({role:"assistant",content:null,tool_calls:data.tool_calls});
 
           for(const tc of data.tool_calls){
             const fname=tc.function.name;
-            const fargs=JSON.parse(tc.function.arguments||"{}");
-            setLoadingStep(`Executando: ${fname.replace(/_/g," ")}...`);
-            setMsgs(p=>[...p,{role:"tool_action",content:`⚙️ Executando **${fname.replace(/_/g," ")}**${fargs.key?` → ${fargs.key}`:""}...`}]);
+            let fargs={};
+            try{fargs=JSON.parse(tc.function.arguments||"{}") || {};}catch{}
+            setLoadingStep(`⚙️ ${fname.replace(/_/g," ")}...`);
+            setMsgs(p=>[...p,{role:"tool_action",content:`⚙️ Executando **${fname.replace(/_/g," ")}**${fargs?.key?` → ${fargs.key}`:""}...`}]);
             let result="{}";
-            if(TOOLS[fname]){
-              try{result=await TOOLS[fname](fargs);}
-              catch(e){result=JSON.stringify({error:e.message});}
-            }
+            if(TOOLS[fname]){try{result=await TOOLS[fname](fargs);}catch(e){result=JSON.stringify({error:e.message});}}
             apiHistory.push({role:"tool",tool_call_id:tc.id,content:result});
           }
           setLoadingStep("Processando resultados...");
 
         }else if(data.reply){
           setMsgs(p=>[...p,{role:"assistant",content:data.reply}]);
+          replied=true;
           break;
         }else{
           break;
         }
+      }
+      // Se não respondeu nada após o loop, mostra aviso
+      if(!replied){
+        setMsgs(p=>[...p,{role:"assistant",content:"✅ Ações concluídas. Verifique o log de ações ao lado para detalhes do que foi executado."}]);
       }
     }catch(e){
       setError(e.message);

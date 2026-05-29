@@ -76,20 +76,28 @@ export default async function handler(req, res) {
   ];
 
   try {
+    const forceText = req.body.force_text === true;
+
+    const body = {
+      model: "llama-3.3-70b-versatile",
+      messages,
+      max_tokens: 2048,
+      temperature: 0.3,
+    };
+
+    // Só oferece ferramentas se não estiver forçando texto
+    if (!forceText) {
+      body.tools = tools;
+      body.tool_choice = "auto";
+    }
+
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${GROQ_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages,
-        tools,
-        tool_choice: "auto",
-        max_tokens: 2048,
-        temperature: 0.3,
-      }),
+      body: JSON.stringify(body),
     });
 
     const data = await response.json();
