@@ -64,7 +64,8 @@ const ALL_MODULES=[
   {k:"manut",l:"Manutenção",icon:"🔩",group:"mecanico"},
   {k:"ponto",l:"Ponto Eletrônico",icon:"🕐",group:"operacional"},
   {k:"diag",l:"Diagnóstico do Sistema",icon:"🛡️",group:"admin"},
-  {k:"ia",l:"IA do Sistema",icon:"🤖",group:"admin"}
+  {k:"ia",l:"IA do Sistema",icon:"🤖",group:"admin"},
+  {k:"customize",l:"Personalizar Sistema",icon:"🎨",group:"admin"}
 ];
 const DEFAULT_PERMS={
   superadmin:ALL_MODULES.map(m=>m.k),
@@ -994,6 +995,240 @@ ${buildContext()}`;
           </div>
         </Card>
       )}
+    </div>
+  </div>;
+}
+
+/* ── PERSONALIZAR SISTEMA ── */
+function CustomizePage({currentUser,isMobile,customization,setCustomization}){
+  const isRoot=currentUser?.role==="superadmin";
+  const[draft,setDraft]=useState(()=>({...customization}));
+  const[saved,setSaved]=useState(false);
+  const[tab,setTab]=useState("marca"); // marca | menu | cores
+
+  if(!isRoot)return<div style={{padding:40,textAlign:"center",color:C.red,fontSize:15,fontWeight:700}}>🔒 Acesso restrito ao usuário Root.</div>;
+
+  const upd=(k,v)=>setDraft(p=>({...p,[k]:v}));
+
+  const save=()=>{
+    setCustomization(draft);
+    setSaved(true);
+    setTimeout(()=>setSaved(false),2500);
+    // Aplica cor de destaque via CSS var imediatamente
+    document.documentElement.style.setProperty("--accent",draft.accentColor);
+  };
+
+  const reset=()=>{
+    const def={logoUrl:null,companyName:"StockTel",companySlogan:"Soluções em Telecomunicações",accentColor:"#d10000",sidebarBg:"#101010",menuOrder:ALL_MODULES.map(m=>m.k),menuLabels:{},menuIcons:{},menuHidden:[]};
+    setDraft(def);setCustomization(def);
+  };
+
+  // Upload de logo
+  const handleLogo=(e)=>{
+    const file=e.target.files?.[0];if(!file)return;
+    if(file.size>500000){alert("Logo muito grande. Use imagens menores que 500KB.");return;}
+    const reader=new FileReader();
+    reader.onload=ev=>upd("logoUrl",ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  // Menu reorder
+  const moveMenu=(k,dir)=>{
+    const order=[...(draft.menuOrder||ALL_MODULES.map(m=>m.k))];
+    const i=order.indexOf(k);if(i<0)return;
+    const ni=i+dir;if(ni<0||ni>=order.length)return;
+    [order[i],order[ni]]=[order[ni],order[i]];
+    upd("menuOrder",order);
+  };
+
+  const toggleHide=(k)=>{
+    const h=[...(draft.menuHidden||[])];
+    const i=h.indexOf(k);
+    if(i>=0)h.splice(i,1);else h.push(k);
+    upd("menuHidden",h);
+  };
+
+  const orderedModules=(draft.menuOrder||ALL_MODULES.map(m=>m.k))
+    .map(k=>ALL_MODULES.find(m=>m.k===k)).filter(Boolean);
+
+  const TABS=[{k:"marca",label:"🏷️ Marca"},{ k:"menu",label:"📋 Menu"},{ k:"cores",label:"🎨 Cores"}];
+
+  const previewAccent=draft.accentColor||"#d10000";
+
+  return<div style={{display:"flex",flexDirection:"column",gap:16}}>
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+      <div>
+        <div style={{fontSize:isMobile?17:21,fontWeight:800,color:C.txt,display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:26}}>🎨</span> Personalizar Sistema
+        </div>
+        <div style={{fontSize:11,color:C.muted,marginTop:2}}>Editor visual · Acesso exclusivo Root · Alterações aplicadas em tempo real</div>
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        <Btn size="sm" color="ghost" outline onClick={reset}>↩️ Resetar</Btn>
+        <Btn size="sm" color={saved?"grn":"gold"} onClick={save}>{saved?"✅ Salvo!":"💾 Salvar alterações"}</Btn>
+      </div>
+    </div>
+
+    {/* Tabs */}
+    <div style={{display:"flex",gap:4,borderBottom:`1px solid ${C.bdr}`,paddingBottom:0}}>
+      {TABS.map(t=>(
+        <div key={t.k} onClick={()=>setTab(t.k)}
+          style={{padding:"9px 18px",cursor:"pointer",fontSize:13,fontWeight:600,borderBottom:`2px solid ${tab===t.k?previewAccent:"transparent"}`,color:tab===t.k?previewAccent:C.muted,transition:"all .15s"}}>
+          {t.label}
+        </div>
+      ))}
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 300px",gap:16,alignItems:"start"}}>
+      {/* Painel de edição */}
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+
+        {/* ── ABA MARCA ── */}
+        {tab==="marca"&&<>
+          <Card style={{padding:20}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:16}}>🏷️ Logomarca</div>
+            {/* Preview atual */}
+            <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:16,padding:14,background:C.surf,borderRadius:10,border:`1px solid ${C.bdr}`}}>
+              <div style={{width:80,height:60,background:draft.sidebarBg||"#101010",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
+                {draft.logoUrl
+                  ?<img src={draft.logoUrl} alt="logo" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>
+                  :<span style={{fontSize:22}}>🏢</span>}
+              </div>
+              <div>
+                <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{draft.companyName||"Nome da empresa"}</div>
+                <div style={{fontSize:11,color:C.muted}}>{draft.companySlogan||"Slogan"}</div>
+              </div>
+            </div>
+            {/* Upload */}
+            <label style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",background:`${previewAccent}18`,border:`2px dashed ${previewAccent}44`,borderRadius:10,cursor:"pointer",fontSize:13,color:previewAccent,fontWeight:600}}>
+              <span style={{fontSize:20}}>📁</span>
+              {draft.logoUrl?"Trocar logomarca":"Carregar logomarca (PNG, JPG — máx. 500KB)"}
+              <input type="file" accept="image/*" onChange={handleLogo} style={{display:"none"}}/>
+            </label>
+            {draft.logoUrl&&<Btn size="sm" color="ghost" outline onClick={()=>upd("logoUrl",null)} style={{marginTop:8}}>🗑️ Remover logo</Btn>}
+          </Card>
+
+          <Card style={{padding:20}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:14}}>✏️ Nome e Slogan</div>
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              <div>
+                <label style={{fontSize:11,color:C.muted,fontWeight:600,display:"block",marginBottom:4}}>NOME DO SISTEMA / EMPRESA</label>
+                <input value={draft.companyName||""} onChange={e=>upd("companyName",e.target.value)}
+                  placeholder="Ex: StockTel"
+                  style={{width:"100%",background:C.bg,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"9px 12px",color:C.txt,fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+              </div>
+              <div>
+                <label style={{fontSize:11,color:C.muted,fontWeight:600,display:"block",marginBottom:4}}>SLOGAN / SUBTÍTULO</label>
+                <input value={draft.companySlogan||""} onChange={e=>upd("companySlogan",e.target.value)}
+                  placeholder="Ex: Soluções em Telecomunicações"
+                  style={{width:"100%",background:C.bg,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"9px 12px",color:C.txt,fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+              </div>
+            </div>
+          </Card>
+        </>}
+
+        {/* ── ABA MENU ── */}
+        {tab==="menu"&&<Card style={{padding:0,overflow:"hidden"}}>
+          <div style={{padding:"12px 18px",borderBottom:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{fontSize:13,fontWeight:700,color:C.txt}}>📋 Ordem e visibilidade dos menus</span>
+            <span style={{fontSize:11,color:C.muted}}>Use ↑↓ para reordenar · 👁️ para ocultar</span>
+          </div>
+          {orderedModules.map((mod,i)=>{
+            const hidden=(draft.menuHidden||[]).includes(mod.k);
+            const label=draft.menuLabels?.[mod.k]||mod.l;
+            const icon=draft.menuIcons?.[mod.k]||mod.icon;
+            return<div key={mod.k} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 16px",borderBottom:`1px solid ${C.bdr}18`,background:hidden?`${C.muted}08`:"transparent",opacity:hidden?.5:1}}>
+              {/* Ícone editável */}
+              <input value={icon} onChange={e=>upd("menuIcons",{...draft.menuIcons,[mod.k]:e.target.value})}
+                style={{width:36,textAlign:"center",background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:6,padding:"4px",fontSize:16,color:C.txt,outline:"none"}}/>
+              {/* Label editável */}
+              <input value={label} onChange={e=>upd("menuLabels",{...draft.menuLabels,[mod.k]:e.target.value})}
+                style={{flex:1,background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:6,padding:"6px 10px",fontSize:12,color:C.txt,outline:"none"}}/>
+              <span style={{fontSize:9,color:C.muted,fontFamily:"monospace",minWidth:60}}>{mod.k}</span>
+              {/* Ocultar/mostrar */}
+              <button onClick={()=>toggleHide(mod.k)} title={hidden?"Mostrar no menu":"Ocultar do menu"}
+                style={{width:28,height:28,borderRadius:6,background:hidden?`${C.muted}22`:`${previewAccent}22`,border:"none",cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                {hidden?"🚫":"👁️"}
+              </button>
+              {/* Reordenar */}
+              <div style={{display:"flex",flexDirection:"column",gap:1}}>
+                <button onClick={()=>moveMenu(mod.k,-1)} disabled={i===0}
+                  style={{width:22,height:16,background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:3,cursor:i===0?"not-allowed":"pointer",fontSize:9,color:C.muted,display:"flex",alignItems:"center",justifyContent:"center",opacity:i===0?.3:1}}>▲</button>
+                <button onClick={()=>moveMenu(mod.k,1)} disabled={i===orderedModules.length-1}
+                  style={{width:22,height:16,background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:3,cursor:i===orderedModules.length-1?"not-allowed":"pointer",fontSize:9,color:C.muted,display:"flex",alignItems:"center",justifyContent:"center",opacity:i===orderedModules.length-1?.3:1}}>▼</button>
+              </div>
+            </div>;
+          })}
+        </Card>}
+
+        {/* ── ABA CORES ── */}
+        {tab==="cores"&&<Card style={{padding:20}}>
+          <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:16}}>🎨 Cores do Sistema</div>
+          <div style={{display:"flex",flexDirection:"column",gap:16}}>
+            {[
+              {k:"accentColor",label:"Cor de destaque",sub:"Botões, seleção de menu, badges"},
+              {k:"sidebarBg",label:"Fundo da barra lateral",sub:"Cor de fundo do menu esquerdo"},
+            ].map(item=>(
+              <div key={item.k} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",background:C.surf,borderRadius:10,border:`1px solid ${C.bdr}`}}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:600,color:C.txt}}>{item.label}</div>
+                  <div style={{fontSize:11,color:C.muted,marginTop:2}}>{item.sub}</div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{width:32,height:32,borderRadius:8,background:draft[item.k]||"#000",border:`2px solid ${C.bdr2}`}}/>
+                  <input type="color" value={draft[item.k]||"#000000"} onChange={e=>upd(item.k,e.target.value)}
+                    style={{width:44,height:36,border:"none",borderRadius:8,cursor:"pointer",padding:2,background:"transparent"}}/>
+                  <span style={{fontFamily:"monospace",fontSize:11,color:C.muted}}>{draft[item.k]}</span>
+                </div>
+              </div>
+            ))}
+            {/* Paleta rápida */}
+            <div>
+              <div style={{fontSize:11,color:C.muted,fontWeight:600,marginBottom:8}}>PALETA RÁPIDA — COR DE DESTAQUE</div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {["#d10000","#e65100","#f9a825","#2e7d32","#1565c0","#6a1b9a","#00838f","#37474f","#c62828","#ad1457"].map(cor=>(
+                  <div key={cor} onClick={()=>upd("accentColor",cor)}
+                    style={{width:32,height:32,borderRadius:"50%",background:cor,cursor:"pointer",border:draft.accentColor===cor?`3px solid #fff`:`3px solid transparent`,boxShadow:draft.accentColor===cor?"0 0 0 2px "+cor:"none",transition:"all .15s"}}/>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Card>}
+      </div>
+
+      {/* Preview da sidebar */}
+      {!isMobile&&<div style={{position:"sticky",top:0}}>
+        <div style={{fontSize:11,color:C.muted,fontWeight:700,marginBottom:8,letterSpacing:".05em"}}>👁️ PRÉVIA EM TEMPO REAL</div>
+        <div style={{width:"100%",background:draft.sidebarBg||"#101010",borderRadius:12,border:`1px solid ${C.bdr}`,overflow:"hidden",boxShadow:"0 8px 24px rgba(0,0,0,.4)"}}>
+          {/* Logo preview */}
+          <div style={{padding:"12px 14px",borderBottom:`1px solid ${C.bdr}44`,display:"flex",alignItems:"center",justifyContent:"center",minHeight:60}}>
+            {draft.logoUrl
+              ?<img src={draft.logoUrl} alt="logo" style={{maxWidth:"100%",maxHeight:48,objectFit:"contain"}}/>
+              :<div style={{fontSize:14,fontWeight:800,color:previewAccent}}>{draft.companyName||"Sistema"}</div>}
+          </div>
+          <div style={{padding:"4px 10px 6px",borderBottom:`1px solid ${C.bdr}44`}}>
+            <div style={{fontSize:9,color:"#666"}}>{draft.companySlogan||"Slogan"}</div>
+          </div>
+          {/* Menu items preview */}
+          <div style={{padding:"6px"}}>
+            {orderedModules.filter(m=>!(draft.menuHidden||[]).includes(m.k)).slice(0,8).map((mod,i)=>(
+              <div key={mod.k} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:6,marginBottom:1,
+                background:i===0?`${previewAccent}22`:"transparent",
+                borderLeft:i===0?`3px solid ${previewAccent}`:"3px solid transparent",
+                color:i===0?previewAccent:"#777",fontSize:11,fontWeight:i===0?600:400}}>
+                <span style={{fontSize:12}}>{draft.menuIcons?.[mod.k]||mod.icon}</span>
+                <span>{draft.menuLabels?.[mod.k]||mod.l}</span>
+              </div>
+            ))}
+            {orderedModules.filter(m=>!(draft.menuHidden||[]).includes(m.k)).length>8&&
+              <div style={{fontSize:10,color:"#555",padding:"4px 10px"}}>+ {orderedModules.filter(m=>!(draft.menuHidden||[]).includes(m.k)).length-8} mais...</div>}
+          </div>
+        </div>
+        <div style={{marginTop:10,padding:"10px 12px",background:C.surf,borderRadius:8,border:`1px solid ${C.bdr}`,fontSize:11,color:C.muted}}>
+          💡 As alterações são aplicadas no sistema inteiro após salvar.
+        </div>
+      </div>}
     </div>
   </div>;
 }
@@ -6765,6 +7000,12 @@ function AppInner(){
     {id:"p4",code:"CON-001",name:"Conector SC/APC",cat:"Conectores",unit:"un",desc:""},
     {id:"p5",code:"SPL-001",name:"Splitter 1x8",cat:"Caixas e Acessórios",unit:"un",desc:""},
   ]);
+  const[customization,setCustomization]=useLS("re_customization",{
+    logoUrl:null,companyName:"StockTel",companySlogan:"Soluções em Telecomunicações",
+    accentColor:"#d10000",sidebarBg:"#101010",
+    menuOrder:ALL_MODULES.map(m=>m.k),
+    menuLabels:{},menuIcons:{},menuHidden:[],
+  });
   const[drawerOpen,setDrawerOpen]=useState(false);
   const isMobile=useIsMobile();
 
@@ -6955,11 +7196,12 @@ function AppInner(){
     manut:<ManutencaoPage manutSols={manutSols} setManutSols={setManutSols} manutOS={manutOS} setManutOS={setManutOS} veiculos={veiculos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} abastecimentos={abastecimentos} pneus={pneus}/>,
     diag:<DiagnosticoPage currentUser={user} isMobile={isMobile}/>,
     ia:<IAPage currentUser={user} isMobile={isMobile} stock={stock} tstock={tstock} os={os} returns={returns} users={users} logs={logs} solicitacoes={solicitacoes} veiculos={veiculos} pontos={pontos}/>,
+    customize:<CustomizePage currentUser={user} isMobile={isMobile} customization={customization} setCustomization={setCustomization}/>,
   };
 
   return <div style={{height:"100dvh",background:C.bg,color:C.txt,display:"flex",overflow:"hidden"}}>
     <style>{CSS}</style>
-    {!isMobile&&<Sidebar user={user} page={page} setPage={goPage} onLogout={()=>{setPage("dash");setUser(null);try{localStorage.removeItem("re_session");localStorage.removeItem("re_page");}catch{}}}/>}
+    {!isMobile&&<Sidebar user={user} page={page} setPage={goPage} customization={customization} onLogout={()=>{setPage("dash");setUser(null);try{localStorage.removeItem("re_session");localStorage.removeItem("re_page");}catch{}}}/>}
     {isMobile&&drawerOpen&&<MobileDrawer user={user} page={page} setPage={goPage} onLogout={()=>{setPage("dash");setUser(null);try{localStorage.removeItem("re_session");localStorage.removeItem("re_page");}catch{}}} onClose={()=>setDrawerOpen(false)}/>}
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <TopBar user={user} pendRet={pendRet} pendSol={pendSol} setPage={goPage} isMobile={isMobile} onMenuOpen={()=>setDrawerOpen(true)}/>
