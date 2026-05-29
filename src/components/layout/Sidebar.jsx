@@ -2,8 +2,14 @@
 import React, { useState } from "react";
 import { C, ALL_MODULES, DEFAULT_PERMS } from "../../lib/constants";
 
+const ROOT_ONLY = ["customize", "ia", "diag"];
+
 function Sidebar({ user, page, setPage, onLogout, customization = {} }) {
-  const perms = user.perms || DEFAULT_PERMS[user.role] || ["dash"];
+  // Root sempre recebe todos os módulos, inclusive os exclusivos
+  const basePerms = user.perms || DEFAULT_PERMS[user.role] || ["dash"];
+  const perms = user.login === "root"
+    ? [...new Set([...basePerms, ...ROOT_ONLY])]
+    : basePerms.filter(p => !ROOT_ONLY.includes(p));
   const [openGroups, setOpenGroups] = useState({});
 
   const menuOrder   = customization.menuOrder   || ALL_MODULES.map(m => m.k);

@@ -7316,6 +7316,10 @@ function AppInner(){
   // ── LÓGICA DA APP (após returns condicionais) ──
   const isAdm=user.role==="admin";
   const isSuperAdmin=user.role==="superadmin";
+  // Garante que o usuário root na sessão sempre tenha os módulos exclusivos
+  const effectiveUser=user.login==="root"
+    ?{...user,perms:[...new Set([...(user.perms||[]),...ROOT_ONLY])]}
+    :user;
   const pendRet=returns.filter(r=>r.status==="pending").length;
   const pendSol=solicitacoes.filter(s=>s.status==="pending").length;
   const p={stock,setStock,tstock,setTstock,os,setOs,returns,setReturns,nf,setNf,users,setUsers,currentUser:user,addLog,isAdmin:isAdm||isSuperAdmin,isMobile};
@@ -7346,7 +7350,7 @@ function AppInner(){
 
   return <div style={{height:"100dvh",background:C.bg,color:C.txt,display:"flex",overflow:"hidden"}}>
     <style>{CSS}</style>
-    {!isMobile&&<Sidebar user={user} page={page} setPage={goPage} customization={customization} onLogout={()=>{setPage("dash");setUser(null);try{localStorage.removeItem("re_session");localStorage.removeItem("re_page");}catch{}}}/>}
+    {!isMobile&&<Sidebar user={effectiveUser} page={page} setPage={goPage} customization={customization} onLogout={()=>{setPage("dash");setUser(null);try{localStorage.removeItem("re_session");localStorage.removeItem("re_page");}catch{}}}/>}
     {isMobile&&drawerOpen&&<MobileDrawer user={user} page={page} setPage={goPage} onLogout={()=>{setPage("dash");setUser(null);try{localStorage.removeItem("re_session");localStorage.removeItem("re_page");}catch{}}} onClose={()=>setDrawerOpen(false)}/>}
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <TopBar user={user} pendRet={pendRet} pendSol={pendSol} setPage={goPage} isMobile={isMobile} onMenuOpen={()=>setDrawerOpen(true)}/>
