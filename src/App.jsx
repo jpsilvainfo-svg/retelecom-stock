@@ -67,9 +67,11 @@ const ALL_MODULES=[
   {k:"ia",l:"IA do Sistema",icon:"🤖",group:"admin"},
   {k:"customize",l:"Personalizar Sistema",icon:"🎨",group:"admin"}
 ];
+// Módulos exclusivos do Root (superadmin) — não aparecem para admin nem outros
+const ROOT_ONLY=["customize","ia","diag"];
 const DEFAULT_PERMS={
   superadmin:ALL_MODULES.map(m=>m.k),
-  admin:ALL_MODULES.map(m=>m.k),
+  admin:ALL_MODULES.map(m=>m.k).filter(k=>!ROOT_ONLY.includes(k)),
   estoque:["dash","os","estoque","kit","dist","dev","sol","rel","ajuda","ponto"],
   tecnico:["dash","os","frota","kit","dev","sol","rel","ajuda","ponto"],
   financeiro:["dash","nf","rel","email","os","dev","log","ajuda"],
@@ -7212,6 +7214,20 @@ function AppInner(){
           return {...u,perms:[...perms,"ponto"]};
         }
         return u;
+      });
+      return changed?updated:prev;
+    });
+  },[]);
+
+  // Remove módulos root-only das permissões de usuários não-superadmin
+  useEffect(()=>{
+    setUsers(prev=>{
+      let changed=false;
+      const updated=prev.map(u=>{
+        if(u.role==="superadmin")return u;
+        const perms=(u.perms||[]).filter(p=>!ROOT_ONLY.includes(p));
+        if(perms.length===u.perms?.length)return u;
+        changed=true;return{...u,perms};
       });
       return changed?updated:prev;
     });
