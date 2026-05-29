@@ -20,7 +20,10 @@ const tools = [
       parameters: {
         type: "object",
         properties: {
-          key: { type: "string", description: "Chave específica (ex: re_stock, re_veiculos). Omita para sincronizar TUDO." }
+          key: {
+            anyOf: [{ type: "string" }, { type: "null" }],
+            description: "Chave específica (ex: re_stock, re_veiculos). Use null ou omita para sincronizar TUDO."
+          }
         }
       }
     }
