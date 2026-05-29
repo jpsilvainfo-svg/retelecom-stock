@@ -79,9 +79,9 @@ export default async function handler(req, res) {
     const forceText = req.body.force_text === true;
 
     const body = {
-      model: "llama-3.3-70b-versatile",
+      model: "llama-3.1-8b-instant",
       messages,
-      max_tokens: 2048,
+      max_tokens: 1024,
       temperature: 0.3,
     };
 
