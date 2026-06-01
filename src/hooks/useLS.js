@@ -8,6 +8,14 @@ const QUEUE_KEY = "__sync_queue";
 // ── Garante que o tipo do valor remoto bate com o tipo esperado ───────────
 function safeValue(remote, initial) {
   if (remote === null || remote === undefined) return null;
+  if (
+    remote &&
+    typeof remote === "object" &&
+    !Array.isArray(remote) &&
+    Object.prototype.hasOwnProperty.call(remote, "empty") &&
+    Object.prototype.hasOwnProperty.call(remote, "value") &&
+    Object.prototype.hasOwnProperty.call(remote, "updated_at")
+  ) return null;
   // Se o valor inicial é array, o remoto também deve ser array
   if (Array.isArray(initial) && !Array.isArray(remote)) return null;
   // Se o valor inicial é objeto (não array), o remoto deve ser objeto
@@ -72,6 +80,10 @@ export const useLS = (key, initial) => {
       const parsed = JSON.parse(s);
       // Garante que o tipo bate com o inicial
       const safe = safeValue(parsed, initial);
+      if (safe === null) {
+        localStorage.removeItem(key);
+        localStorage.removeItem(tsKey(key));
+      }
       return safe !== null ? safe : initial;
     } catch { return initial; }
   });

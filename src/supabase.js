@@ -29,6 +29,17 @@ function normalizeRow(data) {
   return { value, updated_at };
 }
 
+function isWrappedRemoteValue(value) {
+  return (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.prototype.hasOwnProperty.call(value, "empty") &&
+    Object.prototype.hasOwnProperty.call(value, "value") &&
+    Object.prototype.hasOwnProperty.call(value, "updated_at")
+  );
+}
+
 export async function sbPing() {
   const t0 = Date.now();
   try {
@@ -54,6 +65,9 @@ export async function sbGet(key) {
 
 export async function sbSet(key, value) {
   try {
+    if (isWrappedRemoteValue(value)) {
+      return { ok: false, error: "Valor aninhado de sbGet rejeitado. Recarregue/sincronize dados locais antes de enviar." };
+    }
     const { error } = await sb
       .from("re_data")
       .upsert({ key, value, updated_at: new Date().toISOString() });
