@@ -69,7 +69,7 @@ const ALL_MODULES=[
 ];
 // Módulos exclusivos do usuário ROOT (login="root") — nenhum outro usuário tem acesso
 const ROOT_ONLY=["customize","ia","diag"];
-const PAUSED_MODULES=["ia"];
+const PAUSED_MODULES=["ia","manut"];
 const moduleEnabled=(k)=>!PAUSED_MODULES.includes(k);
 const DEFAULT_PERMS={
   superadmin:ALL_MODULES.map(m=>m.k).filter(k=>!ROOT_ONLY.includes(k)),
@@ -4711,10 +4711,20 @@ function SolicitacaoPage({solicitacoes,setSolicitacoes,stock,setStock,tstock,set
 
 
 /* ── FROTA ── */
-function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checkouts,setCheckouts,pneus,setPneus,docsVeic,setDocsVeic,manutOS=[],manutSols=[],users,currentUser,addLog,isMobile}){
-  const isTec=currentUser.role==="tecnico";
-  const isAdm=["admin","superadmin"].includes(currentUser.role);
-  const isFin=currentUser.role==="financeiro";
+function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checkouts,setCheckouts,pneus,setPneus,docsVeic,setDocsVeic,manutOS=[],setManutOS,manutSols=[],setManutSols,users,currentUser,addLog,isMobile}){
+  const role=currentUser.role;
+  const isTec=role==="tecnico";
+  const isMec=role==="mecanico";
+  const isAdm=["admin","superadmin"].includes(role);
+  const isFin=role==="financeiro";
+  const canFrotaDashboard=isAdm;
+  const canVehicles=isAdm||isMec;
+  const canFuel=isAdm||isFin;
+  const canChecklist=isAdm||isTec||isMec;
+  const canTires=isAdm||isTec||isMec;
+  const canHistory=isAdm||isMec;
+  const canCosts=isAdm||isFin;
+  const canMaintenance=isAdm||isMec;
 
   const[tab,setTab]=useState("dash");
   const[modalVeic,setModalVeic]=useState(null);
@@ -4837,7 +4847,7 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
     }).sort((a,b)=>b.abasts-a.abasts);
   },[techs,abastecimentos,veiculos]);
 
-  const viewAbast=isTec?abastecimentos.filter(a=>a.tecnicoId===currentUser.id):abastecimentos;
+  const viewAbast=canFuel?abastecimentos:[];
   const viewCheck=isTec?checkouts.filter(c=>c.tecnicoId===currentUser.id):checkouts;
 
   // ── File handlers ──
@@ -4885,13 +4895,18 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
   };
 
   // ── Tab list ──
-  const tabList=isAdm
-    ?[{k:"dash",l:"📊 Dashboard"},{k:"veic",l:"🚗 Veículos"},{k:"abast",l:"⛽ Abastecimento"},{k:"check",l:"📋 Checklist"},{k:"pneus",l:"🔄 Pneus"},{k:"hist",l:"📖 Histórico"},{k:"custos",l:"💰 Custos"}]
-    :isTec
-    ?[{k:"check",l:"📋 Checklist"},{k:"abast",l:"⛽ Abastecimento"}]
-    :[{k:"dash",l:"📊 Dashboard"},{k:"abast",l:"⛽ Abastecimento"}];
-
-  // ── Filtro de data ──
+  const tabList=[
+    canFrotaDashboard&&{k:"dash",l:"Dashboard"},
+    canVehicles&&{k:"veic",l:"Veiculos"},
+    canMaintenance&&{k:"manut",l:"Manutencao"},
+    canFuel&&{k:"abast",l:"Abastecimento"},
+    canChecklist&&{k:"check",l:"Checklist"},
+    canTires&&{k:"pneus",l:"Pneus"},
+    canHistory&&{k:"hist",l:"Historico"},
+    canCosts&&{k:"custos",l:"Custos"},
+  ].filter(Boolean);
+  const activeTab=tabList.find(t=>t.k===tab)?.k||tabList[0]?.k||"";
+  // Filtro de data ──
   const hoje2=new Date().toISOString().slice(0,10);
   const primMes=new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().slice(0,10);
   const[dtFrIn,setDtFrIn]=useState(primMes);
@@ -4920,10 +4935,6 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
   const totalGastoComb=viewAbastFilt.reduce((a,x)=>a+(parseFloat(x.valor)||0),0);
   const totalLitros=viewAbastFilt.reduce((a,x)=>a+(parseFloat(x.litros)||0),0);
 
-  if(!tab||!tabList.find(t=>t.k===tab)) {
-    // reset to first available tab
-  }
-
   return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
     {/* Header */}
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
@@ -4932,13 +4943,13 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
         <p style={{fontSize:12,color:C.muted,marginTop:2}}>Gestão completa de veículos, combustível e manutenção</p>
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        {isAdm&&tab==="veic"&&<Btn color="gold" size="sm" onClick={()=>{setFormVeic(blankVeic());setModalVeic("new");setErrVeic("");}}>+ Veículo</Btn>}
-        {(isAdm||isTec)&&tab==="abast"&&<Btn color="gold" size="sm" onClick={()=>{setFormAbast(blankAbast());setModalAbast(true);setErrAbast("");}}>⛽ Abastecimento</Btn>}
-        {(isAdm||isTec)&&tab==="check"&&<div style={{display:"flex",gap:8}}>
+        {isAdm&&activeTab==="veic"&&<Btn color="gold" size="sm" onClick={()=>{setFormVeic(blankVeic());setModalVeic("new");setErrVeic("");}}>+ Veículo</Btn>}
+        {canFuel&&activeTab==="abast"&&<Btn color="gold" size="sm" onClick={()=>{setFormAbast(blankAbast());setModalAbast(true);setErrAbast("");}}>⛽ Abastecimento</Btn>}
+        {canChecklist&&activeTab==="check"&&<div style={{display:"flex",gap:8}}>
           <Btn color="gold" size="sm" onClick={()=>{setFormCheck(blankCheck("retirada"));setModalCheck("new");}}>📋 Retirada</Btn>
           <Btn color="ghost" outline size="sm" onClick={()=>{setFormCheck(blankCheck("devolucao"));setModalCheck("new");}}>↩️ Devolução</Btn>
         </div>}
-        {isAdm&&tab==="pneus"&&<Btn color="gold" size="sm" onClick={()=>{setFormPneu(blankPneu());setModalPneu("new");}}>🔄 Registrar Pneu</Btn>}
+        {canTires&&activeTab==="pneus"&&<Btn color="gold" size="sm" onClick={()=>{setFormPneu(blankPneu());setModalPneu("new");}}>🔄 Registrar Pneu</Btn>}
       </div>
     </div>
 
@@ -4953,7 +4964,7 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
 
     {/* Tabs */}
     <div style={{display:"flex",borderBottom:`1px solid ${C.bdr}`,overflowX:"auto",gap:0}}>
-      {tabList.map(t=><div key={t.k} onClick={()=>setTab(t.k)} style={{padding:"9px 16px",cursor:"pointer",fontSize:12,fontWeight:600,borderBottom:`2px solid ${tab===t.k?C.gold:"transparent"}`,color:tab===t.k?C.gold:C.muted,whiteSpace:"nowrap"}}>{t.l}</div>)}
+      {tabList.map(t=><div key={t.k} onClick={()=>setTab(t.k)} style={{padding:"9px 16px",cursor:"pointer",fontSize:12,fontWeight:600,borderBottom:`2px solid ${activeTab===t.k?C.gold:"transparent"}`,color:activeTab===t.k?C.gold:C.muted,whiteSpace:"nowrap"}}>{t.l}</div>)}
     </div>
 
     {/* Filtro de Período */}
@@ -4979,7 +4990,7 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
     </Card>
 
     {/* ── DASHBOARD FROTA ── */}
-    {tab==="dash"&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {activeTab==="dash"&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
       {/* KPI Cards */}
       <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
         {[
@@ -5077,7 +5088,7 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
     </div>}
 
     {/* ── VEÍCULOS ── */}
-    {tab==="veic"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
+    {activeTab==="veic"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
       {veiculos.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted}}>Nenhum veículo cadastrado.</span></Card>}
       {veiculos.map(v=>{
         const tech=users.find(u=>u.id===v.tecnicoId);
@@ -5136,7 +5147,9 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
     </div>}
 
     {/* ── ABASTECIMENTO ── */}
-    {tab==="abast"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+    {activeTab==="manut"&&<ManutencaoPage manutSols={manutSols} setManutSols={setManutSols} manutOS={manutOS} setManutOS={setManutOS} veiculos={veiculos} users={users} currentUser={currentUser} addLog={addLog} isMobile={isMobile}/>}
+
+    {activeTab==="abast"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
       {/* resumo */}
       <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)",gap:10}}>
         {[{l:"ABASTECIMENTOS",v:fmt(viewAbast.length),i:"⛽",c:C.gold},{l:"LITROS",v:fmt(Math.round(totalLitros)),i:"🛢️",c:C.blue},{l:"GASTO TOTAL",v:`R$ ${fmt(Math.round(totalGastoComb))}`,i:"💰",c:C.grn}].map((s,i)=>(
@@ -5175,7 +5188,7 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
     </div>}
 
     {/* ── CHECKLIST ── */}
-    {tab==="check"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+    {activeTab==="check"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
       {viewCheckFilt.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted}}>Nenhum checklist no período.</span></Card>}
       {viewCheckFilt.map(c=>{
         const v=veiculos.find(x=>x.id===c.veiculoId);
@@ -5217,7 +5230,7 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
     </div>}
 
     {/* ── PNEUS ── */}
-    {tab==="pneus"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+    {activeTab==="pneus"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
       {pneus.length===0&&<Card style={{padding:30,textAlign:"center"}}><span style={{color:C.muted}}>Nenhum pneu registrado.</span></Card>}
       {pneus.map(p=>{
         const v=veiculos.find(x=>x.id===p.veiculoId);
@@ -5242,7 +5255,7 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
     </div>}
 
     {/* ── HISTÓRICO POR VEÍCULO ── */}
-    {tab==="hist"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+    {activeTab==="hist"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
       <Card style={{padding:14}}>
         <Sel label="Selecionar Veículo" value={selVeicHist} onChange={setSelVeicHist} options={[{value:"",label:"— Todos os veículos —"},...veiculos.map(v=>({value:v.id,label:`${v.placa} — ${v.modelo}`}))]}/>
       </Card>
@@ -5269,7 +5282,7 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
           {/* Linha do tempo */}
           <div style={{padding:14,display:"flex",flexDirection:"column",gap:8,maxHeight:400,overflowY:"auto"}}>
             {[
-              ...vAbast.map(a=>({tipo:"abast",dt:a.dtAbast,label:`⛽ ${a.dtAbast} — ${a.litros}L R$${a.valor} (${a.combustivel}) · ${fmt(parseInt(a.odometro)||0)} km`,color:C.gold})),
+              ...vAbast.map(a=>({tipo:"abast",dt:a.dtAbast,label:canFuel?`Abastecimento ${a.dtAbast} - ${a.litros}L R$ ${a.valor} (${a.combustivel}) - ${fmt(parseInt(a.odometro)||0)} km`:`Abastecimento ${a.dtAbast} - ${a.litros}L (${a.combustivel}) - ${fmt(parseInt(a.odometro)||0)} km`,color:C.gold})),
               ...vCheck.map(c=>({tipo:"check",dt:c.dtCheck,label:`${c.tipo==="retirada"?"🚗":"↩️"} ${c.dtCheck} — ${c.tipo} · ${fmt(parseInt(c.km)||0)} km · Pneus: ${Object.values(c.pneus||{}).some(p=>p==="problema")?"❌":"✅"} · Avarias: ${c.avarias?"⚠️":"✅"}`,color:c.tipo==="retirada"?C.gold:C.grn})),
               ...vManut.map(o=>({tipo:"manut",dt:o.dtEntrada,label:`🔧 ${o.dtEntrada} — ${o.tipo} · ${o.descricao?.slice(0,40)} · ${o.status}`,color:C.red})),
               ...vPneus.map(p=>({tipo:"pneu",dt:p.dtTroca,label:`🔄 ${p.dtTroca} — Pneu ${p.posicao}: ${p.marca} (DOT: ${p.dot||"?"})`,color:C.blue})),
@@ -5286,7 +5299,7 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
     </div>}
 
     {/* ── CUSTOS ── */}
-    {tab==="custos"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+    {activeTab==="custos"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
       {veiculos.map(v=>{
         const vAbast=abastecimentos.filter(a=>a.veiculoId===v.id);
         const vManut=manutOS.filter(o=>o.veiculoId===v.id);
@@ -7475,7 +7488,7 @@ function AppInner(){
     log:<LogPage logs={logs} isMobile={isMobile}/>,
     ajuda:<HelpPage currentUser={user} isMobile={isMobile}/>,
     ponto:<PontoPage pontos={pontos} setPontos={setPontos} pontoConfig={pontoConfig} setPontoConfig={setPontoConfig} pontoSolicits={pontoSolicits} setPontoSolicits={setPontoSolicits} escalas={escalas} setEscalas={setEscalas} folgas={folgas} setFolgas={setFolgas} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} showToast={showToast}/>,
-    frota:<FrotaPage veiculos={veiculos} setVeiculos={setVeiculos} abastecimentos={abastecimentos} setAbastecimentos={setAbastecimentos} checkouts={checkouts} setCheckouts={setCheckouts} pneus={pneus} setPneus={setPneus} docsVeic={docsVeic} setDocsVeic={setDocsVeic} manutOS={manutOS} manutSols={manutSols} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
+    frota:<FrotaPage veiculos={veiculos} setVeiculos={setVeiculos} abastecimentos={abastecimentos} setAbastecimentos={setAbastecimentos} checkouts={checkouts} setCheckouts={setCheckouts} pneus={pneus} setPneus={setPneus} docsVeic={docsVeic} setDocsVeic={setDocsVeic} manutOS={manutOS} setManutOS={setManutOS} manutSols={manutSols} setManutSols={setManutSols} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
     manut:<ManutencaoPage manutSols={manutSols} setManutSols={setManutSols} manutOS={manutOS} setManutOS={setManutOS} veiculos={veiculos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} abastecimentos={abastecimentos} pneus={pneus}/>,
     diag:<DiagnosticoPage currentUser={user} isMobile={isMobile}/>,
     ia:<div style={{padding:40,textAlign:"center",color:C.ylw,fontSize:15,fontWeight:700}}>⏸️ IA pausada temporariamente. O Diagnóstico e a sincronização continuam ativos.</div>,
