@@ -2,6 +2,13 @@
 const DEFAULT_GROQ_MODEL = "llama-3.1-8b-instant";
 const DEFAULT_OPENROUTER_MODEL = "openrouter/free";
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
+const ALLOWED_ORIGINS = new Set([
+  "https://retelecom-stock.vercel.app",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173"
+]);
+const MAX_MESSAGES = 20;
+const MAX_CONTENT_CHARS = 12000;
 
 const cleanEnv = (name) => {
   const raw = process.env[name];
@@ -11,6 +18,40 @@ const cleanEnv = (name) => {
     .replace(/^["']|["']$/g, "")
     .replace(/^Bearer\s+/i, "")
     .trim();
+};
+
+const isAllowedRequest = (req) => {
+  const origin = req.headers.origin;
+  const referer = req.headers.referer;
+  if (process.env.VERCEL_ENV === "production" && !origin && !referer) return false;
+  if (origin && !ALLOWED_ORIGINS.has(origin)) return false;
+  if (referer) {
+    try {
+      const refererOrigin = new URL(referer).origin;
+      if (!ALLOWED_ORIGINS.has(refererOrigin)) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+};
+
+const sanitizeMessages = (messages) => {
+  if (!Array.isArray(messages) || messages.length > MAX_MESSAGES) return null;
+  let total = 0;
+  const clean = [];
+  for (const msg of messages) {
+    if (!msg || !["system", "user", "assistant", "tool"].includes(msg.role)) return null;
+    const item = { ...msg };
+    if (typeof item.content === "string") {
+      total += item.content.length;
+      if (total > MAX_CONTENT_CHARS) return null;
+    } else if (item.content !== null && item.content !== undefined) {
+      return null;
+    }
+    clean.push(item);
+  }
+  return clean;
 };
 
 const tools = [
@@ -241,18 +282,21 @@ const callCouncil = async ({ messages }) => {
 };
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.has(origin)) res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Método não permitido" });
+  if (!isAllowedRequest(req)) return res.status(403).json({ error: "Origem não autorizada." });
 
   if (req.body?.mode === "status") {
     return res.json({ providers: providerStatus() });
   }
 
-  const { messages } = req.body || {};
-  if (!messages || !Array.isArray(messages)) return res.status(400).json({ error: "Parâmetro inválido." });
+  const messages = sanitizeMessages(req.body?.messages);
+  if (!messages) return res.status(400).json({ error: "Parâmetro inválido ou muito grande." });
 
   try {
     const forceText = req.body.force_text === true;

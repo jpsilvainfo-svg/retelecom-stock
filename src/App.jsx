@@ -340,14 +340,34 @@ function LoginPage({users,onLogin}){
   const[err,setErr]=useState("");
   const[loading,setLoading]=useState(false);
   const[showPass,setShowPass]=useState(false);
+  const loginGuardKey="re_login_guard";
+
+  const getLoginGuard=()=>{
+    try{return JSON.parse(localStorage.getItem(loginGuardKey)||"{}");}catch{return {};}
+  };
+  const setLoginGuard=(value)=>{
+    try{localStorage.setItem(loginGuardKey,JSON.stringify(value));}catch{}
+  };
 
   const doLogin=()=>{
     if(!login||!pass){setErr("Preencha login e senha.");return;}
+    const guard=getLoginGuard();
+    if(guard.lockUntil&&Date.now()<guard.lockUntil){
+      const secs=Math.ceil((guard.lockUntil-Date.now())/1000);
+      setErr(`Muitas tentativas. Aguarde ${secs}s.`);
+      return;
+    }
     setLoading(true);
     setTimeout(()=>{
       const u=users.find(u=>u.login===login&&u.pass===pass);
-      if(u){setErr("");onLogin(u);}
-      else{setErr("Login ou senha incorretos.");setLoading(false);}
+      if(u){setErr("");setLoginGuard({attempts:0});onLogin(u);}
+      else{
+        const attempts=(guard.attempts||0)+1;
+        const lockUntil=attempts>=5?Date.now()+60000:0;
+        setLoginGuard({attempts,lockUntil});
+        setErr(lockUntil?"Muitas tentativas. Login bloqueado por 60 segundos.":"Login ou senha incorretos.");
+        setLoading(false);
+      }
     },400);
   };
 
@@ -903,10 +923,19 @@ ${buildContext()}`;
     {icon:"🗑️",label:"Limpar fila travada",msg:"Verifique se a fila de sincronização está travada e limpe se necessário."},
   ];
 
+  const escapeHtml=(value)=>String(value)
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#39;");
+
   const renderMsg=(text)=>{
     if(!text)return null;
     return text.split("\n").map((line,i)=>{
-      const html=line.replace(/\*\*(.*?)\*\*/g,"<strong style='color:#fff'>$1</strong>").replace(/`(.*?)`/g,"<code style='background:#1a1a1a;padding:1px 5px;border-radius:3px;font-size:11px;color:#d1a800'>$1</code>");
+      const html=escapeHtml(line)
+        .replace(/\*\*(.*?)\*\*/g,"<strong style='color:#fff'>$1</strong>")
+        .replace(/`(.*?)`/g,"<code style='background:#1a1a1a;padding:1px 5px;border-radius:3px;font-size:11px;color:#d1a800'>$1</code>");
       const isLi=line.trim().startsWith("-")||line.trim().match(/^\d+\./);
       return<div key={i} style={{marginBottom:isLi?3:5,paddingLeft:isLi?10:0,color:C.txt2,fontSize:13,lineHeight:1.65}} dangerouslySetInnerHTML={{__html:html||"&nbsp;"}}/>;
     });
