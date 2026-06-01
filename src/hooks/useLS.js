@@ -25,6 +25,35 @@ function safeValue(remote, initial) {
   return remote;
 }
 
+function mergeUsers(localValue, remoteValue, prefer = "remote") {
+  if (!Array.isArray(localValue) || !Array.isArray(remoteValue)) return null;
+  const merged = new Map();
+  const keyOf = (u) => String(u?.login || u?.id || "").trim().toLowerCase();
+  const add = (u) => {
+    const k = keyOf(u);
+    if (!k) return;
+    merged.set(k, { ...(merged.get(k) || {}), ...u });
+  };
+
+  const first = prefer === "local" ? remoteValue : localValue;
+  const second = prefer === "local" ? localValue : remoteValue;
+  first.forEach(add);
+  second.forEach(add);
+
+  const out = Array.from(merged.values());
+  const rootIndex = out.findIndex(u => u?.login === "root" || u?.id === "root");
+  if (rootIndex > 0) {
+    const [root] = out.splice(rootIndex, 1);
+    out.push(root);
+  }
+  return out;
+}
+
+function sameJson(a, b) {
+  try { return JSON.stringify(a) === JSON.stringify(b); }
+  catch { return false; }
+}
+
 // ── Fila de retry ──────────────────────────────────────────────────────────
 export function queueAdd(key, value) {
   try {
@@ -101,15 +130,24 @@ export const useLS = (key, initial) => {
         if (safe === null) return; // tipo incompatível, ignora
 
         if (remoteTs > localTs) {
-          // Nuvem mais recente → aplica local
-          setVal(safe);
+          const localSafe = safeValue(localRaw ? JSON.parse(localRaw) : null, initial);
+          const next = key === "re_users" && localSafe ? mergeUsers(localSafe, safe, "remote") || safe : safe;
+          setVal(next);
           try {
-            localStorage.setItem(key, JSON.stringify(safe));
+            localStorage.setItem(key, JSON.stringify(next));
             localStorage.setItem(tsKey(key), remoteTs);
           } catch {}
+          if (key === "re_users" && !sameJson(next, safe)) pushToCloud(key, next);
         } else if (localTs > remoteTs && localRaw) {
-          // Local mais recente → envia para nuvem
-          try { pushToCloud(key, JSON.parse(localRaw)); } catch {}
+          try {
+            const localParsed = JSON.parse(localRaw);
+            const next = key === "re_users" ? mergeUsers(localParsed, safe, "local") || localParsed : localParsed;
+            if (!sameJson(next, localParsed)) {
+              setVal(next);
+              localStorage.setItem(key, JSON.stringify(next));
+            }
+            pushToCloud(key, next);
+          } catch {}
         }
       } else if (localRaw) {
         // Nuvem vazia mas temos dados locais → envia para nuvem
