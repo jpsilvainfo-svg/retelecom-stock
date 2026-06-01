@@ -69,6 +69,8 @@ const ALL_MODULES=[
 ];
 // Módulos exclusivos do usuário ROOT (login="root") — nenhum outro usuário tem acesso
 const ROOT_ONLY=["customize","ia","diag"];
+const PAUSED_MODULES=["ia"];
+const moduleEnabled=(k)=>!PAUSED_MODULES.includes(k);
 const DEFAULT_PERMS={
   superadmin:ALL_MODULES.map(m=>m.k).filter(k=>!ROOT_ONLY.includes(k)),
   admin:ALL_MODULES.map(m=>m.k).filter(k=>!ROOT_ONLY.includes(k)),
@@ -464,7 +466,7 @@ function Sidebar({user,page,setPage,onLogout}){
   // Garante que módulos novos do perfil apareçam mesmo em users antigos
   const roleDefaults=DEFAULT_PERMS[user.role]||[];
   const perms=[...new Set([...basePerms,...roleDefaults])];
-  const nav=ALL_MODULES.filter(m=>perms.includes(m.k)).map(m=>({k:m.k,icon:m.icon,label:m.l,group:m.group}));
+  const nav=ALL_MODULES.filter(m=>moduleEnabled(m.k)&&perms.includes(m.k)).map(m=>({k:m.k,icon:m.icon,label:m.l,group:m.group}));
   const groupLabels={geral:"GERAL",operacional:"OPERAÇÃO",estoque:"ESTOQUE",relatorios:"RELATÓRIOS",admin:"ADMIN",mecanico:"MECÂNICO"};
   const groups=[...new Set(nav.map(n=>n.group||"geral"))];
   return <div style={{
@@ -541,7 +543,7 @@ function Sidebar({user,page,setPage,onLogout}){
 /* ── DRAWER MOBILE (menu lateral deslizante) ── */
 function MobileDrawer({user,page,setPage,onLogout,onClose}){
   const perms=user.perms||DEFAULT_PERMS[user.role]||["dash"];
-  const nav=ALL_MODULES.filter(m=>perms.includes(m.k)).map(m=>({k:m.k,icon:m.icon,label:m.l}));
+  const nav=ALL_MODULES.filter(m=>moduleEnabled(m.k)&&perms.includes(m.k)).map(m=>({k:m.k,icon:m.icon,label:m.l}));
   const go=(k)=>{setPage(k);onClose();};
   return <>
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"#000000aa",zIndex:200}}/>
@@ -621,7 +623,7 @@ function BottomNav({page,setPage,user,onMenuOpen}){
   const basePerms=user.perms||DEFAULT_PERMS[user.role]||["dash"];
   const roleDefaults=DEFAULT_PERMS[user.role]||[];
   const perms=[...new Set([...basePerms,...roleDefaults])];
-  const allItems=ALL_MODULES.filter(m=>perms.includes(m.k)).map(m=>({k:m.k,icon:m.icon,label:m.l.split(" ")[0]}));
+  const allItems=ALL_MODULES.filter(m=>moduleEnabled(m.k)&&perms.includes(m.k)).map(m=>({k:m.k,icon:m.icon,label:m.l.split(" ")[0]}));
   const visible=allItems.slice(0,5);
   const items=[...visible,{k:"__menu",icon:"☰",label:"Menu"}];
 
@@ -650,6 +652,19 @@ function BottomNav({page,setPage,user,onMenuOpen}){
         <span style={{fontSize:8,marginTop:3,fontWeight:active?900:600,textAlign:"center",maxWidth:48,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.label}</span>
       </div>;
     })}
+  </div>;
+}
+
+function ConnectionBanner({isMobile,status}){
+  if(status==="online")return null;
+  const map={
+    checking:{label:"Verificando conexão com o banco de dados...",bg:C.blueD,border:C.blue,color:C.blue,icon:"🔄"},
+    browser_offline:{label:"Sem internet neste dispositivo. Alterações ficarão pendentes.",bg:C.redD,border:C.red,color:C.red,icon:"📴"},
+    supabase_offline:{label:"Supabase não respondeu. O sistema continua local e tentará sincronizar depois.",bg:C.ylwD,border:C.ylw,color:C.ylw,icon:"☁️"}
+  };
+  const s=map[status]||map.checking;
+  return <div style={{padding:isMobile?"8px 14px":"9px 24px",background:s.bg,borderBottom:`1px solid ${s.border}55`,color:s.color,fontSize:isMobile?11:12,fontWeight:800,display:"flex",alignItems:"center",gap:8}}>
+    <span>{s.icon}</span><span>{s.label}</span>
   </div>;
 }
 
@@ -7240,6 +7255,24 @@ function AppInner(){
   });
   const[drawerOpen,setDrawerOpen]=useState(false);
   const isMobile=useIsMobile();
+  const[connectionStatus,setConnectionStatus]=useState(()=>navigator.onLine?"checking":"browser_offline");
+
+  useEffect(()=>{
+    let alive=true;
+    const check=async()=>{
+      if(!navigator.onLine){if(alive)setConnectionStatus("browser_offline");return;}
+      if(alive)setConnectionStatus("checking");
+      const res=await sbPing();
+      if(alive)setConnectionStatus(res.ok?"online":"supabase_offline");
+    };
+    const offline=()=>setConnectionStatus("browser_offline");
+    const online=()=>check();
+    window.addEventListener("offline",offline);
+    window.addEventListener("online",online);
+    check();
+    const t=setInterval(check,30000);
+    return()=>{alive=false;clearInterval(t);window.removeEventListener("offline",offline);window.removeEventListener("online",online);};
+  },[]);
 
   // Toast global
   const[toast,setToast]=useState(null);
@@ -7419,8 +7452,8 @@ function AppInner(){
   const isSuperAdmin=user.role==="superadmin";
   // Garante que o usuário root na sessão sempre tenha os módulos exclusivos
   const effectiveUser=user.login==="root"
-    ?{...user,perms:[...new Set([...(user.perms||[]),...ROOT_ONLY])]}
-    :user;
+    ?{...user,perms:[...new Set([...(user.perms||[]),...ROOT_ONLY])].filter(moduleEnabled)}
+    :{...user,perms:(user.perms||[]).filter(moduleEnabled)};
   const pendRet=returns.filter(r=>r.status==="pending").length;
   const pendSol=solicitacoes.filter(s=>s.status==="pending").length;
   const p={stock,setStock,tstock,setTstock,os,setOs,returns,setReturns,nf,setNf,users,setUsers,currentUser:user,addLog,isAdmin:isAdm||isSuperAdmin,isMobile};
@@ -7445,7 +7478,7 @@ function AppInner(){
     frota:<FrotaPage veiculos={veiculos} setVeiculos={setVeiculos} abastecimentos={abastecimentos} setAbastecimentos={setAbastecimentos} checkouts={checkouts} setCheckouts={setCheckouts} pneus={pneus} setPneus={setPneus} docsVeic={docsVeic} setDocsVeic={setDocsVeic} manutOS={manutOS} manutSols={manutSols} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
     manut:<ManutencaoPage manutSols={manutSols} setManutSols={setManutSols} manutOS={manutOS} setManutOS={setManutOS} veiculos={veiculos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} abastecimentos={abastecimentos} pneus={pneus}/>,
     diag:<DiagnosticoPage currentUser={user} isMobile={isMobile}/>,
-    ia:<IAPage currentUser={user} isMobile={isMobile} stock={stock} tstock={tstock} os={os} returns={returns} users={users} logs={logs} solicitacoes={solicitacoes} veiculos={veiculos} pontos={pontos}/>,
+    ia:<div style={{padding:40,textAlign:"center",color:C.ylw,fontSize:15,fontWeight:700}}>⏸️ IA pausada temporariamente. O Diagnóstico e a sincronização continuam ativos.</div>,
     customize:<CustomizePage currentUser={user} isMobile={isMobile} customization={customization} setCustomization={setCustomization}/>,
   };
 
@@ -7455,8 +7488,9 @@ function AppInner(){
     {isMobile&&drawerOpen&&<MobileDrawer user={user} page={page} setPage={goPage} onLogout={()=>{setPage("dash");setUser(null);try{localStorage.removeItem("re_session");localStorage.removeItem("re_page");}catch{}}} onClose={()=>setDrawerOpen(false)}/>}
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <TopBar user={user} pendRet={pendRet} pendSol={pendSol} setPage={goPage} isMobile={isMobile} onMenuOpen={()=>setDrawerOpen(true)}/>
+      <ConnectionBanner isMobile={isMobile} status={connectionStatus}/>
       <main style={{flex:1,overflowY:"auto",padding:isMobile?"14px 14px 80px":"24px"}}>
-        {pages[page]||pages.dash}
+        {moduleEnabled(page)?(pages[page]||pages.dash):pages.dash}
       </main>
       {!isMobile&&<div style={{padding:"8px 24px",background:C.surf,borderTop:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <span style={{fontSize:11,color:C.muted}}>StockTel — Soluções em Telecomunicações · v1.1</span>
