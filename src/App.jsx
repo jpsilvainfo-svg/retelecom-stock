@@ -82,6 +82,37 @@ const today=()=>new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"2-dig
 const fmt=(n)=>new Intl.NumberFormat("pt-BR").format(n??0);
 const useIsMobile=()=>{const[m,setM]=useState(()=>window.innerWidth<768);useEffect(()=>{const h=()=>setM(window.innerWidth<768);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);return m;};
 
+// ── SEGURANÇA: Hashing de senhas (PBKDF2 + SHA-256, nativo do browser) ──
+const SESSION_TTL=8*60*60*1000; // 8 horas
+
+async function hashSenha(senha,saltB64=null){
+  const enc=new TextEncoder();
+  const salt=saltB64
+    ?Uint8Array.from(atob(saltB64),c=>c.charCodeAt(0))
+    :crypto.getRandomValues(new Uint8Array(16));
+  const key=await crypto.subtle.importKey("raw",enc.encode(senha),{name:"PBKDF2"},false,["deriveBits"]);
+  const bits=await crypto.subtle.deriveBits({name:"PBKDF2",salt,iterations:100000,hash:"SHA-256"},key,256);
+  const hashB64=btoa(String.fromCharCode(...new Uint8Array(bits)));
+  const saltResult=btoa(String.fromCharCode(...salt));
+  return{hash:hashB64,salt:saltResult,pbkdf2:true};
+}
+
+async function verificarSenha(senha,usuario){
+  // Senha já criptografada (PBKDF2)
+  if(usuario.passHash&&usuario.passSalt){
+    const{hash}=await hashSenha(senha,usuario.passSalt);
+    return hash===usuario.passHash;
+  }
+  // Senha legada (texto puro) — aceita e agenda migração
+  return senha===usuario.pass;
+}
+
+function sessaoValida(u){
+  if(!u)return false;
+  if(!u.loginAt)return true; // sessões antigas sem timestamp são válidas uma última vez
+  return Date.now()-u.loginAt<SESSION_TTL;
+}
+
 // useLS importado do topo do arquivo
 
 const USERS0=[
@@ -348,7 +379,7 @@ function LoginPage({users,onLogin}){
     try{localStorage.setItem(loginGuardKey,JSON.stringify(value));}catch{}
   };
 
-  const doLogin=()=>{
+  const doLogin=async()=>{
     if(!login||!pass){setErr("Preencha login e senha.");return;}
     const guard=getLoginGuard();
     if(guard.lockUntil&&Date.now()<guard.lockUntil){
@@ -357,17 +388,30 @@ function LoginPage({users,onLogin}){
       return;
     }
     setLoading(true);
-    setTimeout(()=>{
-      const u=users.find(u=>u.login===login&&u.pass===pass);
-      if(u){setErr("");setLoginGuard({attempts:0});onLogin(u);}
-      else{
+    try{
+      const u=users.find(u=>u.login===login);
+      const ok=u&&await verificarSenha(pass,u);
+      if(ok){
+        setErr("");
+        setLoginGuard({attempts:0});
+        // Migra senha legada para hash seguro automaticamente
+        if(!u.passHash){
+          const{hash,salt}=await hashSenha(pass);
+          onLogin(u,{passHash:hash,passSalt:salt,pass:undefined});
+        }else{
+          onLogin(u,null);
+        }
+      }else{
         const attempts=(guard.attempts||0)+1;
         const lockUntil=attempts>=5?Date.now()+60000:0;
         setLoginGuard({attempts,lockUntil});
         setErr(lockUntil?"Muitas tentativas. Login bloqueado por 60 segundos.":"Login ou senha incorretos.");
         setLoading(false);
       }
-    },400);
+    }catch(e){
+      setErr("Erro ao autenticar. Tente novamente.");
+      setLoading(false);
+    }
   };
 
   return <div style={{minHeight:"100vh",background:"#070707",display:"flex",alignItems:"center",justifyContent:"center",padding:16,position:"relative",overflow:"hidden"}}>
@@ -6793,7 +6837,18 @@ function EditarHora({reg,onSave,onDelete}){
 function AppInner(){
   // ── TODOS OS HOOKS PRIMEIRO (regra do React) ──
   const[user,setUser]=useState(()=>{
-    try{const u=localStorage.getItem("re_session");return u?JSON.parse(u):null;}catch{return null;}
+    try{
+      const u=localStorage.getItem("re_session");
+      if(!u)return null;
+      const parsed=JSON.parse(u);
+      // Verifica expiração da sessão (8 horas)
+      if(!sessaoValida(parsed)){
+        localStorage.removeItem("re_session");
+        localStorage.removeItem("re_page");
+        return null;
+      }
+      return parsed;
+    }catch{return null;}
   });
   const[page,setPage]=useState(()=>{
     try{return localStorage.getItem("re_page")||"dash";}catch{return "dash";}
@@ -6963,19 +7018,24 @@ function AppInner(){
     setLogs(p=>[{id:uid(),date:now(),user:u,action:a,detail:d,tipo},...p]);
   };
 
-  const salvarPerfil=()=>{
+  const salvarPerfil=async()=>{
     if(perfilForm.novaPass){
-      if(perfilForm.pass!==user.pass){setPerfilMsg("err:Senha atual incorreta.");return;}
+      // Verifica senha atual (suporta hash e texto puro)
+      const senhaOk=await verificarSenha(perfilForm.pass,user);
+      if(!senhaOk){setPerfilMsg("err:Senha atual incorreta.");return;}
       if(perfilForm.novaPass.length<4){setPerfilMsg("err:Nova senha deve ter ao menos 4 caracteres.");return;}
       if(perfilForm.novaPass!==perfilForm.confirmaPass){setPerfilMsg("err:As senhas não conferem.");return;}
     }
-    const updated={...user,
-      pass:perfilForm.novaPass||user.pass,
-      photo:perfilForm.photo||user.photo,
-      mustChangePassword:false};
+    let updated={...user,photo:perfilForm.photo||user.photo,mustChangePassword:false};
+    if(perfilForm.novaPass){
+      // Hash da nova senha
+      const{hash,salt}=await hashSenha(perfilForm.novaPass);
+      updated={...updated,passHash:hash,passSalt:salt,pass:undefined};
+      delete updated.pass;
+    }
     setUsers(p=>p.map(u=>u.id===user.id?updated:u));
     setUser(updated);
-    try{localStorage.setItem("re_session",JSON.stringify(updated));}catch{}
+    try{localStorage.setItem("re_session",JSON.stringify({...updated,loginAt:Date.now()}));}catch{}
     setPerfilMsg("ok:Perfil atualizado com sucesso!");
     showToast("Perfil atualizado com sucesso!","success");
     setPerfilForm({pass:"",novaPass:"",confirmaPass:"",photo:""});
@@ -6991,20 +7051,30 @@ function AppInner(){
     reader.readAsDataURL(file);
   };
 
-  const confirmarSenha=()=>{
+  const confirmarSenha=async()=>{
     if(npwd.length<4){setPwdErr("Senha deve ter ao menos 4 caracteres.");return;}
     if(npwd!==cpwd){setPwdErr("As senhas não conferem.");return;}
-    const upd={...user,pass:npwd,mustChangePassword:false};
+    const{hash,salt}=await hashSenha(npwd);
+    const upd={...user,passHash:hash,passSalt:salt,pass:undefined,mustChangePassword:false};
+    delete upd.pass;
     setUsers(p=>p.map(u=>u.id===user.id?upd:u));
     setUser(upd);
     goPage("dash");
-    try{localStorage.setItem("re_session",JSON.stringify(upd));localStorage.setItem("re_page","dash");}catch{}
+    try{localStorage.setItem("re_session",JSON.stringify({...upd,loginAt:Date.now()}));localStorage.setItem("re_page","dash");}catch{}
   };
 
   // ── RETURNS CONDICIONAIS (após todos os hooks) ──
-  if(!user)return <LoginPage users={users} onLogin={u=>{
-    try{localStorage.setItem("re_session",JSON.stringify(u));localStorage.setItem("re_page","dash");}catch{}
-    setUser(u);
+  if(!user)return <LoginPage users={users} onLogin={(u,hashUpdate)=>{
+    // Se veio migração de senha (legada → hash), salva o hash no banco
+    let finalUser={...u,loginAt:Date.now()};
+    if(hashUpdate){
+      finalUser={...finalUser,...hashUpdate};
+      // Remove senha em texto puro e salva hash no banco
+      delete finalUser.pass;
+      setUsers(p=>p.map(x=>x.id===u.id?{...x,...hashUpdate,pass:undefined}:x));
+    }
+    try{localStorage.setItem("re_session",JSON.stringify(finalUser));localStorage.setItem("re_page","dash");}catch{}
+    setUser(finalUser);
     setPage("dash");
   }}/>;
 
