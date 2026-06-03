@@ -1,11 +1,11 @@
-// src/hooks/useLS.js — sync local ↔ Supabase com timestamp e retry automático
+// src/hooks/useLS.js — sincronização local ↔ Supabase com retry e timestamp imediato
 import { useState, useEffect, useCallback } from "react";
 import { sbGet, sbSet } from "../supabase";
 
 const tsKey = k => `${k}__ts`;
 const QUEUE_KEY = "__sync_queue";
 
-// ── Valida tipo do valor remoto contra o tipo esperado ────────────────────
+// ── Valida tipo do valor remoto ───────────────────────────────────────────
 function safeValue(remote, initial) {
   if (remote === null || remote === undefined) return null;
   if (Array.isArray(initial) && !Array.isArray(remote)) return null;
@@ -15,7 +15,7 @@ function safeValue(remote, initial) {
   return remote;
 }
 
-// ── Fila de retry ─────────────────────────────────────────────────────────
+// ── Fila de pendentes ─────────────────────────────────────────────────────
 export function queueAdd(key, value) {
   try {
     const q = JSON.parse(localStorage.getItem(QUEUE_KEY) || "{}");
@@ -43,7 +43,7 @@ export function queueSize() {
   return Object.keys(queueGet()).length;
 }
 
-// ── Envia para Supabase, fila de retry se falhar ──────────────────────────
+// ── Envia para Supabase (sbSet já faz retry internamente) ─────────────────
 export async function pushToCloud(key, value) {
   try {
     const res = await sbSet(key, value);
@@ -71,8 +71,7 @@ export const useLS = (key, initial) => {
     } catch { return initial; }
   });
 
-  // Ao montar: busca do Supabase e aplica se remoto for mais recente
-  // Se local for mais recente (ou nuvem vazia) → envia local para nuvem
+  // Ao montar: sincroniza com Supabase
   useEffect(() => {
     sbGet(key).then(remote => {
       const localRaw = localStorage.getItem(key);
@@ -81,21 +80,23 @@ export const useLS = (key, initial) => {
       if (remote && !remote.empty && remote.value !== null) {
         const remoteTs = remote.updated_at || "0";
         const safe = safeValue(remote.value, initial);
-        if (safe === null) return;
+        if (safe === null) return; // tipo incompatível, ignora
 
         if (remoteTs > localTs) {
-          // Nuvem mais recente → aplica localmente
+          // Remoto mais recente → aplica localmente
           setVal(safe);
           try {
             localStorage.setItem(key, JSON.stringify(safe));
             localStorage.setItem(tsKey(key), remoteTs);
           } catch {}
-        } else if (localTs >= remoteTs && localRaw) {
-          // Local igual ou mais recente → garante que nuvem está atualizada
-          try { pushToCloud(key, JSON.parse(localRaw)); } catch {}
+        } else {
+          // Local igual ou mais recente → garante que remoto está atualizado
+          if (localRaw) {
+            try { pushToCloud(key, JSON.parse(localRaw)); } catch {}
+          }
         }
       } else if (localRaw) {
-        // Nuvem vazia mas temos dados locais → envia para nuvem
+        // Supabase vazio mas temos local → envia
         try { pushToCloud(key, JSON.parse(localRaw)); } catch {}
       }
     }).catch(() => {});
@@ -104,12 +105,12 @@ export const useLS = (key, initial) => {
   const set = useCallback((v) => {
     setVal(prev => {
       const next = typeof v === "function" ? v(prev) : v;
-      // CRÍTICO: salva timestamp IMEDIATAMENTE junto com os dados
-      // Isso garante que local sempre vence sobre dado remoto antigo
+      // CRÍTICO: grava timestamp LOCAL imediatamente com os dados
+      // Isso garante que dado local SEMPRE ganha sobre remoto antigo
       const ts = new Date().toISOString();
       try {
         localStorage.setItem(key, JSON.stringify(next));
-        localStorage.setItem(tsKey(key), ts); // timestamp local definido ANTES do cloud
+        localStorage.setItem(tsKey(key), ts);
       } catch {}
       pushToCloud(key, next);
       return next;
