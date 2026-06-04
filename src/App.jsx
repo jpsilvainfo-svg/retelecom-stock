@@ -7310,14 +7310,11 @@ function AppInner(){
       a.toLowerCase().includes("aprovada")?"aprovada":
       a.toLowerCase().includes("devolução")||a.toLowerCase().includes("solicitada")?"dev":"outro";
     setLogs(p=>[{id:uid(),date:now(),user:u,action:a,detail:d,tipo},...p]);
-    // Notificação Telegram para eventos importantes
-    if(tg?.ativo&&tg?.token&&tg?.chat_id){
+    // Notifica TODA alteração no sistema via Telegram
+    if(tg?.ativo&&tg?.token){
       const icones={saida:"🚀",entrada:"📥",aprovada:"✅",dev:"↩️",outro:"📋"};
-      const msg=`${icones[tipo]||"📋"} <b>StockTel</b>\n\n<b>${a}</b>\n${d}\n\n👤 ${u}\n⏰ ${new Date().toLocaleString("pt-BR")}`;
-      // Filtra eventos que merecem notificação
-      if(["saida","dev","aprovada"].includes(tipo)||a.toLowerCase().includes("novo usuário")){
-        notificar(msg,tg);
-      }
+      const msg=`${icones[tipo]||"📋"} <b>StockTel — Alteração</b>\n\n<b>${a}</b>\n${d}\n\n👤 Usuário: ${u}\n⏰ ${new Date().toLocaleString("pt-BR")}\n🔗 retelecom-stock.vercel.app`;
+      notificar(msg,tg);
     }
   };
 

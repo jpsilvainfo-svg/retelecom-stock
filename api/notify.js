@@ -1,9 +1,11 @@
-// api/notify.js — Notificações via Telegram Bot (apenas para IDs autorizados)
-// IDs autorizados a receber mensagens deste bot
+// api/notify.js — Notificações via Telegram Bot (IDs autorizados)
+// IDs fixos autorizados + extras via env vars do Vercel
 const AUTHORIZED_IDS = [
-  "-5229565123",  // Grupo StockTel
-  "236353850",    // João Paulo (admin)
-];
+  "-5229565123",   // Grupo StockTel
+  "236353850",     // João Paulo (admin)
+  process.env.TELEGRAM_EXTRA_1,  // Celular 1: +55 21 99299-5955
+  process.env.TELEGRAM_EXTRA_2,  // Celular 2: +55 21 97382-6927
+].filter(Boolean).map(String);
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -21,9 +23,9 @@ export default async function handler(req, res) {
   if (!CHAT_ID)   return res.status(400).json({ ok: false, error: "TELEGRAM_CHAT_ID não configurado" });
   if (!message)   return res.status(400).json({ ok: false, error: "Mensagem vazia" });
 
-  // Bloqueia envio para IDs não autorizados (evita uso indevido do bot)
+  // Bloqueia IDs não autorizados
   if (!AUTHORIZED_IDS.includes(CHAT_ID)) {
-    console.warn(`[notify] Chat ID não autorizado bloqueado: ${CHAT_ID}`);
+    console.warn(`[notify] Bloqueado: ${CHAT_ID}`);
     return res.status(403).json({ ok: false, error: "Chat ID não autorizado" });
   }
 
