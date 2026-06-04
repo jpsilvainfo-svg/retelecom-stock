@@ -107,16 +107,22 @@ function pushBrowser(titulo, corpo, opcoes={}){
 
 // ── TELEGRAM: Notificações gratuitas via Bot ──────────────────────────────
 async function notificar(mensagem, cfg=null){
-  // cfg = { token, chat_id } do re_customization.telegram
-  // Sem config = silencioso (não quebra o sistema)
-  if(!cfg?.token||!cfg?.chat_id)return;
-  try{
-    await fetch("/api/notify",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({message:mensagem,token:cfg.token,chat_id:cfg.chat_id})
-    });
-  }catch{}
+  if(!cfg?.token||!cfg?.ativo)return;
+  // Suporta múltiplos destinatários: chat_ids (array) ou chat_id (string única)
+  const ids=[
+    ...(cfg.chat_ids||[]),
+    ...(cfg.chat_id?[cfg.chat_id]:[]),
+  ].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i); // remove duplicatas
+  if(!ids.length)return;
+  for(const chat_id of ids){
+    try{
+      await fetch("/api/notify",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({message:mensagem,token:cfg.token,chat_id})
+      });
+    }catch{}
+  }
 }
 
 async function hashSenha(senha,saltB64=null){
@@ -1118,19 +1124,47 @@ function CustomizePage({currentUser,isMobile,customization,setCustomization}){
                   style={{width:"100%",background:C.bg,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"9px 12px",color:C.txt,fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"monospace"}}/>
               </div>
               <div>
-                <label style={{fontSize:11,color:C.muted,fontWeight:700,display:"block",marginBottom:4}}>CHAT ID (seu ID ou ID do grupo)</label>
+                <label style={{fontSize:11,color:C.muted,fontWeight:700,display:"block",marginBottom:4}}>CHAT ID PRINCIPAL (grupo ou você mesmo)</label>
                 <input value={draft.telegram?.chat_id||""} onChange={e=>upd("telegram",{...draft.telegram,chat_id:e.target.value})}
-                  placeholder="-1001234567890 ou 123456789"
+                  placeholder="-5229565123 (grupo) ou 236353850 (pessoal)"
                   style={{width:"100%",background:C.bg,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"9px 12px",color:C.txt,fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"monospace"}}/>
               </div>
+
+              {/* Múltiplos destinatários */}
+              <div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                  <label style={{fontSize:11,color:C.muted,fontWeight:700}}>DESTINATÁRIOS ADICIONAIS (chat IDs pessoais)</label>
+                  <Btn size="xs" color="gold" outline onClick={()=>upd("telegram",{...draft.telegram,chat_ids:[...(draft.telegram?.chat_ids||[]),{id:Date.now(),chat_id:"",nome:""}]})}>+ Adicionar</Btn>
+                </div>
+                {(draft.telegram?.chat_ids||[]).map((dest,i)=>(
+                  <div key={dest.id||i} style={{display:"flex",gap:8,marginBottom:6,alignItems:"center"}}>
+                    <input value={dest.nome||""} onChange={e=>{const ids=[...(draft.telegram?.chat_ids||[])];ids[i]={...ids[i],nome:e.target.value};upd("telegram",{...draft.telegram,chat_ids:ids});}}
+                      placeholder="Nome (ex: Desenvolvedor)"
+                      style={{flex:"0 0 140px",background:C.bg,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"8px 10px",color:C.txt,fontSize:12,outline:"none"}}/>
+                    <input value={dest.chat_id||""} onChange={e=>{const ids=[...(draft.telegram?.chat_ids||[])];ids[i]={...ids[i],chat_id:e.target.value};upd("telegram",{...draft.telegram,chat_ids:ids});}}
+                      placeholder="Chat ID (ex: 236353850)"
+                      style={{flex:1,background:C.bg,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"8px 10px",color:C.txt,fontSize:12,outline:"none",fontFamily:"monospace"}}/>
+                    <button onClick={()=>{const ids=(draft.telegram?.chat_ids||[]).filter((_,j)=>j!==i);upd("telegram",{...draft.telegram,chat_ids:ids});}}
+                      style={{width:28,height:28,background:`${C.red}22`,border:"none",borderRadius:6,cursor:"pointer",color:C.red,fontSize:14}}>✕</button>
+                  </div>
+                ))}
+                {(draft.telegram?.chat_ids||[]).length===0&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>Nenhum destinatário adicional. Clique em "+ Adicionar".</div>}
+              </div>
+
               {/* Testar bot */}
               <Btn color="blue" outline onClick={async()=>{
-                if(!draft.telegram?.token||!draft.telegram?.chat_id){alert("Preencha Token e Chat ID primeiro.");return;}
-                const r=await fetch("/api/notify",{method:"POST",headers:{"Content-Type":"application/json"},
-                  body:JSON.stringify({message:"✅ <b>StockTel</b>\n\nBot configurado com sucesso! Notificações ativas.",token:draft.telegram.token,chat_id:draft.telegram.chat_id})});
-                const d=await r.json();
-                alert(d.ok?"✅ Mensagem enviada! Verifique o Telegram.":"❌ Erro: "+(d.error||"Verifique Token e Chat ID"));
-              }}>📤 Enviar mensagem de teste</Btn>
+                if(!draft.telegram?.token){alert("Preencha o Token primeiro.");return;}
+                const ids=[(draft.telegram.chat_id||""),...(draft.telegram.chat_ids||[]).map(d=>d.chat_id)].filter(Boolean);
+                if(!ids.length){alert("Adicione ao menos um Chat ID.");return;}
+                let ok=0,fail=0;
+                for(const cid of ids){
+                  const r=await fetch("/api/notify",{method:"POST",headers:{"Content-Type":"application/json"},
+                    body:JSON.stringify({message:"StockTel Bot - Teste OK! Notificacoes ativas para todos os destinatarios.",token:draft.telegram.token,chat_id:cid})});
+                  const d=await r.json();
+                  if(d.ok)ok++;else fail++;
+                }
+                alert(`Resultado: ${ok} enviado(s) com sucesso${fail>0?" · "+fail+" falhou(aram)":""}`);
+              }}>📤 Testar para todos os destinatários ({[(draft.telegram?.chat_id||""),...(draft.telegram?.chat_ids||[]).map(d=>d.chat_id)].filter(Boolean).length})</Btn>
             </div>
           </Card>
 
@@ -7126,7 +7160,7 @@ function AppInner(){
     menuOrder:ALL_MODULES.map(m=>m.k),
     menuLabels:{},menuIcons:{},menuHidden:[],
     menuGroups:[], // [{id,icon,label,items:[k,...]}]
-    telegram:{token:"",chat_id:"",ativo:false}, // config via Personalizar Sistema → aba Telegram
+    telegram:{token:"",chat_id:"",chat_ids:[],ativo:false}, // config via Personalizar Sistema → aba Telegram
   });
   const[drawerOpen,setDrawerOpen]=useState(false);
   const isMobile=useIsMobile();
