@@ -1899,6 +1899,8 @@ function OSPage({os,setOs,tstock,setTstock,stock,users,currentUser,addLog,isMobi
   const[notes,setNotes]=useState("");
   const[items,setItems]=useState([]);
   const[err,setErr]=useState("");
+  const[fotos,setFotos]=useState([]); // Array de base64
+  const[viewFotos,setViewFotos]=useState(null); // OS para ver fotos
   const blank=()=>({id:uid(),sid:"",qty:""});
   const myTstock=tstock.filter(t=>t.uid===currentUser.id);
   const updItem=(id,k,v)=>setItems(p=>p.map(r=>r.id===id?{...r,[k]:v}:r));
@@ -1907,6 +1909,18 @@ function OSPage({os,setOs,tstock,setTstock,stock,users,currentUser,addLog,isMobi
   const validItems=items.filter(r=>r.sid&&parseInt(r.qty)>0);
   const myStockOpts=myTstock.map(t=>{const s=stock.find(x=>x.id===t.sid);return s?{...s,qty:t.qty}:null;}).filter(Boolean);
 
+  // Adiciona foto via câmera ou galeria
+  const adicionarFoto=(e)=>{
+    const files=Array.from(e.target.files||[]);
+    files.forEach(file=>{
+      if(file.size>2*1024*1024){alert("Foto muito grande. Máx 2MB por imagem.");return;}
+      const reader=new FileReader();
+      reader.onload=ev=>setFotos(p=>[...p,ev.target.result]);
+      reader.readAsDataURL(file);
+    });
+    e.target.value="";
+  };
+
   const save=()=>{
     if(!osNum.trim()){setErr("Informe o número da OS.");return;}
     if(!client.trim()){setErr("Informe o nome do cliente.");return;}
@@ -1914,10 +1928,10 @@ function OSPage({os,setOs,tstock,setTstock,stock,users,currentUser,addLog,isMobi
     let ok=true;
     validItems.forEach(r=>{const ts=myTstock.find(t=>t.sid===r.sid);if(!ts||ts.qty<parseInt(r.qty)){ok=false;setErr("Qtd insuficiente: "+(stock.find(s=>s.id===r.sid)?.name));}});
     if(!ok)return;
-    setOs(p=>[{id:uid(),uid:currentUser.id,os:osNum.trim(),client:client.trim(),date:now(),items:validItems.map(r=>({sid:r.sid,qty:parseInt(r.qty)})),notes},...p]);
+    setOs(p=>[{id:uid(),uid:currentUser.id,os:osNum.trim(),client:client.trim(),date:now(),items:validItems.map(r=>({sid:r.sid,qty:parseInt(r.qty)})),notes,fotos},...p]);
     setTstock(p=>p.map(t=>{const it=validItems.find(r=>r.sid===t.sid&&t.uid===currentUser.id);return it?{...t,qty:t.qty-parseInt(it.qty)}:t;}));
-    addLog(currentUser.name,"Saída","OS: "+osNum.trim()+" · "+client.trim());
-    setModal(false);setErr("");setOsNum("");setClient("");setNotes("");setItems([]);
+    addLog(currentUser.name,"Saída","OS: "+osNum.trim()+" · "+client.trim()+(fotos.length?` · ${fotos.length} foto(s)`:""));
+    setModal(false);setErr("");setOsNum("");setClient("");setNotes("");setItems([]);setFotos([]);
   };
 
   return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
@@ -1944,7 +1958,10 @@ function OSPage({os,setOs,tstock,setTstock,stock,users,currentUser,addLog,isMobi
               <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted,marginTop:4}}>{o.date}</div>
               {o.notes&&<div style={{fontSize:12,color:C.muted,marginTop:4,fontStyle:"italic"}}>📝 {o.notes}</div>}
             </div>
-            <Bdg color="grn">✓ Concluída</Bdg>
+            <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+              <Bdg color="grn">✓ Concluída</Bdg>
+              {o.fotos?.length>0&&<Bdg color="blue" onClick={()=>setViewFotos(o)} style={{cursor:"pointer"}}>📷 {o.fotos.length} foto{o.fotos.length>1?"s":""}</Bdg>}
+            </div>
           </div>
           <div style={{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:".06em",textTransform:"uppercase",marginBottom:8}}>Materiais Utilizados</div>
           <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:6}}>
@@ -1988,12 +2005,43 @@ function OSPage({os,setOs,tstock,setTstock,stock,users,currentUser,addLog,isMobi
             label="Materiais Utilizados"
             addLabel="Clique para adicionar o primeiro material utilizado"
           />
+          {/* Fotos do serviço */}
+          <div>
+            <div style={{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:".06em",marginBottom:8}}>📷 FOTOS DO SERVIÇO (opcional)</div>
+            <label style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:`${C.blue}14`,border:`2px dashed ${C.blue}44`,borderRadius:8,cursor:"pointer",fontSize:13,color:C.blue,fontWeight:600}}>
+              <span style={{fontSize:20}}>📷</span>
+              {fotos.length>0?`${fotos.length} foto(s) adicionada(s) — Adicionar mais`:"Tirar foto ou escolher da galeria"}
+              <input type="file" accept="image/*" capture="environment" multiple onChange={adicionarFoto} style={{display:"none"}}/>
+            </label>
+            {fotos.length>0&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:10}}>
+              {fotos.map((f,i)=>(
+                <div key={i} style={{position:"relative",width:80,height:80}}>
+                  <img src={f} alt={`foto ${i+1}`} style={{width:80,height:80,objectFit:"cover",borderRadius:8,border:`1px solid ${C.bdr}`}}/>
+                  <button onClick={()=>setFotos(p=>p.filter((_,j)=>j!==i))}
+                    style={{position:"absolute",top:-6,right:-6,width:18,height:18,borderRadius:"50%",background:C.red,color:"#fff",border:"none",cursor:"pointer",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>✕</button>
+                </div>
+              ))}
+            </div>}
+          </div>
           {err&&<div style={{background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",color:C.red,fontSize:13}}>⚠️ {err}</div>}
         </div>
         <div style={{padding:"14px 20px",borderTop:`1px solid ${C.bdr}`,background:C.surf,flexShrink:0,display:"flex",justifyContent:"flex-end",gap:10}}>
           <Btn color="ghost" outline onClick={()=>setModal(false)}>Cancelar</Btn>
           <Btn color="gold" onClick={save} disabled={validItems.length===0}>✅ Confirmar Baixa</Btn>
         </div>
+      </div>
+    </div>}
+
+    {/* Viewer de fotos */}
+    {viewFotos&&<div style={{position:"fixed",inset:0,background:"#000000ee",zIndex:2000,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setViewFotos(null)}>
+      <div style={{color:C.muted,fontSize:13,marginBottom:12}} onClick={e=>e.stopPropagation()}>
+        📷 Fotos da OS <span style={{color:C.gold,fontWeight:700}}>{viewFotos.os}</span> · {viewFotos.client}
+        <button onClick={()=>setViewFotos(null)} style={{marginLeft:16,background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:18}}>✕</button>
+      </div>
+      <div style={{display:"flex",gap:12,flexWrap:"wrap",justifyContent:"center",maxHeight:"80vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+        {viewFotos.fotos?.map((f,i)=>(
+          <img key={i} src={f} alt={`foto ${i+1}`} style={{maxWidth:isMobile?"90vw":400,maxHeight:"70vh",objectFit:"contain",borderRadius:10,border:`2px solid ${C.bdr2}`}}/>
+        ))}
       </div>
     </div>}
   </div>;
