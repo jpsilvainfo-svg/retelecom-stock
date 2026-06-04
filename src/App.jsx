@@ -85,6 +85,26 @@ const useIsMobile=()=>{const[m,setM]=useState(()=>window.innerWidth<768);useEffe
 // ── SEGURANÇA: Hashing de senhas (PBKDF2 + SHA-256, nativo do browser) ──
 const SESSION_TTL=8*60*60*1000; // 8 horas
 
+// ── NOTIFICAÇÕES PUSH DO BROWSER ─────────────────────────────────────────
+function solicitarPermissaoNotificacao(){
+  if("Notification" in window && Notification.permission==="default"){
+    Notification.requestPermission();
+  }
+}
+
+function pushBrowser(titulo, corpo, opcoes={}){
+  if(!("Notification" in window)||Notification.permission!=="granted")return;
+  try{
+    new Notification(titulo,{
+      body:corpo,
+      icon:"/favicon-stocktel.png",
+      badge:"/favicon-stocktel.png",
+      tag:opcoes.tag||"stocktel",
+      ...opcoes
+    });
+  }catch{}
+}
+
 // ── TELEGRAM: Notificações gratuitas via Bot ──────────────────────────────
 async function notificar(mensagem, cfg=null){
   // cfg = { token, chat_id } do re_customization.telegram
@@ -1884,7 +1904,7 @@ function ItemList({items,onAdd,onUpdate,onRemove,stockOptions,isMobile,label,add
 }
 
 /* ── DIST ── */
-function DistPage({stock,setStock,tstock,setTstock,users,addLog,currentUser,isMobile}){
+function DistPage({stock,setStock,tstock,setTstock,users,addLog,currentUser,isMobile,customization}){
   const techs=users.filter(u=>u.role==="tecnico");
   const[techId,setTechId]=useState(techs[0]?.id||"");
   const[items,setItems]=useState([]);
@@ -1904,6 +1924,14 @@ function DistPage({stock,setStock,tstock,setTstock,users,addLog,currentUser,isMo
     const tech=users.find(u=>u.id===techId);
     addLog(currentUser.name,"Saída","Liberação · "+tech?.name+" · "+validItems.length+" item(s)");
     setMsg("ok:✅ Liberado para "+tech?.name+"!");
+    // Notificação push no browser (se app estiver aberto no dispositivo do técnico)
+    pushBrowser("📦 Material Liberado!",`${validItems.length} item(s) liberado(s) para ${tech?.name} por ${currentUser.name}`,{tag:"liberacao"});
+    // Telegram para o técnico específico (se tiver chat_id pessoal configurado)
+    const tg=customization?.telegram;
+    if(tg?.ativo&&tg?.token&&tech?.telegram_chat_id){
+      const itens=validItems.map(r=>{const s=stock.find(x=>x.id===r.sid);return`• ${s?.name||r.sid}: ${r.qty} ${s?.unit||"un"}`;}).join("\n");
+      notificar(`Material liberado para ${tech.name}!\n\n${itens}\n\nLiberado por: ${currentUser.name}\n${new Date().toLocaleString("pt-BR")}`,{...tg,chat_id:tech.telegram_chat_id});
+    }
     setItems([]);
     setTimeout(()=>setMsg(""),4000);
   };
@@ -2851,34 +2879,91 @@ function RelPage({stock,os,returns,users,nf,isMobile,currentUser,abastecimentos=
     </div>}
 
     {/* TÉCNICOS */}
-    {tab==="tecnicos"&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
-      {!isMobile&&techData.length>0&&<Card style={{padding:16}}>
-        <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:14}}>Consumo no Período</div>
-        <ResponsiveContainer width="100%" height={200}>
-          <PieChart><Pie data={techData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`} labelLine={false} fontSize={10}>
-            {techData.map((_,i)=><Cell key={i} fill={i===0?C.gold:PIE[i%PIE.length]}/>)}
-          </Pie><Tooltip contentStyle={{background:C.card,border:`1px solid ${C.bdr}`,borderRadius:6,fontSize:12}}/></PieChart>
-        </ResponsiveContainer>
-      </Card>}
-      <Card style={{padding:16}}>
-        <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:14}}>Ranking — {periodoLabel}</div>
-        {techData.length===0?<div style={{color:C.muted,fontSize:12}}>Nenhuma OS no período.</div>
-        :techData.map((t,i)=>(
-          <div key={t.name} style={{marginBottom:12}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted,minWidth:20}}>{i+1}</span>
-                <span style={{fontSize:14,color:C.txt,fontWeight:500}}>{t.name}</span>
+    {tab==="tecnicos"&&(()=>{
+      const techs=users.filter(u=>u.role==="tecnico");
+      return<div style={{display:"flex",flexDirection:"column",gap:14}}>
+        {/* KPIs globais */}
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
+          {[
+            {label:"Técnicos Ativos",value:techs.length,icon:"👷",color:C.blue},
+            {label:"OS no Período",value:viewOs.length,icon:"🔧",color:C.gold},
+            {label:"Itens Consumidos",value:viewOs.reduce((a,o)=>a+o.items.reduce((b,i)=>b+i.qty,0),0),icon:"📦",color:C.grn},
+            {label:"Devoluções Pend.",value:viewRet.filter(r=>r.status==="pending").length,icon:"↩️",color:C.ylw},
+          ].map((s,i)=>(
+            <Card key={i} style={{padding:"12px 14px",display:"flex",gap:10,alignItems:"center"}}>
+              <span style={{fontSize:22}}>{s.icon}</span>
+              <div>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:20,fontWeight:800,color:s.color}}>{fmt(s.value)}</div>
+                <div style={{fontSize:9,color:C.muted}}>{s.label}</div>
               </div>
-              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:13,color:C.gold,fontWeight:700}}>{fmt(t.value)}</span>
+            </Card>
+          ))}
+        </div>
+
+        {/* Gráfico de consumo */}
+        {!isMobile&&techData.length>0&&<Card style={{padding:16}}>
+          <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:14}}>Distribuição de Consumo — {periodoLabel}</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <PieChart><Pie data={techData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`} labelLine={false} fontSize={10}>
+              {techData.map((_,i)=><Cell key={i} fill={i===0?C.gold:PIE[i%PIE.length]}/>)}
+            </Pie><Tooltip contentStyle={{background:C.card,border:`1px solid ${C.bdr}`,borderRadius:6,fontSize:12}}/></PieChart>
+          </ResponsiveContainer>
+        </Card>}
+
+        {/* Cards por técnico */}
+        {techs.map(tech=>{
+          const techOs=viewOs.filter(o=>o.uid===tech.id);
+          const techRet=viewRet.filter(r=>r.uid===tech.id);
+          const totalItens=techOs.reduce((a,o)=>a+o.items.reduce((b,i)=>b+i.qty,0),0);
+          const pendRet=techRet.filter(r=>r.status==="pending").length;
+          // Item mais usado
+          const itemCount={};techOs.forEach(o=>o.items.forEach(i=>{itemCount[i.sid]=(itemCount[i.sid]||0)+i.qty;}));
+          const topItem=Object.entries(itemCount).sort((a,b)=>b[1]-a[1])[0];
+          const topItemName=topItem?stock.find(s=>s.id===topItem[0])?.name:"—";
+          return<Card key={tech.id} style={{padding:0,overflow:"hidden"}}>
+            <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",borderBottom:`1px solid ${C.bdr}`,background:C.surf}}>
+              <div style={{width:38,height:38,borderRadius:"50%",background:`${C.blue}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,overflow:"hidden",flexShrink:0}}>
+                {tech.photo?<img src={tech.photo} style={{width:"100%",height:"100%",objectFit:"cover"}} alt={tech.name}/>:"👷"}
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{tech.name}</div>
+                <div style={{fontSize:10,color:C.muted}}>{tech.login} · {tech.phone}</div>
+              </div>
+              <div style={{display:"flex",gap:6}}>
+                <Bdg color="gold">{techOs.length} OS</Bdg>
+                {pendRet>0&&<Bdg color="ylw">{pendRet} dev. pend.</Bdg>}
+              </div>
             </div>
-            <div style={{height:8,background:C.bdr,borderRadius:4}}>
-              <div style={{height:"100%",width:`${(t.value/maxT)*100}%`,background:i===0?C.gold:"#555",borderRadius:4}}/>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:0}}>
+              {[
+                {label:"OS realizadas",value:techOs.length,color:C.gold},
+                {label:"Itens consumidos",value:totalItens,color:C.grn},
+                {label:"Devoluções",value:techRet.length,color:C.ylw},
+                {label:"Item mais usado",value:topItemName,color:C.blue,small:true},
+              ].map((s,i)=>(
+                <div key={i} style={{padding:"12px 14px",borderRight:i<3?`1px solid ${C.bdr}18`:"none"}}>
+                  <div style={{fontSize:9,color:C.muted,letterSpacing:".05em",marginBottom:4}}>{s.label.toUpperCase()}</div>
+                  <div style={{fontFamily:s.small?"inherit":"'JetBrains Mono',monospace",fontSize:s.small?11:18,fontWeight:800,color:s.color,lineHeight:1.3}}>{s.value}</div>
+                </div>
+              ))}
             </div>
-          </div>
-        ))}
-      </Card>
-    </div>}
+            {/* Últimas OS do técnico */}
+            {techOs.length>0&&<div style={{borderTop:`1px solid ${C.bdr}18`,padding:"8px 16px"}}>
+              <div style={{fontSize:10,color:C.muted,fontWeight:700,marginBottom:6}}>ÚLTIMAS OS</div>
+              <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                {techOs.slice(0,3).map(o=>(
+                  <div key={o.id} style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"4px 0",borderBottom:`1px solid ${C.bdr}11`}}>
+                    <span style={{color:C.gold,fontFamily:"'JetBrains Mono',monospace",fontWeight:700}}>{o.os}</span>
+                    <span style={{color:C.txt2}}>{o.client}</span>
+                    <span style={{color:C.muted}}>{o.date?.slice(0,10)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>}
+          </Card>;
+        })}
+      </div>;
+    })()}
 
     {/* DEVOLUÇÕES */}
     {tab==="dev"&&<Card style={{padding:0,overflow:"hidden"}}>
@@ -3041,6 +3126,13 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
             <Sel label="Perfil" value={form.role} onChange={setRoleAndPerms} options={roles}/>
           </div>
         </div>
+
+        {/* Telegram Chat ID do técnico */}
+        {(form.role==="tecnico"||form.role==="mecanico")&&<Inp
+          label="Telegram Chat ID (opcional — para notificações pessoais)"
+          value={form.telegram_chat_id||""}
+          onChange={v=>setForm(f=>({...f,telegram_chat_id:v}))}
+          placeholder="Ex: 236353850 (obter via @userinfobot no Telegram)"/>}
 
         {/* Trocar senha no primeiro acesso */}
         <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:C.surf,borderRadius:8,border:`1px solid ${C.bdr}`}}>
@@ -7034,7 +7126,7 @@ function AppInner(){
     menuOrder:ALL_MODULES.map(m=>m.k),
     menuLabels:{},menuIcons:{},menuHidden:[],
     menuGroups:[], // [{id,icon,label,items:[k,...]}]
-    telegram:{token:"8575341005:AAE_71QUDdOq48ZFBllDuSeVHr37dfR2qmM",chat_id:"-5229565123",chat_pessoal:"236353850",ativo:true}, // config do bot Telegram
+    telegram:{token:"",chat_id:"",ativo:false}, // config via Personalizar Sistema → aba Telegram
   });
   const[drawerOpen,setDrawerOpen]=useState(false);
   const isMobile=useIsMobile();
@@ -7252,6 +7344,7 @@ function AppInner(){
     }
     try{localStorage.setItem("re_session",JSON.stringify(finalUser));localStorage.setItem("re_page","dash");}catch{}
     setUser(finalUser);
+    solicitarPermissaoNotificacao(); // pede permissão de notificação no login
     setPage("dash");
   }}/>;
 
@@ -7294,7 +7387,7 @@ function AppInner(){
     dash:<Dashboard {...p} setPage={goPage} logs={logs} pendSol={pendSol} currentUser={user} veiculos={veiculos} abastecimentos={abastecimentos}/>,
     estoque:<EstoquePage {...p}/>,
     kit:<KitPage tstock={tstock} stock={stock} users={users} currentUser={user} isMobile={isMobile}/>,
-    dist:<DistPage {...p}/>,
+    dist:<DistPage {...p} customization={customization}/>,
     os:<OSPage {...p}/>,
     dev:<DevPage {...p}/>,
     sol:<SolicitacaoPage solicitacoes={solicitacoes} setSolicitacoes={setSolicitacoes} stock={stock} setStock={setStock} tstock={tstock} setTstock={setTstock} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
