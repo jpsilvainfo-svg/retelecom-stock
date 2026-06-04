@@ -4,11 +4,10 @@ const SUPA_KEY = process.env.VITE_SUPABASE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6I
 
 // IDs que recebem o status a cada 10 min — adicione aqui os IDs dos celulares
 const STATUS_RECIPIENTS = [
-  process.env.TELEGRAM_CHAT_ID || "-5229565123",   // Grupo StockTel
-  "236353850",                                        // João Paulo (admin)
-  // Adicionar aqui os IDs dos dois celulares quando disponíveis:
-  // process.env.TELEGRAM_EXTRA_1,
-  // process.env.TELEGRAM_EXTRA_2,
+  "-1003823794117",                    // Grupo StockTel (supergrupo)
+  "236353850",                         // João Paulo (admin)
+  process.env.TELEGRAM_EXTRA_1,       // Celular 1: +55 21 99299-5955
+  process.env.TELEGRAM_EXTRA_2,       // Celular 2: +55 21 97382-6927
 ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
 
 async function sbGet(key) {
