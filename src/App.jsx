@@ -7034,7 +7034,7 @@ function AppInner(){
     menuOrder:ALL_MODULES.map(m=>m.k),
     menuLabels:{},menuIcons:{},menuHidden:[],
     menuGroups:[], // [{id,icon,label,items:[k,...]}]
-    telegram:{token:"",chat_id:"",ativo:false}, // config do bot Telegram
+    telegram:{token:"8575341005:AAE_71QUDdOq48ZFBllDuSeVHr37dfR2qmM",chat_id:"-5229565123",chat_pessoal:"236353850",ativo:true}, // config do bot Telegram
   });
   const[drawerOpen,setDrawerOpen]=useState(false);
   const isMobile=useIsMobile();
