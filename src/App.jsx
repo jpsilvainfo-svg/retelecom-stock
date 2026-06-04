@@ -85,6 +85,20 @@ const useIsMobile=()=>{const[m,setM]=useState(()=>window.innerWidth<768);useEffe
 // ── SEGURANÇA: Hashing de senhas (PBKDF2 + SHA-256, nativo do browser) ──
 const SESSION_TTL=8*60*60*1000; // 8 horas
 
+// ── TELEGRAM: Notificações gratuitas via Bot ──────────────────────────────
+async function notificar(mensagem, cfg=null){
+  // cfg = { token, chat_id } do re_customization.telegram
+  // Sem config = silencioso (não quebra o sistema)
+  if(!cfg?.token||!cfg?.chat_id)return;
+  try{
+    await fetch("/api/notify",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({message:mensagem,token:cfg.token,chat_id:cfg.chat_id})
+    });
+  }catch{}
+}
+
 async function hashSenha(senha,saltB64=null){
   const enc=new TextEncoder();
   const salt=saltB64
@@ -785,7 +799,7 @@ function CustomizePage({currentUser,isMobile,customization,setCustomization}){
   const orderedModules=(draft.menuOrder||ALL_MODULES.map(m=>m.k))
     .map(k=>ALL_MODULES.find(m=>m.k===k)).filter(Boolean);
 
-  const TABS=[{k:"marca",label:"🏷️ Marca"},{k:"menu",label:"📋 Menu"},{k:"grupos",label:"🗂️ Submenus"},{k:"cores",label:"🎨 Cores"}];
+  const TABS=[{k:"marca",label:"🏷️ Marca"},{k:"menu",label:"📋 Menu"},{k:"grupos",label:"🗂️ Submenus"},{k:"cores",label:"🎨 Cores"},{k:"telegram",label:"📱 Telegram"}];
 
   // ── Export / Import ──
   const exportConfig=()=>{
@@ -1057,6 +1071,86 @@ function CustomizePage({currentUser,isMobile,customization,setCustomization}){
             </div>
           </div>
         </Card>}
+
+        {/* ── ABA TELEGRAM ── */}
+        {tab==="telegram"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+          <Card style={{padding:20}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+              <span style={{fontSize:28}}>📱</span>
+              <div>
+                <div style={{fontSize:14,fontWeight:700,color:C.txt}}>Notificações via Telegram</div>
+                <div style={{fontSize:11,color:C.muted}}>Bot gratuito · Sem limites · Funciona 24h</div>
+              </div>
+              <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:12,color:draft.telegram?.ativo?C.grn:C.muted}}>{draft.telegram?.ativo?"● Ativo":"● Inativo"}</span>
+                <div onClick={()=>upd("telegram",{...draft.telegram,ativo:!draft.telegram?.ativo})}
+                  style={{width:44,height:24,borderRadius:12,background:draft.telegram?.ativo?C.grn:"#333",cursor:"pointer",position:"relative",transition:"all .2s"}}>
+                  <div style={{width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:draft.telegram?.ativo?23:3,transition:"all .2s"}}/>
+                </div>
+              </div>
+            </div>
+
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              <div>
+                <label style={{fontSize:11,color:C.muted,fontWeight:700,display:"block",marginBottom:4}}>TOKEN DO BOT</label>
+                <input value={draft.telegram?.token||""} onChange={e=>upd("telegram",{...draft.telegram,token:e.target.value})}
+                  placeholder="1234567890:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw"
+                  style={{width:"100%",background:C.bg,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"9px 12px",color:C.txt,fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"monospace"}}/>
+              </div>
+              <div>
+                <label style={{fontSize:11,color:C.muted,fontWeight:700,display:"block",marginBottom:4}}>CHAT ID (seu ID ou ID do grupo)</label>
+                <input value={draft.telegram?.chat_id||""} onChange={e=>upd("telegram",{...draft.telegram,chat_id:e.target.value})}
+                  placeholder="-1001234567890 ou 123456789"
+                  style={{width:"100%",background:C.bg,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"9px 12px",color:C.txt,fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"monospace"}}/>
+              </div>
+              {/* Testar bot */}
+              <Btn color="blue" outline onClick={async()=>{
+                if(!draft.telegram?.token||!draft.telegram?.chat_id){alert("Preencha Token e Chat ID primeiro.");return;}
+                const r=await fetch("/api/notify",{method:"POST",headers:{"Content-Type":"application/json"},
+                  body:JSON.stringify({message:"✅ <b>StockTel</b>\n\nBot configurado com sucesso! Notificações ativas.",token:draft.telegram.token,chat_id:draft.telegram.chat_id})});
+                const d=await r.json();
+                alert(d.ok?"✅ Mensagem enviada! Verifique o Telegram.":"❌ Erro: "+(d.error||"Verifique Token e Chat ID"));
+              }}>📤 Enviar mensagem de teste</Btn>
+            </div>
+          </Card>
+
+          {/* Guia de configuração */}
+          <Card style={{padding:18,border:`1px solid ${C.blue}33`,background:`${C.blue}08`}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:12}}>📖 Como configurar em 3 passos</div>
+            {[
+              {n:"1",icon:"🤖",title:"Criar o Bot",desc:'Abra o Telegram → pesquise @BotFather → envie /newbot → escolha um nome → copie o TOKEN gerado'},
+              {n:"2",icon:"🆔",title:"Pegar seu Chat ID",desc:'Pesquise @userinfobot no Telegram → envie /start → seu ID aparece. Para grupo: adicione o bot ao grupo e pesquise @getidsbot'},
+              {n:"3",icon:"💾",title:"Salvar e Ativar",desc:'Cole o Token e Chat ID acima → ative o toggle → clique Salvar → teste com o botão acima'},
+            ].map(s=>(
+              <div key={s.n} style={{display:"flex",gap:12,marginBottom:12,padding:10,background:C.surf,borderRadius:8}}>
+                <div style={{width:28,height:28,borderRadius:"50%",background:`${C.blue}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>{s.n}</div>
+                <div>
+                  <div style={{fontSize:12,fontWeight:700,color:C.txt}}>{s.icon} {s.title}</div>
+                  <div style={{fontSize:11,color:C.muted,marginTop:2,lineHeight:1.5}}>{s.desc}</div>
+                </div>
+              </div>
+            ))}
+          </Card>
+
+          <Card style={{padding:14}}>
+            <div style={{fontSize:12,fontWeight:700,color:C.txt,marginBottom:8}}>🔔 Alertas automáticos configurados</div>
+            {[
+              {icon:"🔴",label:"Estoque crítico",desc:"Quando item cai abaixo de 60% do mínimo"},
+              {icon:"🟡",label:"Estoque baixo",desc:"Quando item fica abaixo do mínimo"},
+              {icon:"🔧",label:"Nova OS criada",desc:"Quando técnico registra uma OS"},
+              {icon:"🚀",label:"Material liberado",desc:"Quando estoque é distribuído a técnico"},
+              {icon:"↩️",label:"Devolução pendente",desc:"Quando técnico solicita devolução"},
+            ].map(a=>(
+              <div key={a.icon} style={{display:"flex",gap:8,alignItems:"center",padding:"6px 0",borderBottom:`1px solid ${C.bdr}22`}}>
+                <span>{a.icon}</span>
+                <div>
+                  <div style={{fontSize:12,fontWeight:600,color:C.txt}}>{a.label}</div>
+                  <div style={{fontSize:10,color:C.muted}}>{a.desc}</div>
+                </div>
+              </div>
+            ))}
+          </Card>
+        </div>}
       </div>
 
       {/* Preview da sidebar */}
@@ -6940,6 +7034,7 @@ function AppInner(){
     menuOrder:ALL_MODULES.map(m=>m.k),
     menuLabels:{},menuIcons:{},menuHidden:[],
     menuGroups:[], // [{id,icon,label,items:[k,...]}]
+    telegram:{token:"",chat_id:"",ativo:false}, // config do bot Telegram
   });
   const[drawerOpen,setDrawerOpen]=useState(false);
   const isMobile=useIsMobile();
@@ -7055,15 +7150,49 @@ function AppInner(){
     });
   },[]);
 
+  // ── ALERTAS AUTOMÁTICOS DE ESTOQUE CRÍTICO VIA TELEGRAM ──
+  const tgCfg=customization?.telegram;
+  useEffect(()=>{
+    if(!tgCfg?.ativo||!tgCfg?.token||!tgCfg?.chat_id)return;
+    const criticos=stock.filter(s=>s.qty<=s.min*0.6&&s.min>0);
+    const baixos=stock.filter(s=>s.qty>s.min*0.6&&s.qty<=s.min);
+    if(criticos.length===0&&baixos.length===0)return;
+    // Só notifica uma vez por sessão (evita spam)
+    const chave=`tg_estoque_alert_${new Date().toDateString()}`;
+    if(sessionStorage.getItem(chave))return;
+    sessionStorage.setItem(chave,"1");
+    let msg="🏭 <b>StockTel — Alerta de Estoque</b>\n\n";
+    if(criticos.length>0){
+      msg+="🔴 <b>CRÍTICO:</b>\n";
+      criticos.forEach(s=>msg+=`  • ${s.name}: <b>${s.qty}</b> (mín: ${s.min})\n`);
+    }
+    if(baixos.length>0){
+      msg+="🟡 <b>BAIXO:</b>\n";
+      baixos.forEach(s=>msg+=`  • ${s.name}: <b>${s.qty}</b> (mín: ${s.min})\n`);
+    }
+    msg+=`\n⏰ ${new Date().toLocaleString("pt-BR")}`;
+    notificar(msg,tgCfg);
+  },[stock,tgCfg?.ativo]);
+
   // ── FUNÇÕES E LÓGICA (após hooks) ──
   const goPage=(p)=>{setPage(p);try{localStorage.setItem("re_page",p);}catch{}};
 
+  const tg=customization?.telegram;
   const addLog=(u,a,d)=>{
     const tipo=a.toLowerCase().includes("saída")||a.toLowerCase().includes("saida")?"saida":
       a.toLowerCase().includes("entrada")?"entrada":
       a.toLowerCase().includes("aprovada")?"aprovada":
       a.toLowerCase().includes("devolução")||a.toLowerCase().includes("solicitada")?"dev":"outro";
     setLogs(p=>[{id:uid(),date:now(),user:u,action:a,detail:d,tipo},...p]);
+    // Notificação Telegram para eventos importantes
+    if(tg?.ativo&&tg?.token&&tg?.chat_id){
+      const icones={saida:"🚀",entrada:"📥",aprovada:"✅",dev:"↩️",outro:"📋"};
+      const msg=`${icones[tipo]||"📋"} <b>StockTel</b>\n\n<b>${a}</b>\n${d}\n\n👤 ${u}\n⏰ ${new Date().toLocaleString("pt-BR")}`;
+      // Filtra eventos que merecem notificação
+      if(["saida","dev","aprovada"].includes(tipo)||a.toLowerCase().includes("novo usuário")){
+        notificar(msg,tg);
+      }
+    }
   };
 
   const salvarPerfil=async()=>{
