@@ -1,11 +1,11 @@
-name: Deploy — Build + Supabase Migrate
+name: Deploy - Build + Supabase Migrate
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
-  # ── 1. Build e teste do projeto ─────────────────────────────────────────
   build:
     name: Build Vite
     runs-on: ubuntu-latest
@@ -28,7 +28,6 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_KEY: ${{ secrets.VITE_SUPABASE_KEY }}
 
-  # ── 2. Migrações automáticas no Supabase ────────────────────────────────
   migrate:
     name: Supabase Migrations
     runs-on: ubuntu-latest
@@ -44,7 +43,9 @@ jobs:
 
       - name: Run migrations
         run: |
-          supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
-          supabase db push --password ${{ secrets.SUPABASE_DB_PASSWORD }}
+          supabase link --project-ref "${SUPABASE_PROJECT_ID}"
+          supabase db push --password "${SUPABASE_DB_PASSWORD}"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
