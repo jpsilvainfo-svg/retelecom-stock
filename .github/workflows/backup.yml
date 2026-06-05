@@ -44,25 +44,20 @@ jobs:
           SIZE=$(wc -c < backup/stocktel_backup_${DATE}.json)
           echo "Backup gerado: $SIZE bytes"
 
-          # Notifica via Telegram
+          # Envia o arquivo de backup direto pelo Telegram (guardado para sempre!)
           NOW=$(TZ='America/Sao_Paulo' date '+%d/%m/%Y %H:%M')
-          MSG="Backup StockTel concluido - $NOW
-
-Arquivo: stocktel_backup_$DATE.json
-Tamanho: ${SIZE} bytes
-Status: Salvo nos artifacts do GitHub Actions
-
-Acesse em: github.com/jpsilvainfo-svg/retelecom-stock/actions"
+          CAPTION="Backup StockTel - $NOW | ${SIZE} bytes | Arquivo guardado permanentemente"
 
           for CHAT_ID in "-1003823794117" "236353850" "7858844640"; do
-            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
-              -H "Content-Type: application/json" \
-              -d "{\"chat_id\":\"$CHAT_ID\",\"text\":\"$MSG\"}" > /dev/null
+            # Envia o arquivo JSON como documento
+            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument" \
+              -F "chat_id=$CHAT_ID" \
+              -F "document=@backup/stocktel_backup_${DATE}.json" \
+              -F "caption=$CAPTION" > /dev/null
+            echo "Backup enviado para $CHAT_ID"
           done
 
-          echo "Notificacao Telegram enviada"
-
-      - name: Salva backup como artifact (retido por 90 dias)
+      - name: Salva backup como artifact (retido por 90 dias — copia extra)
         uses: actions/upload-artifact@v4
         with:
           name: backup-${{ github.run_number }}-${{ github.run_id }}
