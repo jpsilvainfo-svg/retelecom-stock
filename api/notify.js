@@ -1,11 +1,15 @@
 // api/notify.js — Notificações via Telegram Bot (IDs autorizados)
-// IDs fixos autorizados + extras via env vars do Vercel
+// IDs autorizados
 const AUTHORIZED_IDS = [
   "-1003823794117", // Grupo StockTel (supergrupo)
-  "236353850",      // João Paulo admin (@JO4OP)
-  "7858844640",     // Desenvolvedor (@nabasrj) +55 21 99299-5955
-  process.env.TELEGRAM_EXTRA_2,  // Celular 2: +55 21 97382-6927 (aguardando)
+  "236353850",      // João Paulo admin (@JO4OP) +55 21 99299-5955
+  "7858844640",     // Desenvolvedor (@nabasrj) +55 21 97382-6927
 ].filter(Boolean).map(String);
+
+// IDs BLOQUEADOS permanentemente (canais não autorizados)
+const BLOCKED_IDS = [
+  "-1003830383137", // A-TOOLS X (@A_TOOLSX) — canal não autorizado
+];
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -23,9 +27,15 @@ export default async function handler(req, res) {
   if (!CHAT_ID)   return res.status(400).json({ ok: false, error: "TELEGRAM_CHAT_ID não configurado" });
   if (!message)   return res.status(400).json({ ok: false, error: "Mensagem vazia" });
 
+  // Bloqueia IDs na lista negra
+  if (BLOCKED_IDS.includes(CHAT_ID)) {
+    console.warn(`[notify] BLOQUEADO (lista negra): ${CHAT_ID}`);
+    return res.status(403).json({ ok: false, error: "Chat ID bloqueado" });
+  }
+
   // Bloqueia IDs não autorizados
   if (!AUTHORIZED_IDS.includes(CHAT_ID)) {
-    console.warn(`[notify] Bloqueado: ${CHAT_ID}`);
+    console.warn(`[notify] Não autorizado: ${CHAT_ID}`);
     return res.status(403).json({ ok: false, error: "Chat ID não autorizado" });
   }
 
