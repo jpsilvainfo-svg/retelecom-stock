@@ -1,9 +1,13 @@
-// StockTel v1.6 FIXED-20260527 — visual premium + main/render corrigido
+// StockTel v1.2.0 — sistema de estoque, frota, ponto e operacao tecnica
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
 import * as XLSX from "xlsx";
 import { sbGet, sbSet, sbPing } from "./supabase.js"; // sbPing usado no Diagnóstico
 import { useLS, pushToCloud, queueGet, queueRemove, queueSize } from "./hooks/useLS.js";
+
+const APP_VERSION="1.2.0";
+const APP_VERSION_LABEL=`v${APP_VERSION}`;
+const APP_RELEASE_DATE="05/06/2026";
 
 const C={
   bg:"#070707",
@@ -535,7 +539,7 @@ function LoginPage({users,onLogin}){
       </div>
 
       <div style={{textAlign:"center",marginTop:20,fontSize:11,color:"#333"}}>
-        StockTel v1.6 · © {new Date().getFullYear()} · Todos os direitos reservados
+        StockTel {APP_VERSION_LABEL} · © {new Date().getFullYear()} · Todos os direitos reservados
       </div>
     </div>
   </div>;
@@ -2693,7 +2697,7 @@ function RelPage({stock,os,returns,users,nf,isMobile,currentUser,abastecimentos=
         <tr style="background:#fff0f0;"><td colspan="4" style="font-weight:800;text-align:right;padding-right:20px;">TOTAL DO PERÍODO:</td><td style="font-weight:800;font-size:16px;color:#cc0000;">${fmtR(totalNFGasto)}</td></tr></tbody></table></div>`:""}
       <div class="footer">
         <div class="footer-logo">StockTel — Soluções em Telecomunicações</div>
-        <div>Gerado em ${new Date().toLocaleString("pt-BR")} · v1.0.0</div>
+        <div>Gerado em ${new Date().toLocaleString("pt-BR")} · ${APP_VERSION_LABEL}</div>
         <div>© ${new Date().getFullYear()} StockTel</div>
       </div>
     </div></body></html>`);
@@ -3874,8 +3878,8 @@ function AdminRelPage({nf,stock,os,returns,tstock,users,solicitacoes,isMobile,ad
 
       <!-- FOOTER -->
       <div class="footer">
-        <div class="footer-logo">StockTel — Soluções em Telecomunicações · v1.1</div>
-        <div>Relatório gerado em ${new Date().toLocaleString("pt-BR")} · v1.0.0</div>
+        <div class="footer-logo">StockTel — Soluções em Telecomunicações · ${APP_VERSION_LABEL}</div>
+        <div>Relatório gerado em ${new Date().toLocaleString("pt-BR")} · ${APP_VERSION_LABEL}</div>
         <div>© ${new Date().getFullYear()} StockTel — Todos os direitos reservados</div>
       </div>
 
@@ -5872,6 +5876,46 @@ function ManutencaoPage({manutSols,setManutSols,manutOS,setManutOS,veiculos,user
 function HelpPage({currentUser,isMobile}){
   const[section,setSection]=useState("inicio");
   const isAdm=["admin","superadmin"].includes(currentUser?.role);
+  const gerarManualPDF=()=>{
+    const html=`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"/>
+    <title>StockTel - Manual ${APP_VERSION_LABEL}</title>
+    <style>
+      body{font-family:Arial,Helvetica,sans-serif;margin:0;color:#181818;background:#fff;line-height:1.55}
+      .wrap{max-width:920px;margin:0 auto;padding:28px}
+      .top{display:flex;justify-content:space-between;gap:20px;border-bottom:4px solid #d10000;padding-bottom:18px;margin-bottom:22px}
+      h1{margin:0;color:#d10000;font-size:28px} h2{color:#d10000;margin-top:26px;border-bottom:1px solid #eee;padding-bottom:6px}
+      h3{margin-bottom:6px;color:#333}.meta{font-size:12px;color:#666;text-align:right}.box{background:#f7f7f7;border:1px solid #ddd;border-radius:8px;padding:14px;margin:12px 0}
+      li{margin:5px 0}.badge{display:inline-block;background:#d10000;color:#fff;border-radius:4px;padding:3px 7px;font-size:11px;font-weight:bold}
+      .print{position:fixed;right:18px;top:18px;background:#d10000;color:#fff;border:0;border-radius:7px;padding:10px 16px;font-weight:bold;cursor:pointer}
+      @media print{.print{display:none}.wrap{padding:0 18px}.box{break-inside:avoid}}
+    </style></head><body>
+    <button class="print" onclick="window.print()">Imprimir / Salvar PDF</button>
+    <div class="wrap">
+      <div class="top"><div><h1>StockTel</h1><div>Sistema de gestao de estoque, frota, ponto e operacao tecnica</div></div><div class="meta"><b>${APP_VERSION_LABEL}</b><br/>Atualizado em ${APP_RELEASE_DATE}<br/>Gerado em ${new Date().toLocaleString("pt-BR")}</div></div>
+      <div class="box"><b>Objetivo:</b> centralizar materiais, kits dos tecnicos, ordens de servico, frota, ponto eletronico, relatorios e auditoria para a operacao da StockTel.</div>
+      <h2>1. Perfis de acesso</h2>
+      <ul><li><b>Root/Master:</b> administra permissoes, personalizacao e funcoes sensiveis.</li><li><b>Administrador:</b> acompanha operacao, usuarios, estoque, frota, relatorios e aprovacoes.</li><li><b>Estoque:</b> controla materiais, notas fiscais, liberacoes e devolucoes.</li><li><b>Tecnico:</b> consulta kit, registra OS, solicita material, usa ponto e checklist de frota.</li><li><b>Mecanico:</b> acompanha veiculos, manutencoes, pneus e historico da frota.</li><li><b>Financeiro:</b> acompanha notas, custos, relatorios financeiros e gastos de frota.</li></ul>
+      <h2>2. Fluxo de materiais</h2>
+      <ol><li>Entrada por NF aumenta o estoque base.</li><li>Saida/liberacao transfere material para o kit do tecnico.</li><li>Na OS, o tecnico informa materiais usados e o sistema baixa do kit.</li><li>Devolucao volta material excedente para o estoque base apos aprovacao.</li><li>Solicitacoes permitem pedir reposicao sem sair do app.</li></ol>
+      <h2>3. Ordens de servico</h2>
+      <p>Use a OS para vincular cliente, numero da ordem, tecnico responsavel, fotos e materiais consumidos. Esse registro cria historico e alimenta relatorios.</p>
+      <h2>4. Frota e manutencao</h2>
+      <ul><li>Cadastro de veiculos com documento, fotos, vencimentos e responsavel.</li><li>Checklist de retirada/devolucao com KM, combustivel, pneus e avarias.</li><li>Pneus e manutencao ficam dentro da area de Frota.</li><li>Custos e abastecimento ficam restritos a perfis administrativos/financeiros.</li></ul>
+      <h2>5. Ponto eletronico</h2>
+      <p>O colaborador registra entrada, almoco, retorno e saida. Quando estiver fora da regra de horario ou local, deve justificar para analise administrativa. Escalas e folgas ficam visiveis aos colaboradores e configuraveis por administradores.</p>
+      <h2>6. Relatorios</h2>
+      <ul><li>Relatorios por periodo de estoque, OS, tecnicos e devolucoes.</li><li>Relatorio administrativo com financeiro, frota, SLA e alertas.</li><li>Exportacao para PDF e Excel quando disponivel na tela.</li></ul>
+      <h2>7. Sincronizacao e status</h2>
+      <p>O sistema usa Supabase na nuvem e localStorage como apoio offline. Se aparecer aviso de offline ou Supabase sem resposta, continue operando com cuidado e use Diagnostico para verificar/sincronizar quando a conexao voltar.</p>
+      <h2>8. Boas praticas</h2>
+      <ul><li>Nunca compartilhe usuario e senha.</li><li>Confirme tecnico, OS e quantidade antes de liberar material.</li><li>Anexe fotos/documentos quando a tela permitir.</li><li>Use relatorios para conferencia diaria de estoque, devolucoes e frota.</li></ul>
+      <p class="meta">StockTel ${APP_VERSION_LABEL} - Manual operacional</p>
+    </div></body></html>`;
+    const w=window.open("","_blank");
+    if(!w)return alert("O navegador bloqueou a janela do PDF. Libere pop-ups e tente novamente.");
+    w.document.write(html);w.document.close();w.focus();
+    setTimeout(()=>w.print(),500);
+  };
 
   const sections=[
     {k:"inicio",l:"🏠 Início",icon:"🏠"},
@@ -5909,15 +5953,18 @@ function HelpPage({currentUser,isMobile}){
   );
 
   return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
-    <div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+      <div>
       <h1 style={{fontSize:isMobile?17:22,fontWeight:700,color:C.txt}}>📚 Documentação & Ajuda</h1>
       <p style={{fontSize:12,color:C.muted,marginTop:4}}>Guia completo do StockTel — Sistema de Gestão para Provedores FTTH</p>
+    </div>
+      <Btn color="red" size={isMobile?"sm":"md"} onClick={gerarManualPDF}>Baixar manual em PDF</Btn>
     </div>
 
     {/* Quick stats */}
     <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
       {[
-        {l:"VERSÃO",v:"1.0",i:"🚀",c:C.gold},
+        {l:"VERSÃO",v:APP_VERSION_LABEL,i:"🚀",c:C.gold},
         {l:"MÓDULOS",v:"15+",i:"📦",c:C.blue},
         {l:"PERFIS",v:"6",i:"👥",c:C.grn},
         {l:"SUPORTE",v:"24/7",i:"🎧",c:C.ylw},
@@ -5960,7 +6007,7 @@ function HelpPage({currentUser,isMobile}){
                 <div style={{fontSize:13,color:C.muted,marginTop:4}}>Sistema completo de gestão para provedores de internet FTTH</div>
                 <div style={{marginTop:12,display:"flex",gap:8,flexWrap:"wrap"}}>
                   <Bdg color="grn">Logado como {currentUser?.role}</Bdg>
-                  <Bdg color="gold">v1.0.0</Bdg>
+                  <Bdg color="gold">{APP_VERSION_LABEL}</Bdg>
                 </div>
               </div>
             </div>
@@ -7505,7 +7552,7 @@ function AppInner(){
         {pages[page]||pages.dash}
       </main>
       {!isMobile&&<div style={{padding:"8px 24px",background:C.surf,borderTop:`1px solid ${C.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <span style={{fontSize:11,color:C.muted}}>StockTel — Soluções em Telecomunicações · v1.1</span>
+        <span style={{fontSize:11,color:C.muted}}>StockTel — Soluções em Telecomunicações · {APP_VERSION_LABEL}</span>
         <span style={{fontSize:11,color:C.muted}}>© {new Date().getFullYear()} StockTel — Todos os direitos reservados.</span>
       </div>}
     </div>
