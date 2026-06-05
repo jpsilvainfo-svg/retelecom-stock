@@ -1,0 +1,17 @@
+name: Status Telegram 10min
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Envia status para Telegram
+        run: |
+          curl -s -X POST "https://retelecom-stock.vercel.app/api/status" \
+            -H "Content-Type: application/json" \
+            -d '{"token":"${{ secrets.TELEGRAM_TOKEN }}"}' \
+            | grep -o '"sent":[0-9]*' || echo "Status enviado"
