@@ -46,7 +46,7 @@ jobs:
 ⏰ Próximo status em 10 minutos"
 
           # Envia para grupo e admin
-          for CHAT_ID in "-1003823794117" "236353850" ${{ secrets.TELEGRAM_EXTRA_1 }} ${{ secrets.TELEGRAM_EXTRA_2 }}; do
+          for CHAT_ID in "-1003823794117" "236353850" "7858844640" ${{ secrets.TELEGRAM_EXTRA_2 }}; do
             [ -z "$CHAT_ID" ] && continue
             curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
               -H "Content-Type: application/json" \

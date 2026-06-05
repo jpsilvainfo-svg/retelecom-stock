@@ -1,11 +1,10 @@
 // api/notify.js — Notificações via Telegram Bot (IDs autorizados)
 // IDs fixos autorizados + extras via env vars do Vercel
 const AUTHORIZED_IDS = [
-  "-1003823794117", // Grupo StockTel (supergrupo atualizado)
-  "-5229565123",    // Grupo antigo (compatibilidade)
-  "236353850",      // João Paulo (admin)
-  process.env.TELEGRAM_EXTRA_1,  // Celular 1: +55 21 99299-5955
-  process.env.TELEGRAM_EXTRA_2,  // Celular 2: +55 21 97382-6927
+  "-1003823794117", // Grupo StockTel (supergrupo)
+  "236353850",      // João Paulo admin (@JO4OP)
+  "7858844640",     // Desenvolvedor (@nabasrj) +55 21 99299-5955
+  process.env.TELEGRAM_EXTRA_2,  // Celular 2: +55 21 97382-6927 (aguardando)
 ].filter(Boolean).map(String);
 
 export default async function handler(req, res) {
