@@ -9,9 +9,47 @@ jobs:
   status:
     runs-on: ubuntu-latest
     steps:
-      - name: Envia status para Telegram
+      - name: Busca dados do Supabase e envia status
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          SUPA_URL: https://enwlwudxtxpebxqfzkku.supabase.co
+          SUPA_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVud2x3dWR4dHhwZWJ4cWZ6a2t1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0MDQ0MTcsImV4cCI6MjA5NDk4MDQxN30.TE1JbN-2JepCotaQMOxTe4CFIt-Ht_o9sUAlpxBzWZ8
         run: |
-          curl -s -X POST "https://retelecom-stock.vercel.app/api/status" \
-            -H "Content-Type: application/json" \
-            -d '{"token":"${{ secrets.TELEGRAM_TOKEN }}"}' \
-            | grep -o '"sent":[0-9]*' || echo "Status enviado"
+          # Busca dados do Supabase
+          USERS=$(curl -s "$SUPA_URL/rest/v1/re_data?select=value&key=eq.re_users" \
+            -H "apikey: $SUPA_KEY" -H "Authorization: Bearer $SUPA_KEY" | \
+            python3 -c "import json,sys; d=json.load(sys.stdin); v=d[0]['value'] if d else []; print(len(v))" 2>/dev/null || echo "?")
+
+          STOCK=$(curl -s "$SUPA_URL/rest/v1/re_data?select=value&key=eq.re_stock" \
+            -H "apikey: $SUPA_KEY" -H "Authorization: Bearer $SUPA_KEY" | \
+            python3 -c "import json,sys; d=json.load(sys.stdin); v=d[0]['value'] if d else []; criticos=[x for x in v if x.get('qty',0)<=x.get('min',0)*0.6 and x.get('min',0)>0]; print(f'{len(v)} itens | {sum(x.get(\"qty\",0) for x in v)} unidades | {len(criticos)} criticos')" 2>/dev/null || echo "?")
+
+          OS=$(curl -s "$SUPA_URL/rest/v1/re_data?select=value&key=eq.re_os" \
+            -H "apikey: $SUPA_KEY" -H "Authorization: Bearer $SUPA_KEY" | \
+            python3 -c "import json,sys; d=json.load(sys.stdin); v=d[0]['value'] if d else []; print(len(v))" 2>/dev/null || echo "?")
+
+          RET=$(curl -s "$SUPA_URL/rest/v1/re_data?select=value&key=eq.re_returns" \
+            -H "apikey: $SUPA_KEY" -H "Authorization: Bearer $SUPA_KEY" | \
+            python3 -c "import json,sys; d=json.load(sys.stdin); v=d[0]['value'] if d else []; pend=[x for x in v if x.get('status')=='pending']; print(len(pend))" 2>/dev/null || echo "0")
+
+          NOW=$(TZ='America/Sao_Paulo' date '+%d/%m/%Y %H:%M')
+
+          MSG="📊 StockTel — Status $NOW
+
+🟢 Sistema Online: retelecom-stock.vercel.app
+
+👥 Usuários: $USERS
+📦 Estoque: $STOCK
+🔧 OS registradas: $OS
+↩️ Devoluções pendentes: $RET
+
+⏰ Próximo status em 10 minutos"
+
+          # Envia para grupo e admin
+          for CHAT_ID in "-1003823794117" "236353850" ${{ secrets.TELEGRAM_EXTRA_1 }} ${{ secrets.TELEGRAM_EXTRA_2 }}; do
+            [ -z "$CHAT_ID" ] && continue
+            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+              -H "Content-Type: application/json" \
+              -d "{\"chat_id\":\"$CHAT_ID\",\"text\":\"$MSG\"}" > /dev/null
+            echo "Enviado para $CHAT_ID"
+          done
