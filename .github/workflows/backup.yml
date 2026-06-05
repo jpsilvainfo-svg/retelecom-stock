@@ -1,0 +1,70 @@
+name: Backup Diário Automático
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Todo dia às 03:00 UTC (meia-noite no Brasil)
+  workflow_dispatch:       # Permite disparar manualmente
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Exporta dados do Supabase e salva backup
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          SUPA_URL: https://enwlwudxtxpebxqfzkku.supabase.co
+          SUPA_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVud2x3dWR4dHhwZWJ4cWZ6a2t1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0MDQ0MTcsImV4cCI6MjA5NDk4MDQxN30.TE1JbN-2JepCotaQMOxTe4CFIt-Ht_o9sUAlpxBzWZ8
+        run: |
+          DATE=$(TZ='America/Sao_Paulo' date '+%Y-%m-%d_%H-%M')
+          echo "Iniciando backup: $DATE"
+          mkdir -p backup
+
+          # Exporta todas as chaves do Supabase
+          KEYS="re_users re_stock re_tstock re_os re_returns re_nf re_sol re_logs re_veiculos re_abast re_checkouts re_pontos re_ponto_config re_ponto_solicits re_escalas re_folgas re_pneus re_docs_veic re_manut_os re_manut_sols re_cats re_produtos re_customization"
+
+          echo "{" > backup/stocktel_backup_${DATE}.json
+          echo "  \"backup_date\": \"$DATE\"," >> backup/stocktel_backup_${DATE}.json
+          echo "  \"data\": {" >> backup/stocktel_backup_${DATE}.json
+
+          FIRST=true
+          for KEY in $KEYS; do
+            VALUE=$(curl -s "$SUPA_URL/rest/v1/re_data?select=value&key=eq.$KEY" \
+              -H "apikey: $SUPA_KEY" \
+              -H "Authorization: Bearer $SUPA_KEY" | \
+              python3 -c "import json,sys; d=json.load(sys.stdin); print(json.dumps(d[0]['value']) if d else 'null')" 2>/dev/null || echo "null")
+
+            [ "$FIRST" = "true" ] && FIRST=false || echo "," >> backup/stocktel_backup_${DATE}.json
+            echo "    \"$KEY\": $VALUE" >> backup/stocktel_backup_${DATE}.json
+          done
+
+          echo "  }" >> backup/stocktel_backup_${DATE}.json
+          echo "}" >> backup/stocktel_backup_${DATE}.json
+
+          # Tamanho do backup
+          SIZE=$(wc -c < backup/stocktel_backup_${DATE}.json)
+          echo "Backup gerado: $SIZE bytes"
+
+          # Notifica via Telegram
+          NOW=$(TZ='America/Sao_Paulo' date '+%d/%m/%Y %H:%M')
+          MSG="Backup StockTel concluido - $NOW
+
+Arquivo: stocktel_backup_$DATE.json
+Tamanho: ${SIZE} bytes
+Status: Salvo nos artifacts do GitHub Actions
+
+Acesse em: github.com/jpsilvainfo-svg/retelecom-stock/actions"
+
+          for CHAT_ID in "-1003823794117" "236353850" "7858844640"; do
+            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+              -H "Content-Type: application/json" \
+              -d "{\"chat_id\":\"$CHAT_ID\",\"text\":\"$MSG\"}" > /dev/null
+          done
+
+          echo "Notificacao Telegram enviada"
+
+      - name: Salva backup como artifact (retido por 90 dias)
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-${{ github.run_number }}-${{ github.run_id }}
+          path: backup/
+          retention-days: 90

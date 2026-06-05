@@ -3035,8 +3035,16 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
     reader.readAsDataURL(file);
   };
 
+  const usaFrota=(role)=>["tecnico","mecanico","admin","superadmin"].includes(role);
+
   const save=()=>{
     if(!form.name.trim()||!form.login.trim()||!form.pass.trim())return;
+    // CNH obrigatória para quem usa frota
+    if(form.usa_frota){
+      if(!form.cnh_numero?.trim()){alert("CNH obrigatória para usuários que utilizam frota.");return;}
+      if(!form.cnh_validade){alert("Data de validade da CNH é obrigatória.");return;}
+      if(!form.cnh_categoria?.trim()){alert("Categoria da CNH é obrigatória.");return;}
+    }
     const permsToSave=form.perms.length>0?form.perms:DEFAULT_PERMS[form.role]||["dash"];
     if(modal==="new"){
       setUsers(p=>[...p,{id:uid(),...form,perms:permsToSave}]);
@@ -3085,13 +3093,25 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
           <Card key={u.id} style={{padding:14,display:"flex",alignItems:"center",gap:12}}>
             <Avatar user={u} size={44}/>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:13,fontWeight:600,color:C.txt}}>{u.name}</div>
-              <div style={{fontSize:11,color:C.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.login} · {u.email}</div>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <span style={{fontSize:13,fontWeight:600,color:C.txt}}>{u.name}</span>
+                {u.usa_frota&&(()=>{
+                  if(!u.cnh_validade)return<Bdg color="red">🪪 CNH ausente</Bdg>;
+                  const dias=Math.ceil((new Date(u.cnh_validade)-new Date())/(1000*60*60*24));
+                  if(dias<0)return<Bdg color="red">⛔ CNH vencida</Bdg>;
+                  if(dias<=30)return<Bdg color="ylw">⚠️ CNH vence em {dias}d</Bdg>;
+                  return null;
+                })()}
+              </div>
+              <div style={{fontSize:11,color:C.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                {u.login} · {u.email}
+                {u.usa_frota&&u.cnh_validade&&<span style={{marginLeft:6,color:C.blue}}>🚗 CNH {u.cnh_categoria} · val. {new Date(u.cnh_validade).toLocaleDateString("pt-BR")}</span>}
+              </div>
             </div>
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6,flexShrink:0}}>
               <span style={{background:rc[u.role],color:"#000",fontSize:9,fontWeight:800,padding:"2px 6px",borderRadius:3}}>{rl[u.role]}</span>
               <div style={{display:"flex",gap:6}}>
-                <Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf||"",login:u.login,pass:u.pass,role:u.role,photo:u.photo||"",perms:u.perms||DEFAULT_PERMS[u.role]||["dash"],mustChangePassword:u.mustChangePassword||false});setModal(u.id);}}>Editar</Btn>
+                <Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf||"",login:u.login,pass:u.pass,role:u.role,photo:u.photo||"",perms:u.perms||DEFAULT_PERMS[u.role]||["dash"],mustChangePassword:u.mustChangePassword||false,usa_frota:u.usa_frota||false,cnh_numero:u.cnh_numero||"",cnh_categoria:u.cnh_categoria||"",cnh_validade:u.cnh_validade||"",telegram_chat_id:u.telegram_chat_id||""});setModal(u.id);}}>Editar</Btn>
                 {u.id!==currentUser.id&&isRoot&&<Btn size="xs" color="red" outline onClick={()=>{if(window.confirm("Remover "+u.name+"?")){setUsers(p=>p.filter(x=>x.id!==u.id));addLog(currentUser.name,"Usuário Removido",u.name);}}}>✕</Btn>}
               </div>
             </div>
@@ -3167,6 +3187,43 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
           value={form.telegram_chat_id||""}
           onChange={v=>setForm(f=>({...f,telegram_chat_id:v}))}
           placeholder="Ex: 236353850 (obter via @userinfobot no Telegram)"/>}
+
+        {/* USO DE FROTA + CNH */}
+        <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:form.usa_frota?14:0}}>
+            <div>
+              <div style={{fontSize:12,fontWeight:700,color:C.txt}}>🚗 Uso de Frota</div>
+              <div style={{fontSize:10,color:C.muted,marginTop:2}}>Este usuário utilizará veículos da empresa?</div>
+            </div>
+            <div onClick={()=>setForm(f=>({...f,usa_frota:!f.usa_frota}))}
+              style={{width:44,height:24,borderRadius:12,background:form.usa_frota?C.grn:"#333",cursor:"pointer",position:"relative",transition:"all .2s",flexShrink:0}}>
+              <div style={{width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:form.usa_frota?23:3,transition:"all .2s"}}/>
+            </div>
+          </div>
+          {form.usa_frota&&<>
+            <div style={{height:1,background:C.bdr,marginBottom:14}}/>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",marginBottom:10}}>🪪 CNH — OBRIGATÓRIO PARA USO DE FROTA</div>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:10}}>
+              <Inp label="Número da CNH *" value={form.cnh_numero||""} onChange={v=>setForm(f=>({...f,cnh_numero:v}))} placeholder="Ex: 12345678900"/>
+              <div>
+                <label style={{fontSize:11,fontWeight:700,color:C.muted,display:"block",marginBottom:4}}>CATEGORIA *</label>
+                <select value={form.cnh_categoria||""} onChange={e=>setForm(f=>({...f,cnh_categoria:e.target.value}))}
+                  style={{width:"100%",background:C.bg,border:`1px solid ${C.bdr2}`,borderRadius:8,padding:"9px 12px",color:form.cnh_categoria?C.txt:C.muted,fontSize:13,outline:"none"}}>
+                  <option value="">— Selecionar —</option>
+                  {["A","B","C","D","E","AB","AC","AD","AE"].map(c=><option key={c} value={c}>Categoria {c}</option>)}
+                </select>
+              </div>
+              <Inp label="Validade da CNH *" value={form.cnh_validade||""} onChange={v=>setForm(f=>({...f,cnh_validade:v}))} type="date"/>
+            </div>
+            {form.cnh_validade&&(()=>{
+              const dias=Math.ceil((new Date(form.cnh_validade)-new Date())/(1000*60*60*24));
+              if(dias<0)return<div style={{marginTop:8,padding:"8px 12px",background:C.redD,border:`1px solid ${C.red}44`,borderRadius:8,fontSize:12,color:C.red}}>⛔ CNH VENCIDA há {Math.abs(dias)} dias!</div>;
+              if(dias<=30)return<div style={{marginTop:8,padding:"8px 12px",background:C.ylwD,border:`1px solid ${C.ylw}44`,borderRadius:8,fontSize:12,color:C.ylw}}>⚠️ CNH vence em {dias} dias! Providencie a renovação.</div>;
+              if(dias<=90)return<div style={{marginTop:8,padding:"8px 12px",background:`${C.blue}15`,border:`1px solid ${C.blue}44`,borderRadius:8,fontSize:12,color:C.blue}}>ℹ️ CNH válida por {dias} dias.</div>;
+              return<div style={{marginTop:8,padding:"8px 12px",background:`${C.grn}15`,border:`1px solid ${C.grn}44`,borderRadius:8,fontSize:12,color:C.grn}}>✅ CNH válida por {dias} dias.</div>;
+            })()}
+          </>}
+        </div>
 
         {/* Trocar senha no primeiro acesso */}
         <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:C.surf,borderRadius:8,border:`1px solid ${C.bdr}`}}>
