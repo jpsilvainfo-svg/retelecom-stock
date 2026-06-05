@@ -21,7 +21,7 @@ export default async function handler(req, res) {
   const { message, chat_id, token, parse_mode = "HTML" } = req.body;
 
   const BOT_TOKEN = process.env.TELEGRAM_TOKEN || token;
-  const CHAT_ID   = String(process.env.TELEGRAM_CHAT_ID || chat_id || "");
+  const CHAT_ID   = String(chat_id || process.env.TELEGRAM_CHAT_ID || "");
 
   if (!BOT_TOKEN) return res.status(400).json({ ok: false, error: "TELEGRAM_TOKEN não configurado" });
   if (!CHAT_ID)   return res.status(400).json({ ok: false, error: "TELEGRAM_CHAT_ID não configurado" });
