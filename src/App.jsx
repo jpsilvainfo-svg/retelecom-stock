@@ -1,11 +1,11 @@
-// StockTel v1.3.0 - sistema de estoque, frota, ponto e operacao tecnica
+// StockTel v1.3.1 - sistema de estoque, frota, ponto e operacao tecnica
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
 import * as XLSX from "xlsx";
 import { sbGet, sbSet, sbPing } from "./supabase.js"; // sbPing usado no Diagnóstico
 import { useLS, pushToCloud, queueGet, queueRemove, queueSize } from "./hooks/useLS.js";
 
-const APP_VERSION="1.3.0";
+const APP_VERSION="1.3.1";
 const APP_VERSION_LABEL=`v${APP_VERSION}`;
 const APP_RELEASE_DATE="06/06/2026";
 
@@ -7443,6 +7443,26 @@ function AppInner(){
     setToast({msg,type,id});
     setTimeout(()=>setToast(p=>p?.id===id?null:p),4000);
   };
+
+  useEffect(()=>{
+    const day=new Date().toLocaleDateString("sv-SE");
+    const userKey=user?.id||user?.login||"anon";
+    const key=`re_access_tracked_${day}_${userKey}`;
+    try{
+      if(sessionStorage.getItem(key))return;
+      sessionStorage.setItem(key,"1");
+    }catch{}
+    fetch("/api/access",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        path:window.location.pathname+window.location.search,
+        referrer:document.referrer||"",
+        appVersion:APP_VERSION,
+        user:user?{id:user.id,name:user.name,login:user.login,role:user.role,email:user.email}:null
+      })
+    }).catch(()=>{});
+  },[user?.id,user?.login]);
 
   // Meu Perfil
   const[npwd,setNpwd]=useState("");

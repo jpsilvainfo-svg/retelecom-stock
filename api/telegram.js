@@ -235,7 +235,7 @@ function frotaText(d) {
 async function handleCommand(text, msg = null) {
   const cmd = String(text || "").trim().split(/\s+/)[0].split("@")[0].toLowerCase();
   if (!cmd || cmd === "/start" || cmd === "/ajuda" || cmd === "/comandos") return helpText();
-  if (cmd === "/versao") return `<b>StockTel</b>\nVersao: <b>v1.3.0</b>\nAtualizado em: 06/06/2026`;
+  if (cmd === "/versao") return `<b>StockTel</b>\nVersao: <b>v1.3.1</b>\nAtualizado em: 06/06/2026`;
   if (cmd === "/backup") return triggerBackupText();
   if (cmd === "/assumir") return supportActionText("assign", text, msg);
   if (cmd === "/fechar") return supportActionText("close", text, msg);

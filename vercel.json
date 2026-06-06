@@ -1,4 +1,13 @@
 {
+  "rewrites": [
+    { "source": "/.env", "destination": "/api/security-probe?kind=env" },
+    { "source": "/.env.local", "destination": "/api/security-probe?kind=env" },
+    { "source": "/.git/:path*", "destination": "/api/security-probe?kind=git" },
+    { "source": "/wp-admin/:path*", "destination": "/api/security-probe?kind=wp-admin" },
+    { "source": "/wp-login.php", "destination": "/api/security-probe?kind=wp-login" },
+    { "source": "/phpmyadmin/:path*", "destination": "/api/security-probe?kind=phpmyadmin" },
+    { "source": "/adminer.php", "destination": "/api/security-probe?kind=adminer" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
