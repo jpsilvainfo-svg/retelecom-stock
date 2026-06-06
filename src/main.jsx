@@ -2,12 +2,15 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 
-// Registra Service Worker para PWA (offline + instalável)
+// Registra o Service Worker para habilitar PWA, cache offline e instalacao.
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js")
-      .then(r => console.log("[PWA] SW registrado:", r.scope))
-      .catch(e => console.warn("[PWA] SW falhou:", e));
+      .then(registration => {
+        console.log("[PWA] Service Worker registrado:", registration.scope);
+        registration.update?.();
+      })
+      .catch(error => console.warn("[PWA] Service Worker falhou:", error));
   });
 }
 

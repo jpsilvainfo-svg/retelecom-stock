@@ -1,16 +1,57 @@
 {
-  "name": "StockTel — Gestão de Estoque",
+  "id": "/?source=pwa",
+  "name": "StockTel",
   "short_name": "StockTel",
-  "description": "Sistema de gestão de estoque para provedores FTTH",
-  "start_url": "/",
+  "description": "Sistema StockTel para estoque, frota, ponto e operacao tecnica.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
   "background_color": "#070707",
   "theme_color": "#d10000",
-  "orientation": "portrait-primary",
+  "orientation": "any",
+  "lang": "pt-BR",
+  "categories": ["business", "productivity", "utilities"],
   "icons": [
-    { "src": "/favicon-stocktel.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/favicon-stocktel.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    {
+      "src": "/pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ],
-  "categories": ["business", "productivity"],
-  "lang": "pt-BR"
+  "shortcuts": [
+    {
+      "name": "Abrir dashboard",
+      "short_name": "Dashboard",
+      "description": "Abrir o painel principal do StockTel.",
+      "url": "/?source=pwa&atalho=dashboard",
+      "icons": [{ "src": "/pwa-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Ponto eletronico",
+      "short_name": "Ponto",
+      "description": "Abrir o ponto eletronico.",
+      "url": "/?source=pwa&atalho=ponto",
+      "icons": [{ "src": "/pwa-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
 }

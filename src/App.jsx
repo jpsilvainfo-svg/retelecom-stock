@@ -7205,6 +7205,80 @@ function EditarHora({reg,onSave,onDelete}){
 }
 
 
+function InstallAppButton({isMobile}){
+  const[deferredPrompt,setDeferredPrompt]=useState(null);
+  const[show,setShow]=useState(false);
+  const[installed,setInstalled]=useState(false);
+
+  useEffect(()=>{
+    const isStandalone=()=>window.matchMedia?.("(display-mode: standalone)")?.matches||window.navigator.standalone===true;
+    if(isStandalone()){setInstalled(true);return;}
+
+    const beforeInstall=(event)=>{
+      event.preventDefault();
+      setDeferredPrompt(event);
+      setShow(true);
+    };
+    const appInstalled=()=>{
+      setInstalled(true);
+      setShow(false);
+      setDeferredPrompt(null);
+    };
+
+    window.addEventListener("beforeinstallprompt",beforeInstall);
+    window.addEventListener("appinstalled",appInstalled);
+
+    const timer=setTimeout(()=>{
+      if(!isStandalone())setShow(true);
+    },2500);
+
+    return()=>{
+      clearTimeout(timer);
+      window.removeEventListener("beforeinstallprompt",beforeInstall);
+      window.removeEventListener("appinstalled",appInstalled);
+    };
+  },[]);
+
+  const install=async()=>{
+    if(deferredPrompt){
+      deferredPrompt.prompt();
+      const choice=await deferredPrompt.userChoice.catch(()=>null);
+      if(choice?.outcome==="accepted"){
+        setShow(false);
+        setInstalled(true);
+      }
+      setDeferredPrompt(null);
+      return;
+    }
+
+    alert("Para instalar o StockTel: no Android, abra o menu do navegador e toque em 'Instalar app' ou 'Adicionar a tela inicial'. No iPhone, toque em Compartilhar e depois em 'Adicionar a Tela de Inicio'.");
+  };
+
+  if(installed||!show)return null;
+
+  return <button onClick={install} title="Instalar StockTel no dispositivo" style={{
+    position:"fixed",
+    right:isMobile?14:24,
+    bottom:isMobile?82:22,
+    zIndex:1800,
+    display:"flex",
+    alignItems:"center",
+    gap:8,
+    padding:isMobile?"10px 12px":"10px 14px",
+    borderRadius:12,
+    border:`1px solid ${C.gold}66`,
+    background:"linear-gradient(135deg,#d10000,#8f0000)",
+    color:"#fff",
+    boxShadow:"0 14px 30px rgba(0,0,0,.38),0 0 22px rgba(209,0,0,.24)",
+    fontSize:isMobile?12:13,
+    fontWeight:900,
+    cursor:"pointer"
+  }}>
+    <span style={{fontSize:15,lineHeight:1}}>+</span>
+    <span>Instalar app</span>
+  </button>;
+}
+
 /* ── APP ── */
 function AppInner(){
   // ── TODOS OS HOOKS PRIMEIRO (regra do React) ──
@@ -7468,7 +7542,8 @@ function AppInner(){
   };
 
   // ── RETURNS CONDICIONAIS (após todos os hooks) ──
-  if(!user)return <LoginPage users={users} onLogin={(u,hashUpdate)=>{
+  if(!user)return <>
+    <LoginPage users={users} onLogin={(u,hashUpdate)=>{
     // Se veio migração de senha (legada → hash), salva o hash no banco
     let finalUser={...u,loginAt:Date.now()};
     if(hashUpdate){
@@ -7481,7 +7556,9 @@ function AppInner(){
     setUser(finalUser);
     solicitarPermissaoNotificacao(); // pede permissão de notificação no login
     setPage("dash");
-  }}/>;
+    }}/>
+    <InstallAppButton isMobile={isMobile}/>
+  </>;
 
   if(user.mustChangePassword) return (
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
@@ -7558,6 +7635,7 @@ function AppInner(){
     </div>
     {isMobile&&<BottomNav page={page} setPage={goPage} user={user} onMenuOpen={()=>setDrawerOpen(true)}/>}
     {toast&&<Toast key={toast.id} msg={toast.msg} type={toast.type} onClose={()=>setToast(null)}/>}
+    <InstallAppButton isMobile={isMobile}/>
 
     {perfilModal&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:2000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
       <div style={{background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":12,width:"100%",maxWidth:500,maxHeight:isMobile?"92vh":"88vh",display:"flex",flexDirection:"column",position:isMobile?"absolute":"relative",bottom:isMobile?0:"auto"}}>

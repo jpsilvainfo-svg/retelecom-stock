@@ -1,45 +1,59 @@
-// Service Worker — StockTel PWA
-const CACHE = "stocktel-v1";
-const STATIC = ["/", "/index.html", "/favicon-stocktel.png", "/logo-stocktel.png", "/manifest.json"];
+const CACHE = "stocktel-pwa-v2";
+const STATIC_ASSETS = [
+  "/",
+  "/index.html",
+  "/manifest.json",
+  "/favicon-stocktel.png",
+  "/logo-stocktel.png",
+  "/pwa-192.png",
+  "/pwa-512.png"
+];
 
-// Instala e pré-cacheia assets estáticos
-self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(STATIC)).then(() => self.skipWaiting()));
+self.addEventListener("install", event => {
+  event.waitUntil(
+    caches.open(CACHE)
+      .then(cache => cache.addAll(STATIC_ASSETS))
+      .then(() => self.skipWaiting())
+  );
 });
 
-// Ativa e limpa caches antigos
-self.addEventListener("activate", e => {
-  e.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+self.addEventListener("activate", event => {
+  event.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
 
-// Estratégia: Network-first para API, Cache-first para assets
-self.addEventListener("fetch", e => {
-  const url = new URL(e.request.url);
+self.addEventListener("fetch", event => {
+  if (event.request.method !== "GET") return;
 
-  // Ignora chamadas de API e Supabase — sempre vai para rede
+  const url = new URL(event.request.url);
   if (url.pathname.startsWith("/api/") || url.hostname.includes("supabase")) return;
 
-  // Assets JS/CSS — Cache-first (atualiza em background)
-  if (e.request.destination === "script" || e.request.destination === "style") {
-    e.respondWith(
-      caches.match(e.request).then(cached => {
-        const network = fetch(e.request).then(r => {
-          caches.open(CACHE).then(c => c.put(e.request, r.clone()));
-          return r;
-        });
-        return cached || network;
-      })
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          const copy = response.clone();
+          caches.open(CACHE).then(cache => cache.put("/index.html", copy));
+          return response;
+        })
+        .catch(() => caches.match("/index.html"))
     );
     return;
   }
 
-  // Páginas HTML — Network-first com fallback para cache
-  e.respondWith(
-    fetch(e.request)
-      .then(r => { caches.open(CACHE).then(c => c.put(e.request, r.clone())); return r; })
-      .catch(() => caches.match(e.request).then(c => c || caches.match("/index.html")))
+  event.respondWith(
+    caches.match(event.request).then(cached => {
+      if (cached) return cached;
+      return fetch(event.request).then(response => {
+        if (response && response.status === 200) {
+          const copy = response.clone();
+          caches.open(CACHE).then(cache => cache.put(event.request, copy));
+        }
+        return response;
+      });
+    })
   );
 });
