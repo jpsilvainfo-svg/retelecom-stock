@@ -20,6 +20,8 @@ const COMMANDS = [
   ["/tecnicos", "Tecnicos cadastrados"],
   ["/frota", "Resumo da frota"],
   ["/backup", "Gera backup e envia aos responsaveis"],
+  ["/assumir", "Assume um chamado de suporte"],
+  ["/fechar", "Fecha um chamado de suporte"],
   ["/versao", "Versao publicada"],
   ["/ajuda", "Lista de comandos"],
 ];
@@ -106,6 +108,28 @@ async function triggerBackupText() {
     return `<b>StockTel — Backup</b>\n\nBackup gerado e enviado para <b>${data.sent}</b> responsaveis.\nArquivo: <b>${esc(data.filename)}</b>\nTamanho: <b>${data.size}</b> bytes`;
   } catch (error) {
     return `<b>StockTel — Backup</b>\n\nFalha ao gerar backup: ${esc(error.message)}`;
+  }
+}
+
+async function supportActionText(action, text, msg) {
+  const id = String(text || "").trim().split(/\s+/)[1];
+  if (!id) return `Informe o codigo do chamado. Exemplo: <code>/${action === "assign" ? "assumir" : "fechar"} SUP-000000-ABCD</code>`;
+
+  const by = msg?.from?.username
+    ? `@${msg.from.username}`
+    : [msg?.from?.first_name, msg?.from?.last_name].filter(Boolean).join(" ") || "Telegram";
+
+  try {
+    const r = await fetch("https://retelecom-stock.vercel.app/api/support", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, id, by }),
+    });
+    const data = await r.json();
+    if (!r.ok || !data.ok) return `<b>StockTel - Suporte</b>\n\nFalha: ${esc(data.error || r.status)}`;
+    return `<b>StockTel - Suporte</b>\n\nChamado <b>${esc(data.ticket.id)}</b> ${action === "assign" ? "assumido" : "fechado"} por <b>${esc(by)}</b>.`;
+  } catch (error) {
+    return `<b>StockTel - Suporte</b>\n\nFalha: ${esc(error.message)}`;
   }
 }
 
@@ -208,11 +232,13 @@ function frotaText(d) {
   return `<b>StockTel — Frota</b>\n\nVeiculos: <b>${veiculos.length}</b>\nAtivos: <b>${ativos}</b>\nEm manutencao: <b>${emManut}</b>\nAbastecimentos: <b>${abast.length}</b>\nOS mecanicas: <b>${manut.length}</b>`;
 }
 
-async function handleCommand(text) {
+async function handleCommand(text, msg = null) {
   const cmd = String(text || "").trim().split(/\s+/)[0].split("@")[0].toLowerCase();
   if (!cmd || cmd === "/start" || cmd === "/ajuda" || cmd === "/comandos") return helpText();
-  if (cmd === "/versao") return `<b>StockTel</b>\nVersao: <b>v1.2.0</b>\nAtualizado em: 05/06/2026`;
+  if (cmd === "/versao") return `<b>StockTel</b>\nVersao: <b>v1.3.0</b>\nAtualizado em: 06/06/2026`;
   if (cmd === "/backup") return triggerBackupText();
+  if (cmd === "/assumir") return supportActionText("assign", text, msg);
+  if (cmd === "/fechar") return supportActionText("close", text, msg);
 
   const d = await loadData();
   if (cmd === "/status") return statusText(d);
@@ -238,7 +264,7 @@ export default async function handler(req, res) {
     return res.status(403).json({ ok: false, error: "Chat nao autorizado" });
   }
 
-  const answer = await handleCommand(text);
+  const answer = await handleCommand(text, msg);
   const sent = await sendTelegram(chatId, answer);
   return res.json({ ok: !!sent.ok, command: text.split(/\s+/)[0], telegram: sent });
 }

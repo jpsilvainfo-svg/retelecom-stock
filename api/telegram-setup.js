@@ -9,6 +9,8 @@ const COMMANDS = [
   { command: "tecnicos", description: "Tecnicos cadastrados" },
   { command: "frota", description: "Resumo da frota" },
   { command: "backup", description: "Gera backup e envia aos responsaveis" },
+  { command: "assumir", description: "Assume um chamado de suporte" },
+  { command: "fechar", description: "Fecha um chamado de suporte" },
   { command: "versao", description: "Versao publicada" },
   { command: "ajuda", description: "Lista de comandos" },
 ];

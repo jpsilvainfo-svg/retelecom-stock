@@ -1,13 +1,13 @@
-// StockTel v1.2.0 — sistema de estoque, frota, ponto e operacao tecnica
+// StockTel v1.3.0 - sistema de estoque, frota, ponto e operacao tecnica
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
 import * as XLSX from "xlsx";
 import { sbGet, sbSet, sbPing } from "./supabase.js"; // sbPing usado no Diagnóstico
 import { useLS, pushToCloud, queueGet, queueRemove, queueSize } from "./hooks/useLS.js";
 
-const APP_VERSION="1.2.0";
+const APP_VERSION="1.3.0";
 const APP_VERSION_LABEL=`v${APP_VERSION}`;
-const APP_RELEASE_DATE="05/06/2026";
+const APP_RELEASE_DATE="06/06/2026";
 
 const C={
   bg:"#070707",
@@ -7279,6 +7279,80 @@ function InstallAppButton({isMobile}){
   </button>;
 }
 
+function SupportChatButton({user,page,isMobile,tickets,setTickets,showToast}){
+  const[open,setOpen]=useState(false);
+  const[msg,setMsg]=useState("");
+  const[busy,setBusy]=useState(false);
+  const myTickets=(tickets||[]).filter(t=>t.requester?.id===user.id||t.requester?.login===user.login).slice(0,5);
+
+  const send=async()=>{
+    const message=msg.trim();
+    if(!message){showToast?.("Digite a mensagem do chamado.","warning");return;}
+    setBusy(true);
+    try{
+      const res=await fetch("/api/support",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({message,page,user:{id:user.id,name:user.name,login:user.login,role:user.role,email:user.email}})
+      });
+      const data=await res.json();
+      if(!res.ok||!data.ok)throw new Error(data.error||"Falha ao enviar chamado");
+      setTickets(prev=>[data.ticket,...(prev||[])].slice(0,300));
+      setMsg("");
+      showToast?.(`Chamado ${data.ticket.id} enviado ao Telegram.`,"success");
+    }catch(e){
+      showToast?.(e.message||"Falha ao enviar chamado.","error");
+    }finally{
+      setBusy(false);
+    }
+  };
+
+  return <>
+    <button onClick={()=>setOpen(true)} title="Abrir chat de suporte" style={{
+      position:"fixed",
+      right:isMobile?14:24,
+      bottom:isMobile?134:76,
+      zIndex:1750,
+      width:isMobile?48:54,
+      height:isMobile?48:54,
+      borderRadius:"50%",
+      border:`1px solid ${C.blue}66`,
+      background:"linear-gradient(135deg,#2196f3,#0b5cad)",
+      color:"#fff",
+      boxShadow:"0 14px 30px rgba(0,0,0,.38),0 0 22px rgba(33,150,243,.24)",
+      fontSize:21,
+      fontWeight:900,
+      cursor:"pointer"
+    }}>?</button>
+
+    {open&&<div style={{position:"fixed",inset:0,background:"#000000aa",zIndex:2100,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>
+      <div style={{width:"100%",maxWidth:480,maxHeight:isMobile?"88vh":"82vh",background:C.card,border:`1px solid ${C.bdr2}`,borderRadius:isMobile?"16px 16px 0 0":14,display:"flex",flexDirection:"column",boxShadow:C.shadow}}>
+        <div style={{padding:"15px 18px",borderBottom:`1px solid ${C.bdr}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div>
+            <div style={{fontSize:15,fontWeight:900,color:C.txt}}>Chat de suporte</div>
+            <div style={{fontSize:11,color:C.muted}}>A mensagem vai direto para o Telegram da equipe.</div>
+          </div>
+          <button onClick={()=>setOpen(false)} style={{background:C.surf,color:C.muted,width:32,height:32,borderRadius:8,fontSize:16}}>x</button>
+        </div>
+        <div style={{padding:16,overflowY:"auto",display:"flex",flexDirection:"column",gap:12}}>
+          <textarea value={msg} onChange={e=>setMsg(e.target.value)} placeholder="Descreva sua duvida ou problema..." rows={5} style={{width:"100%",resize:"vertical",background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:10,color:C.txt,padding:12,fontSize:13,outline:"none"}}/>
+          <Btn color="gold" onClick={send} disabled={busy}>{busy?"Enviando...":"Enviar chamado"}</Btn>
+          {myTickets.length>0&&<div style={{borderTop:`1px solid ${C.bdr}`,paddingTop:12}}>
+            <div style={{fontSize:11,color:C.muted,fontWeight:900,textTransform:"uppercase",marginBottom:8}}>Meus ultimos chamados</div>
+            {myTickets.map(t=><div key={t.id} style={{padding:10,border:`1px solid ${C.bdr}`,borderRadius:8,background:C.surf,marginBottom:8}}>
+              <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
+                <span style={{fontSize:12,fontWeight:900,color:C.txt}}>{t.id}</span>
+                <span style={{fontSize:11,color:t.status==="fechado"?C.grn:t.status==="assumido"?C.blue:C.ylw,fontWeight:900}}>{t.status}</span>
+              </div>
+              <div style={{fontSize:11,color:C.muted,marginTop:5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.message}</div>
+            </div>)}
+          </div>}
+        </div>
+      </div>
+    </div>}
+  </>;
+}
+
 /* ── APP ── */
 function AppInner(){
   // ── TODOS OS HOOKS PRIMEIRO (regra do React) ──
@@ -7320,6 +7394,7 @@ function AppInner(){
   const[docsVeic,setDocsVeic]=useLS("re_docs_veic",[]);
   const[manutSols,setManutSols]=useLS("re_manut_sols",[]);
   const[manutOS,setManutOS]=useLS("re_manut_os",[]);
+  const[supportTickets,setSupportTickets]=useLS("re_support_tickets",[]);
   const[cats,setCats]=useLS("re_cats",[
     {id:"c1",name:"Equipamentos",icon:"📡"},{id:"c2",name:"Cabos e Fios",icon:"🔌"},
     {id:"c3",name:"Conectores",icon:"🔗"},{id:"c4",name:"Caixas e Acessórios",icon:"🗃️"},
@@ -7635,6 +7710,7 @@ function AppInner(){
     </div>
     {isMobile&&<BottomNav page={page} setPage={goPage} user={user} onMenuOpen={()=>setDrawerOpen(true)}/>}
     {toast&&<Toast key={toast.id} msg={toast.msg} type={toast.type} onClose={()=>setToast(null)}/>}
+    <SupportChatButton user={user} page={page} isMobile={isMobile} tickets={supportTickets} setTickets={setSupportTickets} showToast={showToast}/>
     <InstallAppButton isMobile={isMobile}/>
 
     {perfilModal&&<div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:2000,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:16}}>

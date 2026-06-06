@@ -1,0 +1,56 @@
+name: Release notify Telegram
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Send release notification
+        env:
+          RELEASE_URL: https://retelecom-stock.vercel.app/api/release-notify
+          RELEASE_NOTIFY_SECRET: ${{ secrets.RELEASE_NOTIFY_SECRET }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT: ${{ github.sha }}
+          AUTHOR: ${{ github.actor }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION=$(node -p "require('./package.json').version")
+          PREVIOUS_VERSION=""
+          if git show HEAD^:package.json >/tmp/package-prev.json 2>/dev/null; then
+            PREVIOUS_VERSION=$(node -e "try{console.log(require('/tmp/package-prev.json').version)}catch{console.log('')}")
+          fi
+
+          COMMIT_MESSAGE=$(git log -1 --pretty=%B)
+          CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD | head -40)
+          export VERSION PREVIOUS_VERSION COMMIT_MESSAGE CHANGED_FILES
+
+          BODY=$(node -e '
+            const payload = {
+              version: process.env.VERSION,
+              previous_version: process.env.PREVIOUS_VERSION,
+              commit: process.env.COMMIT,
+              author: process.env.AUTHOR,
+              run_url: process.env.RUN_URL,
+              commit_message: process.env.COMMIT_MESSAGE,
+              changed_files: process.env.CHANGED_FILES
+            };
+            process.stdout.write(JSON.stringify(payload));
+          ')
+
+          ARGS=(-fsS -X POST "$RELEASE_URL" -H "Content-Type: application/json" -d "$BODY")
+          if [ -n "${RELEASE_NOTIFY_SECRET:-}" ]; then
+            ARGS+=(-H "x-release-key: $RELEASE_NOTIFY_SECRET")
+          fi
+
+          curl --retry 6 --retry-delay 20 --retry-all-errors "${ARGS[@]}"
