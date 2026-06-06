@@ -53,6 +53,7 @@ function backupRecipients() {
   ].filter(Boolean);
 
   return [...new Set([...configured, ...DEFAULT_BACKUP_RECIPIENTS].map(String))]
+    .filter(id => /^-?\d+$/.test(id))
     .filter(id => !id.startsWith("-100"))
     .slice(0, 2);
 }
