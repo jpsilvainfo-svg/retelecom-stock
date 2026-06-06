@@ -9,66 +9,20 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - name: Export Supabase data
+      - name: Trigger StockTel backup
         env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          SUPA_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          SUPA_KEY: ${{ secrets.VITE_SUPABASE_KEY }}
+          BACKUP_URL: https://retelecom-stock.vercel.app/api/backup
+          BACKUP_SECRET: ${{ secrets.BACKUP_SECRET }}
         shell: bash
         run: |
           set -euo pipefail
 
-          if [ -z "${TELEGRAM_TOKEN:-}" ] || [ -z "${SUPA_URL:-}" ] || [ -z "${SUPA_KEY:-}" ]; then
-            echo "Missing TELEGRAM_TOKEN, VITE_SUPABASE_URL or VITE_SUPABASE_KEY secrets."
-            exit 1
+          CURL_ARGS=(-fsS -X POST "$BACKUP_URL")
+          if [ -n "${BACKUP_SECRET:-}" ]; then
+            CURL_ARGS+=(-H "x-backup-key: $BACKUP_SECRET")
           fi
 
-          DATE=$(TZ="America/Sao_Paulo" date "+%Y-%m-%d_%H-%M")
-          mkdir -p backup
-
-          KEYS="re_users re_stock re_tstock re_os re_returns re_nf re_sol re_logs re_veiculos re_abast re_checkouts re_pontos re_ponto_config re_ponto_solicits re_escalas re_folgas re_pneus re_docs_veic re_manut_os re_manut_sols re_cats re_produtos re_customization"
-          OUT="backup/stocktel_backup_${DATE}.json"
-
-          echo "Starting backup: $DATE"
-          echo "{" > "$OUT"
-          echo "  \"backup_date\": \"$DATE\"," >> "$OUT"
-          echo "  \"data\": {" >> "$OUT"
-
-          FIRST=true
-          for KEY in $KEYS; do
-            VALUE=$(curl -fsS "$SUPA_URL/rest/v1/re_data?select=value&key=eq.$KEY" \
-              -H "apikey: $SUPA_KEY" \
-              -H "Authorization: Bearer $SUPA_KEY" | \
-              python3 -c "import json,sys; d=json.load(sys.stdin); print(json.dumps(d[0].get('value')) if d else 'null')")
-
-            if [ "$FIRST" = "true" ]; then
-              FIRST=false
-            else
-              echo "," >> "$OUT"
-            fi
-            printf '    "%s": %s' "$KEY" "$VALUE" >> "$OUT"
-          done
-
-          echo "" >> "$OUT"
-          echo "  }" >> "$OUT"
-          echo "}" >> "$OUT"
-
-          SIZE=$(wc -c < "$OUT")
-          NOW=$(TZ="America/Sao_Paulo" date "+%d/%m/%Y %H:%M")
-          CAPTION="Backup StockTel - $NOW | ${SIZE} bytes"
-
-          for CHAT_ID in "-1003823794117" "236353850" "7858844640"; do
-            curl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument" \
-              -F "chat_id=$CHAT_ID" \
-              -F "document=@$OUT" \
-              -F "caption=$CAPTION" \
-              > /dev/null
-            echo "Backup sent to $CHAT_ID"
-          done
-
-      - name: Upload backup artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: backup-${{ github.run_number }}-${{ github.run_id }}
-          path: backup/
-          retention-days: 90
+          echo "Solicitando backup StockTel..."
+          curl "${CURL_ARGS[@]}"
+          echo ""
+          echo "Backup solicitado com sucesso."

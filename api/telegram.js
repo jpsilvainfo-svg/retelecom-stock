@@ -19,6 +19,7 @@ const COMMANDS = [
   ["/estoque", "Itens baixos e criticos"],
   ["/tecnicos", "Tecnicos cadastrados"],
   ["/frota", "Resumo da frota"],
+  ["/backup", "Gera backup e envia aos responsaveis"],
   ["/versao", "Versao publicada"],
   ["/ajuda", "Lista de comandos"],
 ];
@@ -87,6 +88,25 @@ async function sendTelegram(chat_id, text) {
     }),
   });
   return r.json();
+}
+
+async function triggerBackupText() {
+  try {
+    const headers = {};
+    if (process.env.BACKUP_SECRET) headers["x-backup-key"] = process.env.BACKUP_SECRET;
+
+    const r = await fetch("https://retelecom-stock.vercel.app/api/backup", {
+      method: "POST",
+      headers,
+    });
+    const data = await r.json();
+    if (!r.ok || !data.ok) {
+      return `<b>StockTel — Backup</b>\n\nFalha ao gerar backup: ${esc(data.error || data.errors?.join("; ") || r.status)}`;
+    }
+    return `<b>StockTel — Backup</b>\n\nBackup gerado e enviado para <b>${data.sent}</b> responsaveis.\nArquivo: <b>${esc(data.filename)}</b>\nTamanho: <b>${data.size}</b> bytes`;
+  } catch (error) {
+    return `<b>StockTel — Backup</b>\n\nFalha ao gerar backup: ${esc(error.message)}`;
+  }
 }
 
 function helpText() {
@@ -192,6 +212,7 @@ async function handleCommand(text) {
   const cmd = String(text || "").trim().split(/\s+/)[0].split("@")[0].toLowerCase();
   if (!cmd || cmd === "/start" || cmd === "/ajuda" || cmd === "/comandos") return helpText();
   if (cmd === "/versao") return `<b>StockTel</b>\nVersao: <b>v1.2.0</b>\nAtualizado em: 05/06/2026`;
+  if (cmd === "/backup") return triggerBackupText();
 
   const d = await loadData();
   if (cmd === "/status") return statusText(d);

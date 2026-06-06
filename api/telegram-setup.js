@@ -8,6 +8,7 @@ const COMMANDS = [
   { command: "estoque", description: "Itens baixos e criticos" },
   { command: "tecnicos", description: "Tecnicos cadastrados" },
   { command: "frota", description: "Resumo da frota" },
+  { command: "backup", description: "Gera backup e envia aos responsaveis" },
   { command: "versao", description: "Versao publicada" },
   { command: "ajuda", description: "Lista de comandos" },
 ];
