@@ -103,9 +103,12 @@ export default async function handler(req, res) {
     try {
       const logs = await sbGet(ACCESS_KEY, []);
       const daily = await sbGet(DAILY_KEY, []);
+      const alerts = await sbGet(ALERT_KEY, []);
+      const day = todayKey();
       return res.json({
         ok: true,
         today: summarizeDay(Array.isArray(logs) ? logs : []),
+        securityAlertsToday: Array.isArray(alerts) ? alerts.filter(item => String(item.at || "").startsWith(day)).length : 0,
         daily: Array.isArray(daily) ? daily.slice(0, 30) : [],
       });
     } catch (error) {

@@ -5,6 +5,7 @@ const GITHUB_REPO = process.env.GITHUB_REPOSITORY || "jpsilvainfo-svg/retelecom-
 const SUPA_URL = process.env.VITE_SUPABASE_URL;
 const SUPA_KEY = process.env.VITE_SUPABASE_KEY;
 const ACCESS_KEY = "re_access_logs";
+const ALERT_KEY = "re_security_alerts";
 
 async function timed(label, fn) {
   const started = Date.now();
@@ -46,14 +47,18 @@ function todayKey() {
 }
 
 async function accessSummary() {
-  const logs = await sbGet(ACCESS_KEY, []);
+  const [logs, alerts] = await Promise.all([
+    sbGet(ACCESS_KEY, []),
+    sbGet(ALERT_KEY, []),
+  ]);
   const day = todayKey();
   const dayLogs = Array.isArray(logs) ? logs.filter(item => item.day === day) : [];
+  const dayAlerts = Array.isArray(alerts) ? alerts.filter(item => String(item.at || "").startsWith(day)) : [];
   return {
     hits: dayLogs.length,
     visitors: new Set(dayLogs.map(item => item.visitorKey)).size,
     ips: new Set(dayLogs.map(item => item.ip)).size,
-    suspicious: dayLogs.filter(item => item.suspicious).length,
+    suspicious: dayLogs.filter(item => item.suspicious).length + dayAlerts.length,
   };
 }
 
