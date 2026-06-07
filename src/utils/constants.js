@@ -53,3 +53,58 @@ export const DEFAULT_ACTION_PERMS={
   tecnico:[],
   mecanico:[],
 };
+
+export const DIAGNOSTIC_CHECKS=[
+  {key:"supabase",label:"Conexao Supabase",group:"infra"},
+  {key:"serviceWorker",label:"Service Worker",group:"browser"},
+  {key:"localStorage",label:"LocalStorage",group:"browser"},
+  {key:"notifications",label:"Notificacoes",group:"browser"},
+  {key:"githubActions",label:"GitHub Actions",group:"deploy"},
+  {key:"systemInfo",label:"Ambiente",group:"runtime"},
+];
+
+export const DIAGNOSTIC_MODULES=[
+  {key:"re_stock",label:"Estoque Base",icon:"📦"},
+  {key:"re_tstock",label:"Estoque Tecnico",icon:"🎒"},
+  {key:"re_os",label:"Ordens de Servico",icon:"🔧"},
+  {key:"re_pontos",label:"Ponto Eletronico",icon:"🕐"},
+  {key:"re_veiculos",label:"Frota",icon:"🚗"},
+  {key:"re_abast",label:"Abastecimentos",icon:"⛽"},
+  {key:"re_returns",label:"Devolucoes",icon:"↩️"},
+  {key:"re_nf",label:"Entradas NF",icon:"📥"},
+  {key:"re_users",label:"Usuarios",icon:"👥"},
+  {key:"re_sol",label:"Solicitacoes",icon:"📋"},
+  {key:"re_logs",label:"Logs",icon:"🗒️"},
+  {key:"re_checkouts",label:"Checklist Frota",icon:"✅"},
+  {key:"re_pneus",label:"Pneus",icon:"🔄"},
+  {key:"re_docs_veic",label:"Docs Veiculos",icon:"📄"},
+  {key:"re_manut_os",label:"Manutencao OS",icon:"🔩"},
+  {key:"re_escalas",label:"Escalas",icon:"📅"},
+  {key:"re_folgas",label:"Folgas",icon:"🌴"},
+  {key:"re_cats",label:"Categorias",icon:"🏷️"},
+  {key:"re_produtos",label:"Produtos",icon:"🔩"},
+];
+
+export const CUSTOMIZE_DEFAULT_SETTINGS={
+  logoUrl:null,
+  companyName:"StockTel",
+  companySlogan:"Solucoes em Telecomunicacoes",
+  accentColor:"#d10000",
+  sidebarBg:"#101010",
+  fontSize:"medium",
+  sidebarMode:"auto",
+  notificationMode:"on",
+  menuOrder:ALL_MODULES.map(m=>m.k),
+  menuLabels:{},
+  menuIcons:{},
+  menuHidden:[],
+  menuGroups:[],
+  telegram:{ativo:false,token:"",chat_id:"",chat_ids:[]},
+};
+
+export const CUSTOMIZE_THEMES=[
+  {key:"stocktel",label:"StockTel",accentColor:"#d10000",sidebarBg:"#101010"},
+  {key:"light",label:"Claro",accentColor:"#1565c0",sidebarBg:"#f5f5f5"},
+  {key:"graphite",label:"Grafite",accentColor:"#f9a825",sidebarBg:"#151515"},
+  {key:"green",label:"Operacional",accentColor:"#2e7d32",sidebarBg:"#0f1712"},
+];
