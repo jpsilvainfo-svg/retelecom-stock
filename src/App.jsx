@@ -77,7 +77,7 @@ const DEFAULT_PERMS={
   admin:ALL_MODULES.map(m=>m.k).filter(k=>!ROOT_ONLY.includes(k)),
   estoque:["dash","os","estoque","kit","dist","dev","sol","rel","ajuda","ponto"],
   tecnico:["dash","os","frota","kit","dev","sol","rel","ajuda","ponto"],
-  financeiro:["dash","nf","rel","email","os","dev","log","ajuda"],
+  financeiro:["dash","nf","rel","email","os","dev","log","ajuda","ponto"],
   mecanico:["dash","manut","frota","ajuda","ponto"],
 };
 const uid=()=>crypto.randomUUID();
@@ -6204,6 +6204,8 @@ function HelpPage({currentUser,isMobile}){
 /* ── PONTO ELETRÔNICO ── */
 function PontoPage({pontos,setPontos,pontoConfig,setPontoConfig,pontoSolicits,setPontoSolicits,escalas=[],setEscalas,folgas=[],setFolgas,users,currentUser,addLog,isMobile,showToast}){
   const isAdm=["admin","superadmin"].includes(currentUser.role);
+  const isFinanceiro=currentUser.role==="financeiro";
+  const canViewFechamento=isAdm||isFinanceiro;
   const hoje=new Date().toISOString().slice(0,10);
 
   // ── Haversine ──
@@ -6217,7 +6219,7 @@ function PontoPage({pontos,setPontos,pontoConfig,setPontoConfig,pontoSolicits,se
   // ── Estado local ──
   const[geoLoading,setGeoLoading]=useState(false);
   const[geoErro,setGeoErro]=useState("");
-  const[tab,setTab]=useState(isAdm?"admin":"meu");
+  const[tab,setTab]=useState(isAdm?"admin":isFinanceiro?"fechamento":"meu");
   const[mesEscala,setMesEscala]=useState(new Date().getMonth());
   const[anoEscala,setAnoEscala]=useState(new Date().getFullYear());
   const[modalEscala,setModalEscala]=useState(null);
@@ -6233,6 +6235,8 @@ function PontoPage({pontos,setPontos,pontoConfig,setPontoConfig,pontoSolicits,se
   const[filtroUser,setFiltroUser]=useState("");
   const[filtroDt,setFiltroDt]=useState(hoje);
   const[modalEdit,setModalEdit]=useState(null);
+  const[fechamentoMes,setFechamentoMes]=useState(new Date().toISOString().slice(0,7));
+  const[fechamentoUser,setFechamentoUser]=useState("");
 
   // ── Helpers ──
   const TIPOS={
@@ -6274,6 +6278,108 @@ function PontoPage({pontos,setPontos,pontoConfig,setPontoConfig,pontoSolicits,se
     const trabMs=ms-almMs;
     const h=Math.floor(trabMs/3600000),m=Math.floor((trabMs%3600000)/60000);
     return `${h}h${m.toString().padStart(2,"0")}m`;
+  };
+  const minHora=(hhmm)=>{
+    if(!hhmm||!String(hhmm).includes(":"))return 0;
+    const [h,m]=String(hhmm).split(":").map(Number);
+    return (h||0)*60+(m||0);
+  };
+  const minFmt=(mins)=>{
+    const sign=mins<0?"-":"";
+    const abs=Math.abs(Math.round(mins||0));
+    return `${sign}${Math.floor(abs/60)}h${String(abs%60).padStart(2,"0")}m`;
+  };
+  const dataLocal=(ds)=>new Date(`${ds}T12:00:00`);
+  const diasCurto=["Dom","Seg","Ter","Qua","Qui","Sex","Sab"];
+  const normDia=(v)=>String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").slice(0,3);
+  const escalaDo=(uid)=>escalas.find(e=>e.userId===uid)||null;
+  const folgaNoDia=(uid,ds)=>folgas.find(f=>(f.userId===uid||f.todos)&&f.data===ds)||null;
+  const previstoNoDia=(uid,ds)=>{
+    const e=escalaDo(uid);
+    if(!e)return 0;
+    const d=dataLocal(ds);
+    const dia=diasCurto[d.getDay()];
+    const trabalha=(e.diasSemana||[]).map(normDia).includes(dia);
+    if(!trabalha||folgaNoDia(uid,ds))return 0;
+    const bruto=minHora(e.saida)-minHora(e.entrada);
+    const almoco=e.almEntrada&&e.almSaida?Math.max(0,minHora(e.almSaida)-minHora(e.almEntrada)):0;
+    return Math.max(0,bruto-almoco);
+  };
+  const realizadoNoDia=(uid,ds)=>{
+    const regs=pontos.filter(p=>p.funcionarioId===uid&&String(p.dt||"").startsWith(ds)).sort((a,b)=>new Date(a.dt)-new Date(b.dt));
+    const ent=regs.find(p=>p.tipo==="entrada");
+    const sai=[...regs].reverse().find(p=>p.tipo==="saida");
+    const almS=regs.find(p=>p.tipo==="saida_almoco");
+    const almV=regs.find(p=>p.tipo==="volta_almoco");
+    if(!ent||!sai)return {mins:0,regs,ent,sai,almS,almV};
+    const bruto=(new Date(sai.dt)-new Date(ent.dt))/60000;
+    const almoco=almS&&almV?Math.max(0,(new Date(almV.dt)-new Date(almS.dt))/60000):0;
+    return {mins:Math.max(0,bruto-almoco),regs,ent,sai,almS,almV};
+  };
+  const fechamentoUsuarios=()=>users.filter(u=>["tecnico","mecanico","estoque","admin","superadmin","financeiro"].includes(u.role));
+  const montarFechamento=()=>{
+    const [ano,mes]=fechamentoMes.split("-").map(Number);
+    const dias=new Date(ano,mes,0).getDate();
+    const selecionados=fechamentoUsuarios().filter(u=>fechamentoUser?u.id===fechamentoUser:true);
+    return selecionados.map(u=>{
+      const linhas=Array.from({length:dias},(_,i)=>{
+        const ds=`${ano}-${String(mes).padStart(2,"0")}-${String(i+1).padStart(2,"0")}`;
+        const d=dataLocal(ds);
+        const real=realizadoNoDia(u.id,ds);
+        const previsto=previstoNoDia(u.id,ds);
+        const folga=folgaNoDia(u.id,ds);
+        const manuais=real.regs.filter(p=>p.aprovadoPor||p.localValido===false);
+        const foraGeo=real.regs.filter(p=>p.localValido===false);
+        const incompleto=real.regs.length>0&&(!real.ent||!real.sai);
+        const ausencia=previsto>0&&real.regs.length===0&&!folga;
+        const status=folga?folga.tipoFolga:ausencia?"ausente":incompleto?"incompleto":foraGeo.length?"manual/geo":real.mins>0?"ok":previsto>0?"pendente":"sem escala";
+        return {ds,dia:d.toLocaleDateString("pt-BR",{weekday:"short",day:"2-digit",month:"2-digit"}),previsto,realizado:real.mins,diff:real.mins-previsto,folga,regs:real.regs,ent:real.ent,sai:real.sai,almS:real.almS,almV:real.almV,manuais,foraGeo,incompleto,ausencia,status};
+      });
+      const relevantes=linhas.filter(l=>l.previsto>0||l.realizado>0||l.folga||l.regs.length);
+      return {
+        user:u,
+        linhas:relevantes,
+        previsto:linhas.reduce((a,l)=>a+l.previsto,0),
+        realizado:linhas.reduce((a,l)=>a+l.realizado,0),
+        manuais:linhas.reduce((a,l)=>a+l.manuais.length,0),
+        ausencias:linhas.filter(l=>l.ausencia).length,
+        incompletos:linhas.filter(l=>l.incompleto).length,
+        folgas:linhas.filter(l=>l.folga).length,
+      };
+    });
+  };
+  const escPdf=(v)=>String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const gerarPDFPonto=()=>{
+    const dados=montarFechamento();
+    if(!dados.length){showToast("Nenhum funcionario para o fechamento.","warning");return;}
+    const periodo=new Date(`${fechamentoMes}-01T12:00:00`).toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+    const resumo=dados.map(d=>`
+      <tr>
+        <td>${escPdf(d.user.name)}</td><td>${escPdf(d.user.role)}</td><td>${minFmt(d.previsto)}</td><td>${minFmt(d.realizado)}</td>
+        <td>${minFmt(d.realizado-d.previsto)}</td><td>${d.ausencias}</td><td>${d.incompletos}</td><td>${d.manuais}</td><td>${d.folgas}</td>
+      </tr>`).join("");
+    const detalhes=dados.map(d=>`
+      <section class="func">
+        <h2>${escPdf(d.user.name)} <small>${escPdf(d.user.role)}</small></h2>
+        <table>
+          <thead><tr><th>Dia</th><th>Entrada</th><th>Almoco</th><th>Retorno</th><th>Saida</th><th>Previsto</th><th>Realizado</th><th>Saldo</th><th>Status</th></tr></thead>
+          <tbody>${(d.linhas.length?d.linhas:[{dia:"Sem movimentos",previsto:0,realizado:0,diff:0,status:"sem registros"}]).map(l=>`
+            <tr>
+              <td>${escPdf(l.dia)}</td><td>${l.ent?fmtHora(l.ent.dt):"--:--"}</td><td>${l.almS?fmtHora(l.almS.dt):"--:--"}</td><td>${l.almV?fmtHora(l.almV.dt):"--:--"}</td><td>${l.sai?fmtHora(l.sai.dt):"--:--"}</td>
+              <td>${minFmt(l.previsto)}</td><td>${minFmt(l.realizado)}</td><td>${minFmt(l.diff)}</td><td>${escPdf(l.status)}</td>
+            </tr>`).join("")}</tbody>
+        </table>
+      </section>`).join("");
+    const html=`<!doctype html><html><head><meta charset="utf-8"><title>StockTel - Fechamento de Ponto</title><style>
+      @page{size:A4;margin:12mm}body{font-family:Arial,sans-serif;color:#202124;margin:0;background:#fff}header{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #d10000;padding-bottom:14px;margin-bottom:18px}.brand{display:flex;align-items:center;gap:12px}.brand img{width:58px;height:58px;object-fit:contain}h1{font-size:22px;margin:0;color:#111}h2{font-size:15px;margin:22px 0 8px;color:#d10000}small{color:#666;font-size:11px}.meta{text-align:right;font-size:11px;color:#555;line-height:1.5}.box{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0}.kpi{border:1px solid #ddd;border-radius:8px;padding:10px}.kpi b{display:block;font-size:16px;color:#111}.kpi span{font-size:10px;color:#666;text-transform:uppercase}table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border:1px solid #ddd;padding:6px 7px;font-size:10px;text-align:left}th{background:#f3f3f3;color:#333;text-transform:uppercase;font-size:9px}.func{page-break-inside:avoid}.sign{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:38px}.line{border-top:1px solid #333;text-align:center;padding-top:6px;font-size:11px;color:#555}.print{position:fixed;right:16px;top:16px;background:#d10000;color:#fff;border:0;border-radius:6px;padding:9px 14px;font-weight:700}@media print{.print{display:none}}
+    </style></head><body><button class="print" onclick="window.print()">Imprimir / Salvar PDF</button><header><div class="brand"><img src="/logo-stocktel.png"><div><h1>Fechamento Mensal de Ponto</h1><small>StockTel - ${escPdf(periodo)}</small></div></div><div class="meta">Gerado em ${new Date().toLocaleString("pt-BR")}<br>Responsavel: ${escPdf(currentUser.name)}<br>Origem: StockTel Web</div></header>
+    <div class="box"><div class="kpi"><b>${dados.length}</b><span>Funcionarios</span></div><div class="kpi"><b>${minFmt(dados.reduce((a,d)=>a+d.previsto,0))}</b><span>Previsto</span></div><div class="kpi"><b>${minFmt(dados.reduce((a,d)=>a+d.realizado,0))}</b><span>Realizado</span></div><div class="kpi"><b>${dados.reduce((a,d)=>a+d.ausencias+d.incompletos+d.manuais,0)}</b><span>Alertas</span></div></div>
+    <h2>Resumo para o financeiro</h2><table><thead><tr><th>Funcionario</th><th>Perfil</th><th>Previsto</th><th>Realizado</th><th>Saldo</th><th>Aus.</th><th>Inc.</th><th>Manuais</th><th>Folgas</th></tr></thead><tbody>${resumo}</tbody></table>
+    <h2>Detalhamento por funcionario</h2>${detalhes}<div class="sign"><div class="line">Responsavel pelo fechamento</div><div class="line">Financeiro</div></div></body></html>`;
+    const w=window.open("","_blank");
+    if(!w){showToast("O navegador bloqueou a janela do PDF. Libere pop-ups.","warning");return;}
+    w.document.write(html);w.document.close();w.focus();
+    addLog(currentUser.name,"Fechamento Ponto",`PDF ${periodo} - ${dados.length} funcionario(s)`);
   };
 
   // ── Bater ponto (com geo quando necessário) ──
@@ -6371,7 +6477,7 @@ function PontoPage({pontos,setPontos,pontoConfig,setPontoConfig,pontoSolicits,se
   const meusPontosHoje=pontosHoje(currentUser.id);
 
   // Usuários com acesso ao ponto
-  const usersComPonto=users.filter(u=>["tecnico","mecanico","estoque","admin","superadmin"].includes(u.role));
+  const usersComPonto=users.filter(u=>["tecnico","mecanico","estoque","admin","superadmin","financeiro"].includes(u.role));
 
   return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
     {/* Header */}
@@ -6393,8 +6499,9 @@ function PontoPage({pontos,setPontos,pontoConfig,setPontoConfig,pontoSolicits,se
     {/* Tabs */}
     <div style={{display:"flex",borderBottom:`1px solid ${C.bdr}`,gap:0}}>
       {[
-        {k:"meu",l:"🕐 Meu Ponto"},
+        ...(!isFinanceiro?[{k:"meu",l:"Meu Ponto"}]:[]),
         {k:"escala",l:"📅 Escala & Folgas"},
+        ...(canViewFechamento?[{k:"fechamento",l:"Fechamento"}]:[]),
         ...(isAdm?[{k:"admin",l:`📋 Gestão${solicsPendentes.length>0?` (${solicsPendentes.length})`:""}`,},{k:"config_view",l:"📊 Resumo Equipe"}]:[]),
       ].map(t=>(
         <div key={t.k} onClick={()=>setTab(t.k)} style={{padding:"9px 16px",cursor:"pointer",fontSize:13,fontWeight:600,borderBottom:`2px solid ${tab===t.k?C.gold:"transparent"}`,color:tab===t.k?C.gold:C.muted,whiteSpace:"nowrap"}}>{t.l}</div>
@@ -6626,6 +6733,56 @@ function PontoPage({pontos,setPontos,pontoConfig,setPontoConfig,pontoSolicits,se
         </Card>;
       })}
     </div>}
+
+    {tab==="fechamento"&&canViewFechamento&&(()=>{
+      const dados=montarFechamento();
+      const totais=dados.reduce((acc,d)=>({
+        previsto:acc.previsto+d.previsto,
+        realizado:acc.realizado+d.realizado,
+        ausencias:acc.ausencias+d.ausencias,
+        alertas:acc.alertas+d.ausencias+d.incompletos+d.manuais,
+      }),{previsto:0,realizado:0,ausencias:0,alertas:0});
+      return <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        <Card style={{padding:14}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:12,flexWrap:"wrap"}}>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"180px minmax(220px,1fr)",gap:10,flex:1}}>
+              <Inp label="Mes de fechamento" value={fechamentoMes} onChange={setFechamentoMes} type="month"/>
+              <Sel label="Funcionario" value={fechamentoUser} onChange={setFechamentoUser}
+                options={[{value:"",label:"Todos os funcionarios"},...fechamentoUsuarios().map(u=>({value:u.id,label:`${u.name} (${u.role})`}))]}/>
+            </div>
+            <Btn color="red" onClick={gerarPDFPonto}>Gerar PDF</Btn>
+          </div>
+        </Card>
+
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
+          <Card style={{padding:14}}><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",fontWeight:700}}>Funcionarios</div><div style={{fontSize:22,fontWeight:800,color:C.txt}}>{dados.length}</div></Card>
+          <Card style={{padding:14}}><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",fontWeight:700}}>Previsto</div><div style={{fontSize:22,fontWeight:800,color:C.gold}}>{minFmt(totais.previsto)}</div></Card>
+          <Card style={{padding:14}}><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",fontWeight:700}}>Realizado</div><div style={{fontSize:22,fontWeight:800,color:C.grn}}>{minFmt(totais.realizado)}</div></Card>
+          <Card style={{padding:14}}><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",fontWeight:700}}>Alertas</div><div style={{fontSize:22,fontWeight:800,color:totais.alertas?C.red:C.grn}}>{totais.alertas}</div></Card>
+        </div>
+
+        <Card style={{padding:0,overflow:"hidden"}}>
+          <div style={{padding:"10px 16px",background:C.surf,borderBottom:`1px solid ${C.bdr}`,fontSize:12,fontWeight:700,color:C.gold}}>Resumo mensal para financeiro</div>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",minWidth:720}}>
+              <THead cols={["Funcionario","Previsto","Realizado","Saldo","Ausencias","Incompletos","Manuais","Folgas"]}/>
+              <tbody>
+                {dados.map(d=><TRow key={d.user.id} cells={[
+                  <span style={{fontWeight:700,color:C.txt,fontSize:12}}>{d.user.name}<span style={{fontWeight:400,color:C.muted}}> ({d.user.role})</span></span>,
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",color:C.gold}}>{minFmt(d.previsto)}</span>,
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",color:C.grn}}>{minFmt(d.realizado)}</span>,
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",color:d.realizado-d.previsto<0?C.red:C.grn}}>{minFmt(d.realizado-d.previsto)}</span>,
+                  d.ausencias? <Bdg color="red">{d.ausencias}</Bdg>:<span style={{color:C.muted}}>0</span>,
+                  d.incompletos? <Bdg color="ylw">{d.incompletos}</Bdg>:<span style={{color:C.muted}}>0</span>,
+                  d.manuais? <Bdg color="ylw">{d.manuais}</Bdg>:<span style={{color:C.muted}}>0</span>,
+                  d.folgas? <Bdg color="blue">{d.folgas}</Bdg>:<span style={{color:C.muted}}>0</span>,
+                ]}/>)}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>;
+    })()}
 
     {/* ── ABA ESCALA & FOLGAS ── */}
     {tab==="escala"&&<EscalaFolgaTab
