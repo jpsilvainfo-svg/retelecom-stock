@@ -4,14 +4,10 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis
 import * as XLSX from "xlsx";
 import { sbGet, sbSet, sbPing } from "./supabase.js"; // sbPing usado no Diagnóstico
 import { useLS, pushToCloud, queueGet, queueRemove, queueSize } from "./hooks/useLS.js";
+import { useIsMobile } from "./hooks/useIsMobile.js";
 import { C, catColor, consumptionColor, PIE } from "./utils/colors.js";
 import { ALL_MODULES, APP_RELEASE_DATE, APP_VERSION, APP_VERSION_LABEL, DEFAULT_PERMS, ROOT_ONLY, SESSION_TTL } from "./utils/constants.js";
-
-const uid=()=>crypto.randomUUID();
-const now=()=>new Date().toLocaleString("pt-BR");
-const today=()=>new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})+" - "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
-const fmt=(n)=>new Intl.NumberFormat("pt-BR").format(n??0);
-const useIsMobile=()=>{const[m,setM]=useState(()=>window.innerWidth<768);useEffect(()=>{const h=()=>setM(window.innerWidth<768);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);return m;};
+import { fmt, now, today, uid } from "./utils/formatters.js";
 
 // ── SEGURANÇA: Hashing de senhas (PBKDF2 + SHA-256, nativo do browser) ──
 // ── NOTIFICAÇÕES PUSH DO BROWSER ─────────────────────────────────────────
