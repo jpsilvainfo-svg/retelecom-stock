@@ -23,7 +23,6 @@ As variáveis de ambiente devem ser configuradas diretamente no painel do Vercel
 VITE_SUPABASE_URL = https://enwlwudxtxpebxqfzkku.supabase.co
 VITE_SUPABASE_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 TELEGRAM_TOKEN = 8575341005:AAE_71QUDdOq48ZFBllDuSeVHr37dfR2qmM
-GROQ_API_KEY = (sua chave GROQ aqui)
 ```
 
 5. **Salve** e redeploye
@@ -54,7 +53,6 @@ Crie na raiz do projeto:
 VITE_SUPABASE_URL=https://enwlwudxtxpebxqfzkku.supabase.co
 VITE_SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 TELEGRAM_TOKEN=8575341005:AAE_71QUDdOq48ZFBllDuSeVHr37dfR2qmM
-GROQ_API_KEY=...
 ```
 
 ⚠️ **ADICIONE AO .gitignore:**
@@ -73,7 +71,6 @@ GROQ_API_KEY=...
 | `VITE_SUPABASE_URL` | https://enwlwudxtxpebxqfzkku.supabase.co | Build + Runtime |
 | `VITE_SUPABASE_KEY` | eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... | Build + Runtime |
 | `TELEGRAM_TOKEN` | 8575341005:AAE_71QUDdOq48ZFBllDuSeVHr37dfR2qmM | Runtime |
-| `GROQ_API_KEY` | (sua chave) | Runtime |
 
 ---
 
