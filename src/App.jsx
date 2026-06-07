@@ -7206,14 +7206,12 @@ function EditarHora({reg,onSave,onDelete}){
 
 
 function InstallAppButton({isMobile}){
+  const isStandalone=()=>window.matchMedia?.("(display-mode: standalone)")?.matches||window.navigator.standalone===true;
   const[deferredPrompt,setDeferredPrompt]=useState(null);
   const[show,setShow]=useState(false);
-  const[installed,setInstalled]=useState(false);
+  const[installed,setInstalled]=useState(()=>isStandalone());
 
   useEffect(()=>{
-    const isStandalone=()=>window.matchMedia?.("(display-mode: standalone)")?.matches||window.navigator.standalone===true;
-    if(isStandalone()){setInstalled(true);return;}
-
     const beforeInstall=(event)=>{
       event.preventDefault();
       setDeferredPrompt(event);
