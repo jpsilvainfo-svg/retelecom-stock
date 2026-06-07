@@ -7,7 +7,7 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 export default defineConfig([
   globalIgnores(['dist', 'online_snapshots', 'temp_backup', 'src/**/*.bak-*']),
   {
-    files: ['src/App.jsx', 'src/main.jsx', 'src/supabase.js'],
+    files: ['src/**/*.{js,jsx}'],
     extends: [
       js.configs.recommended,
       reactHooks.configs.flat.recommended,
@@ -21,6 +21,7 @@ export default defineConfig([
       'no-unused-vars': 'off',
       'no-empty': 'off',
       'react-hooks/static-components': 'off',
+      'react-hooks/refs': 'off',
       'react-refresh/only-export-components': 'off',
     },
   },
