@@ -1,5 +1,5 @@
 // src/hooks/useLS.js — sincronização local ↔ Supabase com retry e timestamp imediato
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { sbGet, sbSet } from "../supabase";
 
 const tsKey = k => `${k}__ts`;
@@ -61,14 +61,15 @@ export async function pushToCloud(key, value) {
 
 // ── Hook principal ────────────────────────────────────────────────────────
 export const useLS = (key, initial) => {
+  const initialRef = useRef(initial);
   const [val, setVal] = useState(() => {
     try {
       const s = localStorage.getItem(key);
-      if (!s) return initial;
+      if (!s) return initialRef.current;
       const parsed = JSON.parse(s);
-      const safe = safeValue(parsed, initial);
-      return safe !== null ? safe : initial;
-    } catch { return initial; }
+      const safe = safeValue(parsed, initialRef.current);
+      return safe !== null ? safe : initialRef.current;
+    } catch { return initialRef.current; }
   });
 
   // Ao montar: sincroniza com Supabase
@@ -79,7 +80,7 @@ export const useLS = (key, initial) => {
 
       if (remote && !remote.empty && remote.value !== null) {
         const remoteTs = remote.updated_at || "0";
-        const safe = safeValue(remote.value, initial);
+        const safe = safeValue(remote.value, initialRef.current);
         if (safe === null) return; // tipo incompatível, ignora
 
         if (remoteTs > localTs) {
@@ -100,7 +101,7 @@ export const useLS = (key, initial) => {
         try { pushToCloud(key, JSON.parse(localRaw)); } catch {}
       }
     }).catch(() => {});
-  }, [key]); // eslint-disable-line
+  }, [key]);
 
   const set = useCallback((v) => {
     setVal(prev => {

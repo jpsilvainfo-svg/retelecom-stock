@@ -7,7 +7,8 @@
     "dev": "vite --configLoader runner",
     "build": "vite build --configLoader runner",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "notify:change": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/notify-telegram-change.ps1 -Event manual"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.1",

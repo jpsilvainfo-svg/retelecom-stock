@@ -1,5 +1,5 @@
 ﻿// StockTel v1.3.1 - sistema de estoque, frota, ponto e operacao tecnica
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
 import * as XLSX from "xlsx";
 import { sbGet, sbSet, sbPing } from "./supabase.js"; // sbPing usado no Diagnóstico
@@ -2143,33 +2143,33 @@ function RelPage({stock,os,returns,users,nf,isMobile,currentUser,abastecimentos=
   };
 
   // ── Filtragem por data ──
-  const parseDateBR=(dateStr)=>{
+  const parseDateBR=useCallback((dateStr)=>{
     if(!dateStr)return null;
     // formato DD/MM/YYYY HH:MM ou DD/MM/YYYY
     const parts=dateStr.split(" ")[0].split("/");
     if(parts.length===3)return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
     // formato YYYY-MM-DD
     return new Date(dateStr);
-  };
-  const inRange=(dateStr)=>{
+  },[]);
+  const inRange=useCallback((dateStr)=>{
     const d=parseDateBR(dateStr);
     if(!d)return true;
     const ini=new Date(dtInicio+"T00:00:00");
     const fim=new Date(dtFim+"T23:59:59");
     return d>=ini&&d<=fim;
-  };
+  },[parseDateBR,dtInicio,dtFim]);
 
   const viewOs=useMemo(()=>{
     const base=isTec?os.filter(o=>o.uid===currentUser.id):os;
     return base.filter(o=>inRange(o.date));
-  },[os,dtInicio,dtFim,isTec,currentUser]);
+  },[os,isTec,currentUser,inRange]);
 
   const viewRet=useMemo(()=>{
     const base=isTec?returns.filter(r=>r.uid===currentUser.id):returns;
     return base.filter(r=>inRange(r.date));
-  },[returns,dtInicio,dtFim,isTec,currentUser]);
+  },[returns,isTec,currentUser,inRange]);
 
-  const viewNF=useMemo(()=>nf.filter(n=>inRange(n.date)),[nf,dtInicio,dtFim]);
+  const viewNF=useMemo(()=>nf.filter(n=>inRange(n.date)),[nf,inRange]);
 
   const catData=useMemo(()=>{const m={};stock.forEach(s=>{m[s.cat]=(m[s.cat]||0)+s.qty;});return Object.entries(m).map(([name,value])=>({name,value}));},[stock]);
   const matData=useMemo(()=>{const m={};viewOs.forEach(o=>o.items.forEach(it=>{m[it.sid]=(m[it.sid]||0)+it.qty;}));return Object.entries(m).map(([sid,value])=>{const s=stock.find(x=>x.id===sid);return{name:s?.name?.split(" ").slice(0,2).join(" ")||sid,value};}).sort((a,b)=>b.value-a.value);},[viewOs,stock]);
@@ -3091,14 +3091,14 @@ function AdminRelPage({nf,stock,os,returns,tstock,users,solicitacoes,isMobile,ad
     else if(p==="tudo"){setDtInicio("2020-01-01");setDtFim("2099-12-31");}
   };
 
-  const parseDateBR=(s)=>{if(!s)return null;const p=s.split(" ")[0].split("/");if(p.length===3)return new Date(`${p[2]}-${p[1]}-${p[0]}`);return new Date(s);};
-  const inRange=(s)=>{const d=parseDateBR(s);if(!d)return true;return d>=new Date(dtInicio+"T00:00:00")&&d<=new Date(dtFim+"T23:59:59");};
+  const parseDateBR=useCallback((s)=>{if(!s)return null;const p=s.split(" ")[0].split("/");if(p.length===3)return new Date(`${p[2]}-${p[1]}-${p[0]}`);return new Date(s);},[]);
+  const inRange=useCallback((s)=>{const d=parseDateBR(s);if(!d)return true;return d>=new Date(dtInicio+"T00:00:00")&&d<=new Date(dtFim+"T23:59:59");},[parseDateBR,dtInicio,dtFim]);
   const periodoLabel=dtInicio===dtFim?dtInicio.split("-").reverse().join("/"):`${dtInicio.split("-").reverse().join("/")} a ${dtFim.split("-").reverse().join("/")}`;
 
   // ── Cálculos financeiros ──
-  const viewNFAdmin=useMemo(()=>nf.filter(n=>inRange(n.date)),[nf,dtInicio,dtFim]);
-  const viewOsAdmin=useMemo(()=>os.filter(o=>inRange(o.date)),[os,dtInicio,dtFim]);
-  const viewRetAdmin=useMemo(()=>returns.filter(r=>inRange(r.date)),[returns,dtInicio,dtFim]);
+  const viewNFAdmin=useMemo(()=>nf.filter(n=>inRange(n.date)),[nf,inRange]);
+  const viewOsAdmin=useMemo(()=>os.filter(o=>inRange(o.date)),[os,inRange]);
+  const viewRetAdmin=useMemo(()=>returns.filter(r=>inRange(r.date)),[returns,inRange]);
 
   const gastoPorMes=useMemo(()=>{
     const m={};
@@ -3152,7 +3152,7 @@ function AdminRelPage({nf,stock,os,returns,tstock,users,solicitacoes,isMobile,ad
       const totalOsMat=myOs.reduce((a,o)=>a+o.items.reduce((b,i)=>b+i.qty,0),0);
       return{...u,qtdOS:myOs.length,matEmPosse:totalMat,matUsado:totalOsMat,devs:myDev.length,sols:mySol.length};
     }).sort((a,b)=>b.qtdOS-a.qtdOS);
-  },[users,viewOsAdmin,tstock,viewRetAdmin,solicitacoes,dtInicio,dtFim]);
+  },[users,viewOsAdmin,tstock,viewRetAdmin,solicitacoes]);
 
   const totalGasto=viewNFAdmin.reduce((a,n)=>a+(n.total||0),0);
   const totalNFs=viewNFAdmin.length;
@@ -3164,20 +3164,20 @@ function AdminRelPage({nf,stock,os,returns,tstock,users,solicitacoes,isMobile,ad
 
   // ── Gastos da frota no Relatório Administrativo ──
   const fmtMoeda=(n)=>"R$ "+new Intl.NumberFormat("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
-  const veicById=(id)=>veiculos.find(v=>v.id===id)||{};
-  const custoManut=(o)=>{
+  const veicById=useCallback((id)=>veiculos.find(v=>v.id===id)||{},[veiculos]);
+  const custoManut=useCallback((o)=>{
     const pecas=o.pecas?.reduce((s,p)=>s+(parseFloat(p.valor)||0)*(parseInt(p.qtd)||1),0)||0;
     return pecas+(parseFloat(o.valorMaoObra)||0)+(parseFloat(o.valorTotal)||0)+(parseFloat(o.custo)||0);
-  };
-  const viewAbastAdmin=useMemo(()=>abastecimentos.filter(a=>inRange(a.dtAbast||a.date||a.data)),[abastecimentos,dtInicio,dtFim]);
-  const viewManutAdmin=useMemo(()=>manutOS.filter(o=>inRange(o.dtEntrada||o.dtSaida||o.date||o.data)),[manutOS,dtInicio,dtFim]);
+  },[]);
+  const viewAbastAdmin=useMemo(()=>abastecimentos.filter(a=>inRange(a.dtAbast||a.date||a.data)),[abastecimentos,inRange]);
+  const viewManutAdmin=useMemo(()=>manutOS.filter(o=>inRange(o.dtEntrada||o.dtSaida||o.date||o.data)),[manutOS,inRange]);
   const totalCombFrota=viewAbastAdmin.reduce((s,a)=>s+(parseFloat(a.valor)||0),0);
   const totalManutFrota=viewManutAdmin.reduce((s,o)=>s+custoManut(o),0);
   const totalGeralFrota=totalCombFrota+totalManutFrota;
   const fotosFrota=useMemo(()=>[
     ...viewAbastAdmin.filter(a=>a.foto).map(a=>({tipo:"Abastecimento",data:a.dtAbast||a.date||a.data,veiculo:veicById(a.veiculoId),valor:parseFloat(a.valor)||0,foto:a.foto,desc:a.posto||a.combustivel||"Comprovante"})),
     ...viewManutAdmin.flatMap(o=>(o.fotos||o.fotosComprovante||o.fotosServico||[]).filter(Boolean).map(f=>({tipo:"Manutenção",data:o.dtEntrada||o.dtSaida||o.date||o.data,veiculo:veicById(o.veiculoId),valor:custoManut(o),foto:f,desc:o.descricao||o.tipo||"Comprovante"})))
-  ],[viewAbastAdmin,viewManutAdmin,veiculos]);
+  ],[viewAbastAdmin,viewManutAdmin,veicById,custoManut]);
   const gastosFrotaPorVeiculo=useMemo(()=>{
     const map={};
     veiculos.forEach(v=>{map[v.id]={id:v.id,placa:v.placa,modelo:v.modelo,combustivel:0,manutencao:0,total:0,qtdAbast:0,qtdManut:0,fotos:0};});
@@ -3192,7 +3192,7 @@ function AdminRelPage({nf,stock,os,returns,tstock,users,solicitacoes,isMobile,ad
       map[id].manutencao+=custoManut(o); map[id].qtdManut+=1; map[id].fotos+=(o.fotos||o.fotosComprovante||o.fotosServico||[]).filter(Boolean).length;
     });
     return Object.values(map).map(v=>({...v,total:v.combustivel+v.manutencao})).sort((a,b)=>b.total-a.total);
-  },[veiculos,viewAbastAdmin,viewManutAdmin]);
+  },[veiculos,viewAbastAdmin,viewManutAdmin,veicById,custoManut]);
 
   // ── Gera PDF Profissional ──
   const gerarPDF=()=>{
@@ -4293,12 +4293,12 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
   const PNEU_COLOR={ok:C.grn,baixo:C.ylw,problema:C.red};
   const PNEU_ICON={ok:"✅",baixo:"⚠️",problema:"❌"};
 
-  const hoje=new Date();
-  const diasAte=(dataStr)=>{
+  const hoje=useMemo(()=>new Date(),[]);
+  const diasAte=useCallback((dataStr)=>{
     if(!dataStr)return null;
     const d=new Date(dataStr);
     return Math.floor((d-hoje)/(1000*60*60*24));
-  };
+  },[hoje]);
 
   const blankVeic=()=>({id:uid(),placa:"",modelo:"",ano:"",cor:"",tecnicoId:"",dtAquisicao:"",kmCadastro:"",status:"ativo",obs:"",fotos:["","","",""],docPDF:"",vencIPVA:"",vencLicenc:"",vencSeguro:""});
   const blankAbast=()=>({id:uid(),veiculoId:"",tecnicoId:currentUser.id,dtAbast:hoje.toISOString().slice(0,10),odometro:"",litros:"",valor:"",combustivel:"gasolina",posto:"",foto:"",obs:""});
@@ -4315,18 +4315,18 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
   const[selVeicHist,setSelVeicHist]=useState("");
 
   // ── KM helpers ──
-  const getKmAtual=(veicId)=>{
+  const getKmAtual=useCallback((veicId)=>{
     const regs=[...abastecimentos.filter(a=>a.veiculoId===veicId&&parseInt(a.odometro)>0),...checkouts.filter(c=>c.veiculoId===veicId&&parseInt(c.km)>0)];
     if(!regs.length){const v=veiculos.find(x=>x.id===veicId);return parseInt(v?.kmCadastro)||0;}
     return Math.max(...regs.map(r=>parseInt(r.odometro||r.km)||0));
-  };
-  const getAlertaOleo=(veic)=>{
+  },[abastecimentos,checkouts,veiculos]);
+  const getAlertaOleo=useCallback((veic)=>{
     const kmAtual=getKmAtual(veic.id);
     const kmBase=parseInt(veic.kmCadastro)||0;
     const proxima=Math.ceil((kmAtual-kmBase+1)/10000)*10000+kmBase;
     const faltam=proxima-kmAtual;
     return{kmAtual,faltam,urgente:faltam<=500,alerta:faltam<=2000};
-  };
+  },[getKmAtual]);
 
   // ── Consumo médio ──
   const getConsumo=(veicId)=>{
@@ -4369,7 +4369,7 @@ function FrotaPage({veiculos,setVeiculos,abastecimentos,setAbastecimentos,checko
     const solsAbertas=manutSols.filter(s=>s.status==="aberta").length;
     if(solsAbertas>0) notifs.push({tipo:"info",msg:`📋 ${solsAbertas} solicitação(ões) de manutenção aguardando análise`,icon:"🔧"});
     return notifs;
-  },[veiculos,abastecimentos,checkouts,manutSols]);
+  },[veiculos,manutSols,diasAte,getAlertaOleo]);
 
   // ── Gastos mensais combustível ──
   const gastosMensisComb=useMemo(()=>{
@@ -7217,7 +7217,7 @@ function AppInner(){
         user:user?{id:user.id,name:user.name,login:user.login,role:user.role,email:user.email}:null
       })
     }).catch(()=>{});
-  },[user?.id,user?.login]);
+  },[user]);
 
   // Meu Perfil
   const[npwd,setNpwd]=useState("");
@@ -7248,7 +7248,7 @@ function AppInner(){
       });
       return updated.length!==prev.length?updated:prev;
     });
-  },[]);
+  },[setUsers]);
 
   // Reset solicitado dos acessos originais. Mantem o usuario root exatamente como esta.
   useEffect(()=>{
@@ -7269,7 +7269,7 @@ function AppInner(){
       setUsersResetVersion(RESET_VERSION);
     },2500);
     return()=>clearTimeout(t);
-  },[usersResetVersion]);
+  },[usersResetVersion,setUsers,setUsersResetVersion]);
 
   // Migração de permissões — adiciona módulos novos a usuários existentes
   useEffect(()=>{
@@ -7288,7 +7288,7 @@ function AppInner(){
       });
       return changed?updated:prev;
     });
-  },[]);
+  },[setUsers]);
 
   // Remove módulos root-only de TODOS os usuários exceto o usuário root (login="root")
   useEffect(()=>{
@@ -7302,7 +7302,7 @@ function AppInner(){
       });
       return changed?updated:prev;
     });
-  },[]);
+  },[setUsers]);
 
   // ── ALERTAS AUTOMÁTICOS DE ESTOQUE CRÍTICO VIA TELEGRAM ──
   const tgCfg=customization?.telegram;
@@ -7326,7 +7326,7 @@ function AppInner(){
     }
     msg+=`\n⏰ ${new Date().toLocaleString("pt-BR")}`;
     notificar(msg,tgCfg);
-  },[stock,tgCfg?.ativo]);
+  },[stock,tgCfg]);
 
   // ── FUNÇÕES E LÓGICA (após hooks) ──
   const goPage=(p)=>{setPage(p);try{localStorage.setItem("re_page",p);}catch{}};
