@@ -49,8 +49,8 @@
 ### **Opção 1: Via curl (linha de comando)**
 
 ```bash
-TOKEN="8575341005:AAE_71QUDdOq48ZFBllDuSeVHr37dfR2qmM"
-CHAT_IDS="236353850 7858844640"
+TOKEN="$TELEGRAM_TOKEN"
+CHAT_IDS="$TELEGRAM_EXTRA_1 $TELEGRAM_EXTRA_2"
 
 MESSAGE="sua_mensagem_aqui"
 
