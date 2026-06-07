@@ -22,6 +22,10 @@ const DATA_KEYS = [
   "re_cats",
   "re_produtos",
   "re_customization",
+  "re_support_tickets",
+  "re_access_logs",
+  "re_access_daily",
+  "re_security_alerts",
 ];
 
 const DEFAULT_BACKUP_RECIPIENTS = ["236353850", "7858844640"];

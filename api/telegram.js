@@ -1,6 +1,8 @@
 // api/telegram.js — comandos interativos do bot Telegram StockTel
 const SUPA_URL = process.env.VITE_SUPABASE_URL || "https://enwlwudxtxpebxqfzkku.supabase.co";
 const SUPA_KEY = process.env.VITE_SUPABASE_KEY;
+const SITE_URL = process.env.PUBLIC_SITE_URL || "https://retelecom-stock.vercel.app";
+const GITHUB_REPO = process.env.GITHUB_REPOSITORY || "jpsilvainfo-svg/retelecom-stock";
 
 const AUTHORIZED_IDS = [
   "-1003823794117",
@@ -22,6 +24,10 @@ const COMMANDS = [
   ["/backup", "Gera backup e envia aos responsaveis"],
   ["/assumir", "Assume um chamado de suporte"],
   ["/fechar", "Fecha um chamado de suporte"],
+  ["/supabase_teste", "Testa banco Supabase"],
+  ["/github_teste", "Testa GitHub Actions"],
+  ["/vercel_teste", "Testa deploy Vercel"],
+  ["/teste_integracoes", "Testa Supabase, GitHub e Vercel"],
   ["/versao", "Versao publicada"],
   ["/ajuda", "Lista de comandos"],
 ];
@@ -47,6 +53,16 @@ function nowBR() {
   return new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
 }
 
+async function timed(label, fn) {
+  const started = Date.now();
+  try {
+    const result = await fn();
+    return { label, ok: true, ms: Date.now() - started, ...result };
+  } catch (error) {
+    return { label, ok: false, ms: Date.now() - started, error: error.message };
+  }
+}
+
 function diaSemanaBR() {
   const dias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
   const br = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
@@ -64,6 +80,61 @@ async function sbGet(key) {
   } catch {
     return null;
   }
+}
+
+async function testSupabase() {
+  if (!SUPA_KEY) throw new Error("VITE_SUPABASE_KEY ausente no ambiente");
+  const r = await fetch(`${SUPA_URL}/rest/v1/re_data?select=key,updated_at&limit=1`, {
+    headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` },
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const data = await r.json();
+  return { status: r.status, rows: Array.isArray(data) ? data.length : 0, host: new URL(SUPA_URL).host };
+}
+
+async function testVercel() {
+  const r = await fetch(SITE_URL, { method: "GET" });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const text = await r.text();
+  const title = text.match(/<title>(.*?)<\/title>/i)?.[1] || "sem titulo";
+  return { status: r.status, title, host: new URL(SITE_URL).host };
+}
+
+async function testGitHub() {
+  const r = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/actions/runs?per_page=1`, {
+    headers: { "User-Agent": "StockTel-Bot", Accept: "application/vnd.github+json" },
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const data = await r.json();
+  const run = data.workflow_runs?.[0];
+  return {
+    status: r.status,
+    workflow: run?.name || "sem workflow",
+    conclusion: run?.conclusion || run?.status || "desconhecido",
+    branch: run?.head_branch || "main",
+  };
+}
+
+function integrationLine(item) {
+  const status = item.ok ? "OK" : "ERRO";
+  const detail = item.ok
+    ? [item.status && `HTTP ${item.status}`, item.ms && `${item.ms}ms`, item.workflow && `${item.workflow}: ${item.conclusion}`, item.title && `titulo: ${item.title}`].filter(Boolean).join(" | ")
+    : `${item.ms}ms | ${item.error}`;
+  return `<b>${esc(item.label)}:</b> ${status}${detail ? ` - ${esc(detail)}` : ""}`;
+}
+
+async function integrationTestText(target = "all") {
+  const jobs = [];
+  if (target === "all" || target === "supabase") jobs.push(timed("Supabase", testSupabase));
+  if (target === "all" || target === "github") jobs.push(timed("GitHub", testGitHub));
+  if (target === "all" || target === "vercel") jobs.push(timed("Vercel", testVercel));
+  const results = await Promise.all(jobs);
+  const ok = results.every(r => r.ok);
+  return `<b>StockTel - Teste de integracoes</b>\n\n` +
+    `<b>Status geral:</b> ${ok ? "OK" : "ATENCAO"}\n` +
+    `<b>Horario:</b> ${esc(nowBR())}\n\n` +
+    results.map(integrationLine).join("\n") +
+    `\n\n${ok ? "Tudo respondeu corretamente." : "Existe falha em uma ou mais integracoes."}`;
 }
 
 async function loadData() {
@@ -233,12 +304,17 @@ function frotaText(d) {
 }
 
 async function handleCommand(text, msg = null) {
-  const cmd = String(text || "").trim().split(/\s+/)[0].split("@")[0].toLowerCase();
+  const normalized = String(text || "").trim().toLowerCase();
+  const cmd = normalized.split(/\s+/)[0].split("@")[0];
   if (!cmd || cmd === "/start" || cmd === "/ajuda" || cmd === "/comandos") return helpText();
   if (cmd === "/versao") return `<b>StockTel</b>\nVersao: <b>v1.3.1</b>\nAtualizado em: 06/06/2026`;
   if (cmd === "/backup") return triggerBackupText();
   if (cmd === "/assumir") return supportActionText("assign", text, msg);
   if (cmd === "/fechar") return supportActionText("close", text, msg);
+  if (cmd === "/supabase_teste" || normalized === "supabase teste" || normalized === "subase teste") return integrationTestText("supabase");
+  if (cmd === "/github_teste" || normalized === "github teste" || normalized === "gente teste" || normalized === "genthub teste") return integrationTestText("github");
+  if (cmd === "/vercel_teste" || normalized === "vercel teste" || normalized === "vencer teste" || normalized === "vence teste") return integrationTestText("vercel");
+  if (cmd === "/teste_integracoes" || normalized === "teste integracoes" || normalized === "teste integrações") return integrationTestText("all");
 
   const d = await loadData();
   if (cmd === "/status") return statusText(d);
