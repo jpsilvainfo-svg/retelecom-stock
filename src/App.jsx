@@ -21,6 +21,9 @@ import EstoqueModule from "./modules/estoque/EstoquePage.jsx";
 import KitModule from "./modules/estoque/KitPage.jsx";
 import DistModule from "./modules/estoque/DistPage.jsx";
 import NFModule from "./modules/estoque/NFPage.jsx";
+import PontoModule from "./modules/grandes/PontoPage.jsx";
+import FrotaModule from "./modules/grandes/FrotaPage.jsx";
+import RelatoriosModule from "./modules/grandes/RelatoriosPage.jsx";
 
 // ── SEGURANÇA: Hashing de senhas (PBKDF2 + SHA-256, nativo do browser) ──
 // ── NOTIFICAÇÕES PUSH DO BROWSER ─────────────────────────────────────────
@@ -7578,15 +7581,15 @@ function AppInner(){
     dev:<DevModule {...p}/>,
     sol:<SolicitacaoModule solicitacoes={solicitacoes} setSolicitacoes={setSolicitacoes} stock={stock} setStock={setStock} tstock={tstock} setTstock={setTstock} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
     nf:<NFModule nf={nf} setNf={setNf} stock={stock} setStock={setStock} addLog={addLog} currentUser={user} isMobile={isMobile}/>,
-    rel:<RelPage stock={stock} os={os} returns={returns} users={users} nf={nf} isMobile={isMobile} currentUser={user} abastecimentos={abastecimentos} manutOS={manutOS} veiculos={veiculos}/>,
+    rel:<RelatoriosModule stock={stock} os={os} returns={returns} users={users} nf={nf} isMobile={isMobile} currentUser={user} abastecimentos={abastecimentos} manutOS={manutOS} veiculos={veiculos}/>,
     email:<AdminRelPage nf={nf} stock={stock} os={os} returns={returns} tstock={tstock} users={users} solicitacoes={solicitacoes} isMobile={isMobile} addLog={addLog} veiculos={veiculos} abastecimentos={abastecimentos} manutOS={manutOS}/>,
     cat:<CatPage cats={cats} setCats={setCats} isMobile={isMobile}/>,
     produtos:<ProdutosPage produtos={produtos} setProdutos={setProdutos} cats={cats} isMobile={isMobile}/>,
     usr:<UsrPage users={users} setUsers={setUsers} addLog={addLog} currentUser={user} isMobile={isMobile}/>,
     log:<LogPage logs={logs} isMobile={isMobile}/>,
     ajuda:<HelpPage currentUser={user} isMobile={isMobile}/>,
-    ponto:<PontoPage pontos={pontos} setPontos={setPontos} pontoConfig={pontoConfig} setPontoConfig={setPontoConfig} pontoSolicits={pontoSolicits} setPontoSolicits={setPontoSolicits} pontoFechamentos={pontoFechamentos} setPontoFechamentos={setPontoFechamentos} escalas={escalas} setEscalas={setEscalas} folgas={folgas} setFolgas={setFolgas} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} showToast={showToast}/>,
-    frota:<FrotaPage veiculos={veiculos} setVeiculos={setVeiculos} abastecimentos={abastecimentos} setAbastecimentos={setAbastecimentos} checkouts={checkouts} setCheckouts={setCheckouts} pneus={pneus} setPneus={setPneus} docsVeic={docsVeic} setDocsVeic={setDocsVeic} manutOS={manutOS} setManutOS={setManutOS} manutSols={manutSols} setManutSols={setManutSols} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
+    ponto:<PontoModule pontos={pontos} setPontos={setPontos} pontoConfig={pontoConfig} setPontoConfig={setPontoConfig} pontoSolicits={pontoSolicits} setPontoSolicits={setPontoSolicits} pontoFechamentos={pontoFechamentos} setPontoFechamentos={setPontoFechamentos} escalas={escalas} setEscalas={setEscalas} folgas={folgas} setFolgas={setFolgas} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} showToast={showToast}/>,
+    frota:<FrotaModule veiculos={veiculos} setVeiculos={setVeiculos} abastecimentos={abastecimentos} setAbastecimentos={setAbastecimentos} checkouts={checkouts} setCheckouts={setCheckouts} pneus={pneus} setPneus={setPneus} docsVeic={docsVeic} setDocsVeic={setDocsVeic} manutOS={manutOS} setManutOS={setManutOS} manutSols={manutSols} setManutSols={setManutSols} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
     manut:<ManutencaoPage manutSols={manutSols} setManutSols={setManutSols} manutOS={manutOS} setManutOS={setManutOS} veiculos={veiculos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} abastecimentos={abastecimentos} pneus={pneus}/>,
     diag:<DiagnosticoModule currentUser={user} isMobile={isMobile}/>,
     customize:<CustomizeModule currentUser={user} isMobile={isMobile} customization={customization} setCustomization={setCustomization}/>,

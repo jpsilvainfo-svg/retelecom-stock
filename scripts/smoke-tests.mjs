@@ -12,6 +12,9 @@ const mustExist = [
   "src/modules/estoque/KitPage.jsx",
   "src/modules/estoque/DistPage.jsx",
   "src/modules/estoque/NFPage.jsx",
+  "src/modules/grandes/PontoPage.jsx",
+  "src/modules/grandes/FrotaPage.jsx",
+  "src/modules/grandes/RelatoriosPage.jsx",
   "src/hooks/useLS.js",
   "api/notify-progress.js",
   "scripts/notify-telegram-change.ps1",
@@ -46,5 +49,8 @@ assert.match(app, /EstoqueModule/, "Estoque base deve usar modulo extraido");
 assert.match(app, /KitModule/, "Kit tecnico deve usar modulo extraido");
 assert.match(app, /DistModule/, "Saida/liberacao deve usar modulo extraido");
 assert.match(app, /NFModule/, "Entrada NF deve usar modulo extraido");
+assert.match(app, /PontoModule/, "Ponto eletronico deve usar modulo extraido");
+assert.match(app, /FrotaModule/, "Frota deve usar modulo extraido");
+assert.match(app, /RelatoriosModule/, "Relatorios deve usar modulo extraido");
 
 console.log("StockTel smoke tests OK");
