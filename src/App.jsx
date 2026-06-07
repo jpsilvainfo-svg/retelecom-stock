@@ -4,82 +4,9 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis
 import * as XLSX from "xlsx";
 import { sbGet, sbSet, sbPing } from "./supabase.js"; // sbPing usado no Diagnóstico
 import { useLS, pushToCloud, queueGet, queueRemove, queueSize } from "./hooks/useLS.js";
+import { C, catColor, consumptionColor, PIE } from "./utils/colors.js";
+import { ALL_MODULES, APP_RELEASE_DATE, APP_VERSION, APP_VERSION_LABEL, DEFAULT_PERMS, ROOT_ONLY, SESSION_TTL } from "./utils/constants.js";
 
-const APP_VERSION="1.3.1";
-const APP_VERSION_LABEL=`v${APP_VERSION}`;
-const APP_RELEASE_DATE="06/06/2026";
-
-const C={
-  bg:"#070707",
-  surf:"#101010",
-  card:"#171717",
-  card2:"#1d1d1f",
-  bdr:"#2d2d2d",
-  bdr2:"#3a3a3a",
-  gold:"#d10000",
-  goldD:"#d1000026",
-  goldL:"#ff1a1a",
-  red:"#d10000",
-  redD:"#d1000026",
-  grn:"#00c853",
-  grnD:"#00c85322",
-  ylw:"#ff9800",
-  ylwD:"#ff980022",
-  blue:"#2196f3",
-  blueD:"#2196f322",
-  txt:"#ffffff",
-  txt2:"#d6d6d6",
-  muted:"#9a9a9a",
-  muted2:"#666666",
-  glass:"rgba(20,20,22,.82)",
-  shadow:"0 18px 45px rgba(0,0,0,.45)",
-  glow:"0 0 28px rgba(209,0,0,.20)"
-};
-const PIE=["#d10000","#ff9800","#ffd54f","#00c853","#2196f3","#9c27b0","#9e9e9e","#607d8b"];
-const catColor=(name,i)=>{
-  const n=String(name||"").toLowerCase();
-  if(n.includes("equip"))return "#d10000";
-  if(n.includes("cabo"))return "#2196f3";
-  if(n.includes("conector"))return "#00c853";
-  if(n.includes("caixa"))return "#ff9800";
-  if(n.includes("acess"))return "#ffd54f";
-  if(n.includes("ferrament"))return "#9c27b0";
-  if(n.includes("prevent"))return "#00bcd4";
-  return PIE[i%PIE.length];
-};
-const consumptionColor=(pct)=> pct>=75?"#d10000":pct>=50?"#ff9800":"#00c853";
-const ALL_MODULES=[
-  {k:"dash",l:"Dashboard",icon:"🏠",group:"geral"},
-  {k:"os",l:"Ordens de Serviço",icon:"🔧",group:"operacional"},
-  {k:"frota",l:"Frota",icon:"🚗",group:"operacional"},
-  {k:"estoque",l:"Estoque Base",icon:"📦",group:"estoque"},
-  {k:"kit",l:"Estoque Técnico",icon:"🎒",group:"estoque"},
-  {k:"nf",l:"Entrada de Materiais (NF)",icon:"📥",group:"estoque"},
-  {k:"dist",l:"Saída / Liberação",icon:"🚀",group:"estoque"},
-  {k:"dev",l:"Devoluções",icon:"↩️",group:"operacional"},
-  {k:"sol",l:"Solicitações",icon:"📋",group:"operacional"},
-  {k:"rel",l:"Relatórios",icon:"📊",group:"relatorios"},
-  {k:"email",l:"Relatório Administrativo",icon:"📧",group:"relatorios"},
-  {k:"cat",l:"Categorias",icon:"🏷️",group:"admin"},
-  {k:"produtos",l:"Produtos",icon:"🔩",group:"admin"},
-  {k:"usr",l:"Usuários",icon:"👥",group:"admin"},
-  {k:"log",l:"Logs do Sistema",icon:"📋",group:"admin"},
-  {k:"ajuda",l:"Ajuda / Docs",icon:"❓",group:"admin"},
-  {k:"manut",l:"Manutenção",icon:"🔩",group:"mecanico"},
-  {k:"ponto",l:"Ponto Eletrônico",icon:"🕐",group:"operacional"},
-  {k:"diag",l:"Diagnóstico do Sistema",icon:"🛡️",group:"admin"},
-  {k:"customize",l:"Personalizar Sistema",icon:"🎨",group:"admin"}
-];
-// Módulos exclusivos do usuário ROOT (login="root")
-const ROOT_ONLY=["customize","diag"];
-const DEFAULT_PERMS={
-  superadmin:ALL_MODULES.map(m=>m.k).filter(k=>!ROOT_ONLY.includes(k)),
-  admin:ALL_MODULES.map(m=>m.k).filter(k=>!ROOT_ONLY.includes(k)),
-  estoque:["dash","os","estoque","kit","dist","dev","sol","rel","ajuda","ponto"],
-  tecnico:["dash","os","frota","kit","dev","sol","rel","ajuda","ponto"],
-  financeiro:["dash","nf","rel","email","os","dev","log","ajuda","ponto"],
-  mecanico:["dash","manut","frota","ajuda","ponto"],
-};
 const uid=()=>crypto.randomUUID();
 const now=()=>new Date().toLocaleString("pt-BR");
 const today=()=>new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})+" - "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
@@ -87,8 +14,6 @@ const fmt=(n)=>new Intl.NumberFormat("pt-BR").format(n??0);
 const useIsMobile=()=>{const[m,setM]=useState(()=>window.innerWidth<768);useEffect(()=>{const h=()=>setM(window.innerWidth<768);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);return m;};
 
 // ── SEGURANÇA: Hashing de senhas (PBKDF2 + SHA-256, nativo do browser) ──
-const SESSION_TTL=8*60*60*1000; // 8 horas
-
 // ── NOTIFICAÇÕES PUSH DO BROWSER ─────────────────────────────────────────
 function solicitarPermissaoNotificacao(){
   if("Notification" in window && Notification.permission==="default"){
