@@ -8,6 +8,10 @@ const root = process.cwd();
 const mustExist = [
   "src/App.jsx",
   "src/modules/auth/session.js",
+  "src/modules/estoque/EstoquePage.jsx",
+  "src/modules/estoque/KitPage.jsx",
+  "src/modules/estoque/DistPage.jsx",
+  "src/modules/estoque/NFPage.jsx",
   "src/hooks/useLS.js",
   "api/notify-progress.js",
   "scripts/notify-telegram-change.ps1",
@@ -38,5 +42,9 @@ assert.match(app, /pontoFechamentos/, "Fechamento mensal de ponto deve estar con
 assert.match(app, /exportarExcelPonto/, "Exportacao Excel do ponto deve existir");
 assert.match(app, /Auditoria do Sistema/, "Tela de auditoria deve estar disponivel");
 assert.match(app, /ACTION_LABELS/, "Permissoes por acao devem estar conectadas ao cadastro");
+assert.match(app, /EstoqueModule/, "Estoque base deve usar modulo extraido");
+assert.match(app, /KitModule/, "Kit tecnico deve usar modulo extraido");
+assert.match(app, /DistModule/, "Saida/liberacao deve usar modulo extraido");
+assert.match(app, /NFModule/, "Entrada NF deve usar modulo extraido");
 
 console.log("StockTel smoke tests OK");
