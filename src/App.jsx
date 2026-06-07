@@ -14,6 +14,9 @@ import { fmt, now, today, uid } from "./utils/formatters.js";
 import { hashSenha, sessaoValida, verificarSenha } from "./modules/auth/session.js";
 import DiagnosticoModule from "./modules/diag/Diagnostico.jsx";
 import CustomizeModule from "./modules/customize/Customize.jsx";
+import OSModule from "./modules/operacional/OSPage.jsx";
+import DevModule from "./modules/operacional/DevPage.jsx";
+import SolicitacaoModule from "./modules/operacional/SolicitacaoPage.jsx";
 
 // ── SEGURANÇA: Hashing de senhas (PBKDF2 + SHA-256, nativo do browser) ──
 // ── NOTIFICAÇÕES PUSH DO BROWSER ─────────────────────────────────────────
@@ -7567,9 +7570,9 @@ function AppInner(){
     estoque:<EstoquePage {...p}/>,
     kit:<KitPage tstock={tstock} stock={stock} users={users} currentUser={user} isMobile={isMobile}/>,
     dist:<DistPage {...p} customization={customization}/>,
-    os:<OSPage {...p}/>,
-    dev:<DevPage {...p}/>,
-    sol:<SolicitacaoPage solicitacoes={solicitacoes} setSolicitacoes={setSolicitacoes} stock={stock} setStock={setStock} tstock={tstock} setTstock={setTstock} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
+    os:<OSModule {...p}/>,
+    dev:<DevModule {...p}/>,
+    sol:<SolicitacaoModule solicitacoes={solicitacoes} setSolicitacoes={setSolicitacoes} stock={stock} setStock={setStock} tstock={tstock} setTstock={setTstock} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
     nf:<NFPage nf={nf} setNf={setNf} stock={stock} setStock={setStock} addLog={addLog} currentUser={user} isMobile={isMobile}/>,
     rel:<RelPage stock={stock} os={os} returns={returns} users={users} nf={nf} isMobile={isMobile} currentUser={user} abastecimentos={abastecimentos} manutOS={manutOS} veiculos={veiculos}/>,
     email:<AdminRelPage nf={nf} stock={stock} os={os} returns={returns} tstock={tstock} users={users} solicitacoes={solicitacoes} isMobile={isMobile} addLog={addLog} veiculos={veiculos} abastecimentos={abastecimentos} manutOS={manutOS}/>,
