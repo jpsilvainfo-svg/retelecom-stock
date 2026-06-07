@@ -9,8 +9,9 @@ import { ErrorBoundary, Spinner, Toast } from "./components/feedback.jsx";
 import { BottomNav, MobileDrawer, Sidebar, TopBar } from "./components/Navigation.jsx";
 import { Bdg, Btn, Card, Inp, Modal, Sel, THead, TRow } from "./components/ui.jsx";
 import { C, catColor, consumptionColor, PIE } from "./utils/colors.js";
-import { ALL_MODULES, APP_RELEASE_DATE, APP_VERSION, APP_VERSION_LABEL, DEFAULT_PERMS, ROOT_ONLY, SESSION_TTL } from "./utils/constants.js";
+import { ACTION_LABELS, ALL_MODULES, APP_RELEASE_DATE, APP_VERSION, APP_VERSION_LABEL, DEFAULT_ACTION_PERMS, DEFAULT_PERMS, ROOT_ONLY } from "./utils/constants.js";
 import { fmt, now, today, uid } from "./utils/formatters.js";
+import { hashSenha, sessaoValida, verificarSenha } from "./modules/auth/session.js";
 
 // ── SEGURANÇA: Hashing de senhas (PBKDF2 + SHA-256, nativo do browser) ──
 // ── NOTIFICAÇÕES PUSH DO BROWSER ─────────────────────────────────────────
@@ -51,34 +52,6 @@ async function notificar(mensagem, cfg=null){
       });
     }catch{}
   }
-}
-
-async function hashSenha(senha,saltB64=null){
-  const enc=new TextEncoder();
-  const salt=saltB64
-    ?Uint8Array.from(atob(saltB64),c=>c.charCodeAt(0))
-    :crypto.getRandomValues(new Uint8Array(16));
-  const key=await crypto.subtle.importKey("raw",enc.encode(senha),{name:"PBKDF2"},false,["deriveBits"]);
-  const bits=await crypto.subtle.deriveBits({name:"PBKDF2",salt,iterations:100000,hash:"SHA-256"},key,256);
-  const hashB64=btoa(String.fromCharCode(...new Uint8Array(bits)));
-  const saltResult=btoa(String.fromCharCode(...salt));
-  return{hash:hashB64,salt:saltResult,pbkdf2:true};
-}
-
-async function verificarSenha(senha,usuario){
-  // Senha já criptografada (PBKDF2)
-  if(usuario.passHash&&usuario.passSalt){
-    const{hash}=await hashSenha(senha,usuario.passSalt);
-    return hash===usuario.passHash;
-  }
-  // Senha legada (texto puro) — aceita e agenda migração
-  return senha===usuario.pass;
-}
-
-function sessaoValida(u){
-  if(!u)return false;
-  if(!u.loginAt)return true; // sessões antigas sem timestamp são válidas uma última vez
-  return Date.now()-u.loginAt<SESSION_TTL;
 }
 
 // useLS importado do topo do arquivo
@@ -2624,7 +2597,7 @@ function RelPage({stock,os,returns,users,nf,isMobile,currentUser,abastecimentos=
 /* ── USUÁRIOS ── */
 function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
   const[modal,setModal]=useState(null);
-  const[form,setForm]=useState({name:"",email:"",phone:"",cpf:"",login:"",pass:"",role:"tecnico",photo:"",perms:DEFAULT_PERMS["tecnico"],mustChangePassword:true});
+  const[form,setForm]=useState({name:"",email:"",phone:"",cpf:"",login:"",pass:"",role:"tecnico",photo:"",perms:DEFAULT_PERMS["tecnico"],actionPerms:DEFAULT_ACTION_PERMS["tecnico"],mustChangePassword:true});
   const roles=[{value:"admin",label:"Administrador"},{value:"estoque",label:"Estoque"},{value:"tecnico",label:"Técnico"},{value:"financeiro",label:"Financeiro"},{value:"mecanico",label:"Mecânico"}];
   const isRoot=currentUser?.role==="superadmin";
   const rl={superadmin:"MASTER",admin:"ADM",estoque:"EST",tecnico:"TEC",financeiro:"FIN",mecanico:"MEC"};
@@ -2650,19 +2623,20 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
       if(!form.cnh_categoria?.trim()){alert("Categoria da CNH é obrigatória.");return;}
     }
     const permsToSave=form.perms.length>0?form.perms:DEFAULT_PERMS[form.role]||["dash"];
+    const actionPermsToSave=form.actionPerms||DEFAULT_ACTION_PERMS[form.role]||[];
     if(modal==="new"){
-      setUsers(p=>[...p,{id:uid(),...form,perms:permsToSave}]);
+      setUsers(p=>[...p,{id:uid(),...form,perms:permsToSave,actionPerms:actionPermsToSave}]);
       addLog(currentUser.name,"Usuário Criado",form.name+" ("+form.role+")");
     } else {
       // Admin não pode alterar login/senha de outros usuários — só o próprio ou superadmin
       setUsers(p=>p.map(u=>{
         if(u.id!==modal)return u;
         if(isRoot){
-          return{...u,...form,perms:permsToSave};
+          return{...u,...form,perms:permsToSave,actionPerms:actionPermsToSave};
         }
         // Admin pode editar nome, email, telefone, foto, perfil e permissões
         // mas NÃO pode alterar login ou senha de outros
-        return{...u,name:form.name,email:form.email,phone:form.phone,cpf:form.cpf,role:form.role,photo:form.photo,perms:permsToSave,mustChangePassword:form.mustChangePassword};
+        return{...u,name:form.name,email:form.email,phone:form.phone,cpf:form.cpf,role:form.role,photo:form.photo,perms:permsToSave,actionPerms:actionPermsToSave,mustChangePassword:form.mustChangePassword};
       }));
       addLog(currentUser.name,"Usuário Editado",form.name);
     }
@@ -2672,8 +2646,14 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
   const togglePerm=(k)=>{
     setForm(f=>({...f,perms:f.perms.includes(k)?f.perms.filter(p=>p!==k):[...f.perms,k]}));
   };
+  const toggleAction=(k)=>{
+    setForm(f=>{
+      const cur=f.actionPerms||DEFAULT_ACTION_PERMS[f.role]||[];
+      return {...f,actionPerms:cur.includes(k)?cur.filter(p=>p!==k):[...cur,k]};
+    });
+  };
   const setRoleAndPerms=(role)=>{
-    setForm(f=>({...f,role,perms:DEFAULT_PERMS[role]||["dash"]}));
+    setForm(f=>({...f,role,perms:DEFAULT_PERMS[role]||["dash"],actionPerms:DEFAULT_ACTION_PERMS[role]||[]}));
   };
   const MODULE_GROUPS={geral:"Geral",estoque:"Estoque",operacional:"Operacional",relatorios:"Relatórios",admin:"Administração"};
 
@@ -2689,7 +2669,7 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
   return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
       <div><h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Usuários</h1></div>
-      <Btn color="gold" size={isMobile?"sm":"md"} onClick={()=>{setForm({name:"",email:"",phone:"",cpf:"",login:"",pass:"",role:"tecnico",photo:"",perms:DEFAULT_PERMS["tecnico"],mustChangePassword:true});setModal("new");}}>+ Novo</Btn>
+      <Btn color="gold" size={isMobile?"sm":"md"} onClick={()=>{setForm({name:"",email:"",phone:"",cpf:"",login:"",pass:"",role:"tecnico",photo:"",perms:DEFAULT_PERMS["tecnico"],actionPerms:DEFAULT_ACTION_PERMS["tecnico"],mustChangePassword:true});setModal("new");}}>+ Novo</Btn>
     </div>
     {isMobile?(
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
@@ -2715,7 +2695,7 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6,flexShrink:0}}>
               <span style={{background:rc[u.role],color:"#000",fontSize:9,fontWeight:800,padding:"2px 6px",borderRadius:3}}>{rl[u.role]}</span>
               <div style={{display:"flex",gap:6}}>
-                <Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf||"",login:u.login,pass:u.pass,role:u.role,photo:u.photo||"",perms:u.perms||DEFAULT_PERMS[u.role]||["dash"],mustChangePassword:u.mustChangePassword||false,usa_frota:u.usa_frota||false,cnh_numero:u.cnh_numero||"",cnh_categoria:u.cnh_categoria||"",cnh_validade:u.cnh_validade||"",telegram_chat_id:u.telegram_chat_id||""});setModal(u.id);}}>Editar</Btn>
+                <Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf||"",login:u.login,pass:u.pass,role:u.role,photo:u.photo||"",perms:u.perms||DEFAULT_PERMS[u.role]||["dash"],actionPerms:u.actionPerms||DEFAULT_ACTION_PERMS[u.role]||[],mustChangePassword:u.mustChangePassword||false,usa_frota:u.usa_frota||false,cnh_numero:u.cnh_numero||"",cnh_categoria:u.cnh_categoria||"",cnh_validade:u.cnh_validade||"",telegram_chat_id:u.telegram_chat_id||""});setModal(u.id);}}>Editar</Btn>
                 {u.id!==currentUser.id&&isRoot&&<Btn size="xs" color="red" outline onClick={()=>{if(window.confirm("Remover "+u.name+"?")){setUsers(p=>p.filter(x=>x.id!==u.id));addLog(currentUser.name,"Usuário Removido",u.name);}}}>✕</Btn>}
               </div>
             </div>
@@ -2738,7 +2718,7 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted}}>{u.cpf||"—"}</span>,
                 <span style={{background:rc[u.role]||C.gold,color:u.role==="superadmin"?"#fff":"#000",fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:4}}>{rl[u.role]||u.role}</span>,
                 <div style={{display:"flex",gap:6}}>
-                  {isRoot&&<Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf||"",login:u.login,pass:u.pass,role:u.role,photo:u.photo||"",perms:u.perms||DEFAULT_PERMS[u.role]||["dash"],mustChangePassword:u.mustChangePassword||false});setModal(u.id);}}>Editar</Btn>}
+                  {isRoot&&<Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf||"",login:u.login,pass:u.pass,role:u.role,photo:u.photo||"",perms:u.perms||DEFAULT_PERMS[u.role]||["dash"],actionPerms:u.actionPerms||DEFAULT_ACTION_PERMS[u.role]||[],mustChangePassword:u.mustChangePassword||false});setModal(u.id);}}>Editar</Btn>}
                   {isRoot&&u.role!=="superadmin"&&<Btn size="xs" color="red" outline onClick={()=>{if(window.confirm("Remover "+u.name+"?")){setUsers(p=>p.filter(x=>x.id!==u.id));addLog(currentUser.name,"Usuário Removido",u.name);}}}>✕</Btn>}
                   {!isRoot&&<span style={{fontSize:11,color:C.muted}}>—</span>}
                 </div>
@@ -2839,6 +2819,23 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
           </label>
         </div>
 
+        {/* Permissões por ação sensível */}
+        <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:".06em",textTransform:"uppercase",marginBottom:10}}>🧭 Ações Sensíveis</div>
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:8}}>
+            {Object.entries(ACTION_LABELS).map(([k,label])=>{
+              const enabled=(form.actionPerms||DEFAULT_ACTION_PERMS[form.role]||[]).includes(k);
+              return <div key={k} onClick={()=>toggleAction(k)}
+                style={{display:"flex",alignItems:"center",gap:8,padding:"9px 10px",borderRadius:8,cursor:"pointer",background:enabled?`${C.grn}14`:C.card,border:`1px solid ${enabled?`${C.grn}55`:C.bdr2}`}}>
+                <div style={{width:16,height:16,borderRadius:4,background:enabled?C.grn:C.bdr2,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  {enabled&&<span style={{fontSize:10,color:"#000",fontWeight:800}}>✓</span>}
+                </div>
+                <span style={{fontSize:12,color:enabled?C.txt:C.muted}}>{label}</span>
+              </div>;
+            })}
+          </div>
+        </div>
+
         {/* Permissões por módulo */}
         <div style={{background:C.surf,borderRadius:10,padding:14,border:`1px solid ${C.bdr}`}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
@@ -2888,13 +2885,53 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
 }
 /* ── LOGS ── */
 function LogPage({logs,isMobile}){
+  const[filtroTipo,setFiltroTipo]=useState("");
+  const[filtroTexto,setFiltroTexto]=useState("");
+  const logsOrdenados=[...(logs||[])].sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));
+  const logsFiltrados=logsOrdenados.filter(l=>{
+    const tipoOk=filtroTipo?l.tipo===filtroTipo:true;
+    const alvo=`${l.date||""} ${l.user||""} ${l.action||""} ${l.detail||""} ${l.origin||""}`.toLowerCase();
+    return tipoOk&&alvo.includes(filtroTexto.toLowerCase());
+  });
+  const resumo=logsOrdenados.reduce((acc,l)=>({...acc,[l.tipo||"outro"]:(acc[l.tipo||"outro"]||0)+1}),{});
+  const exportarCSV=()=>{
+    const esc=(v)=>`"${String(v??"").replace(/"/g,'""')}"`;
+    const rows=[["Data","Usuario","Perfil","Acao","Detalhe","Tipo","Origem"],...logsFiltrados.map(l=>[l.date,l.user,l.role,l.action,l.detail,l.tipo,l.origin])];
+    const csv=rows.map(r=>r.map(esc).join(";")).join("\n");
+    const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;a.download=`stocktel-auditoria-${new Date().toISOString().slice(0,10)}.csv`;a.click();
+    URL.revokeObjectURL(url);
+  };
   const tc={saida:C.gold,entrada:C.grn,dev:C.ylw,aprovada:C.grn};
   const ic={saida:"→",entrada:"↓",dev:"↺",aprovada:"✓"};
   return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
-    <h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Logs do Sistema</h1>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:10,flexWrap:"wrap"}}>
+      <div>
+        <h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Auditoria do Sistema</h1>
+        <p style={{fontSize:12,color:C.muted,marginTop:2}}>Trilha de ações operacionais, administrativas e financeiras.</p>
+      </div>
+      <Btn color="gold" size={isMobile?"sm":"md"} onClick={exportarCSV}>Exportar CSV</Btn>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(5,1fr)",gap:10}}>
+      <Card style={{padding:12}}><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",fontWeight:700}}>Eventos</div><div style={{fontSize:22,fontWeight:800,color:C.txt}}>{logsOrdenados.length}</div></Card>
+      {["entrada","saida","dev","aprovada"].map(t=><Card key={t} style={{padding:12}}>
+        <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",fontWeight:700}}>{t}</div>
+        <div style={{fontSize:22,fontWeight:800,color:tc[t]||C.gold}}>{resumo[t]||0}</div>
+      </Card>)}
+    </div>
+    <Card style={{padding:14}}>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"180px 1fr",gap:10}}>
+        <Sel label="Tipo" value={filtroTipo} onChange={setFiltroTipo} options={[
+          {value:"",label:"Todos"},{value:"entrada",label:"Entrada"},{value:"saida",label:"Saida"},{value:"dev",label:"Devolucao/Solicitacao"},{value:"aprovada",label:"Aprovada"},{value:"outro",label:"Outros"}
+        ]}/>
+        <Inp label="Buscar" value={filtroTexto} onChange={setFiltroTexto} placeholder="Usuario, acao, detalhe ou origem"/>
+      </div>
+    </Card>
     {isMobile?(
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {logs.map(l=>(
+        {logsFiltrados.map(l=>(
           <Card key={l.id} style={{padding:14,borderLeft:`3px solid ${tc[l.tipo]||C.gold}`}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:4}}>
               <span style={{fontSize:12,fontWeight:700,color:tc[l.tipo]||C.gold}}>{l.action}</span>
@@ -2902,6 +2939,7 @@ function LogPage({logs,isMobile}){
             </div>
             <div style={{fontSize:12,fontWeight:600,color:C.txt,marginBottom:2}}>{l.user}</div>
             <div style={{fontSize:11,color:C.muted}}>{l.detail}</div>
+            <div style={{fontSize:10,color:C.muted,marginTop:6}}>Origem: {l.origin||"StockTel Web"}</div>
           </Card>
         ))}
       </div>
@@ -2909,16 +2947,17 @@ function LogPage({logs,isMobile}){
       <Card style={{padding:0,overflow:"hidden"}}>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
-            <thead><THead cols={["DATA/HORA","USUÁRIO","AÇÃO","DETALHE"]}/></thead>
-            <tbody>{logs.map(l=>(
+            <thead><THead cols={["DATA/HORA","USUÁRIO","AÇÃO","DETALHE","ORIGEM"]}/></thead>
+            <tbody>{logsFiltrados.map(l=>(
               <TRow key={l.id} cells={[
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted,whiteSpace:"nowrap"}}>{l.date}</span>,
-                <span style={{fontSize:12,fontWeight:600,color:C.txt}}>{l.user}</span>,
+                <span style={{fontSize:12,fontWeight:600,color:C.txt}}>{l.user}<span style={{display:"block",fontSize:10,color:C.muted,fontWeight:400}}>{l.role||""}</span></span>,
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                   <div style={{width:22,height:22,borderRadius:"50%",background:`${tc[l.tipo]||C.gold}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:tc[l.tipo]||C.gold,fontWeight:700}}>{ic[l.tipo]||"·"}</div>
                   <span style={{fontSize:12,fontWeight:600,color:tc[l.tipo]||C.gold}}>{l.action}</span>
                 </div>,
-                <span style={{fontSize:12,color:C.muted}}>{l.detail}</span>
+                <span style={{fontSize:12,color:C.muted}}>{l.detail}</span>,
+                <span style={{fontSize:11,color:C.muted}}>{l.origin||"StockTel Web"}</span>
               ]}/>
             ))}</tbody>
           </table>
@@ -5802,10 +5841,15 @@ function HelpPage({currentUser,isMobile}){
 
 
 /* ── PONTO ELETRÔNICO ── */
-function PontoPage({pontos,setPontos,pontoConfig,setPontoConfig,pontoSolicits,setPontoSolicits,escalas=[],setEscalas,folgas=[],setFolgas,users,currentUser,addLog,isMobile,showToast}){
+function PontoPage({pontos,setPontos,pontoConfig,setPontoConfig,pontoSolicits,setPontoSolicits,pontoFechamentos=[],setPontoFechamentos,escalas=[],setEscalas,folgas=[],setFolgas,users,currentUser,addLog,isMobile,showToast}){
   const isAdm=["admin","superadmin"].includes(currentUser.role);
   const isFinanceiro=currentUser.role==="financeiro";
   const canViewFechamento=isAdm||isFinanceiro;
+  const actionPerms=currentUser.actionPerms||DEFAULT_ACTION_PERMS[currentUser.role]||[];
+  const canExportar=actionPerms.includes("exportar")||isAdm;
+  const canAprovarPonto=actionPerms.includes("aprovar_ponto")||isAdm;
+  const canReabrirPonto=actionPerms.includes("reabrir_ponto")||isAdm;
+  const canEditarPonto=actionPerms.includes("editar_ponto")||isAdm;
   const hoje=new Date().toISOString().slice(0,10);
 
   // ── Haversine ──
@@ -5948,6 +5992,55 @@ function PontoPage({pontos,setPontos,pontoConfig,setPontoConfig,pontoSolicits,se
       };
     });
   };
+  const fechamentoAtual=pontoFechamentos.find(f=>f.mes===fechamentoMes&&(fechamentoUser?f.userId===fechamentoUser:!f.userId));
+  const mesTravado=(uid,iso)=>{
+    const mes=String(iso||new Date().toISOString()).slice(0,7);
+    return pontoFechamentos.some(f=>f.mes===mes&&(!f.userId||f.userId===uid)&&["fechado","aprovado"].includes(f.status));
+  };
+  const salvarFechamento=(status)=>{
+    const dados=montarFechamento();
+    if(!dados.length){showToast("Nenhum funcionario para fechar.","warning");return;}
+    const idAtual=fechamentoAtual?.id||uid();
+    const base={
+      id:idAtual,
+      mes:fechamentoMes,
+      userId:fechamentoUser||"",
+      status,
+      funcionarios:dados.length,
+      previsto:dados.reduce((a,d)=>a+d.previsto,0),
+      realizado:dados.reduce((a,d)=>a+d.realizado,0),
+      alertas:dados.reduce((a,d)=>a+d.ausencias+d.incompletos+d.manuais,0),
+      fechadoPor:fechamentoAtual?.fechadoPor||currentUser.name,
+      fechadoEm:fechamentoAtual?.fechadoEm||new Date().toISOString(),
+      aprovadoPor:status==="aprovado"?currentUser.name:fechamentoAtual?.aprovadoPor,
+      aprovadoEm:status==="aprovado"?new Date().toISOString():fechamentoAtual?.aprovadoEm,
+    };
+    setPontoFechamentos(prev=>[base,...prev.filter(f=>f.id!==idAtual)]);
+    addLog(currentUser.name,status==="aprovado"?"Ponto Fechamento Aprovado":"Ponto Fechamento",`${fechamentoMes} · ${fechamentoUser||"todos"} · ${dados.length} funcionario(s)`);
+    showToast(status==="aprovado"?"Fechamento aprovado e travado.":"Fechamento salvo e travado.","success");
+  };
+  const exportarExcelPonto=()=>{
+    const dados=montarFechamento();
+    if(!dados.length){showToast("Nenhum dado para exportar.","warning");return;}
+    const linhas=dados.flatMap(d=>d.linhas.map(l=>({
+      Funcionario:d.user.name,
+      Perfil:d.user.role,
+      Mes:fechamentoMes,
+      Dia:l.dia,
+      Entrada:l.ent?fmtHora(l.ent.dt):"",
+      SaidaAlmoco:l.almS?fmtHora(l.almS.dt):"",
+      VoltaAlmoco:l.almV?fmtHora(l.almV.dt):"",
+      Saida:l.sai?fmtHora(l.sai.dt):"",
+      Previsto:minFmt(l.previsto),
+      Realizado:minFmt(l.realizado),
+      Saldo:minFmt(l.diff),
+      Status:l.status,
+    })));
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(linhas),"Fechamento");
+    XLSX.writeFile(wb,`stocktel-fechamento-ponto-${fechamentoMes}${fechamentoUser?`-${fechamentoUser}`:""}.xlsx`);
+    addLog(currentUser.name,"Fechamento Ponto",`Excel ${fechamentoMes} - ${dados.length} funcionario(s)`);
+  };
   const escPdf=(v)=>String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   const gerarPDFPonto=()=>{
     const dados=montarFechamento();
@@ -5984,6 +6077,7 @@ function PontoPage({pontos,setPontos,pontoConfig,setPontoConfig,pontoSolicits,se
 
   // ── Bater ponto (com geo quando necessário) ──
   const baterPonto=(tipo)=>{
+    if(mesTravado(currentUser.id,new Date().toISOString())){showToast("Este mês já foi fechado. Solicite reabertura ao administrador.","warning");return;}
     const cfg=pontoConfig;
     const precisaGeo=TIPOS[tipo].geo;
     if(!precisaGeo){
@@ -6044,6 +6138,7 @@ function PontoPage({pontos,setPontos,pontoConfig,setPontoConfig,pontoSolicits,se
   };
 
   const aprovarSolicit=(sol,aprovar)=>{
+    if(aprovar&&mesTravado(sol.funcionarioId,sol.dt)){showToast("Não é possível aprovar ponto em mês fechado.","warning");return;}
     // Aprova: cria registro de ponto; rejeita: apenas atualiza status
     if(aprovar){
       const reg={id:uid(),funcionarioId:sol.funcionarioId,funcionarioNome:sol.funcionarioNome,tipo:sol.tipo,dt:sol.dt,lat:null,lng:null,distancia:null,localValido:false,aprovado:true,aprovadoPor:currentUser.name,solicitacaoId:sol.id};
@@ -6266,7 +6361,7 @@ function PontoPage({pontos,setPontos,pontoConfig,setPontoConfig,pontoSolicits,se
                     p.lat?<span style={{fontSize:10,color:C.muted}}>{parseFloat(p.lat).toFixed(4)},{parseFloat(p.lng).toFixed(4)}</span>:<span style={{color:C.muted,fontSize:11}}>—</span>,
                     p.distancia!==null?<span style={{fontSize:12,color:p.distancia<=parseInt(pontoConfig.raio)?C.grn:C.red}}>{p.distancia}m</span>:<span style={{color:C.muted}}>—</span>,
                     p.localValido?<Bdg color="grn">✅ Geo</Bdg>:p.aprovado?<Bdg color="ylw">👤 Manual</Bdg>:<Bdg color="red">❌</Bdg>,
-                    isAdm?<button onClick={()=>setModalEdit(p)} style={{background:"transparent",border:"none",cursor:"pointer",color:C.muted,fontSize:14}}>✏️</button>:null,
+                    canEditarPonto?<button onClick={()=>setModalEdit(p)} style={{background:"transparent",border:"none",cursor:"pointer",color:C.muted,fontSize:14}}>✏️</button>:null,
                   ]}/>
                 ))}
               </tbody>
@@ -6350,9 +6445,25 @@ function PontoPage({pontos,setPontos,pontoConfig,setPontoConfig,pontoSolicits,se
               <Sel label="Funcionario" value={fechamentoUser} onChange={setFechamentoUser}
                 options={[{value:"",label:"Todos os funcionarios"},...fechamentoUsuarios().map(u=>({value:u.id,label:`${u.name} (${u.role})`}))]}/>
             </div>
-            <Btn color="red" onClick={gerarPDFPonto}>Gerar PDF</Btn>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {canExportar&&<Btn color="ghost" outline onClick={exportarExcelPonto}>Excel</Btn>}
+              <Btn color="red" onClick={gerarPDFPonto}>Gerar PDF</Btn>
+              {canAprovarPonto&&<Btn color="gold" outline onClick={()=>salvarFechamento("fechado")}>Fechar mes</Btn>}
+              {canAprovarPonto&&<Btn color="grn" onClick={()=>salvarFechamento("aprovado")}>Aprovar</Btn>}
+            </div>
           </div>
         </Card>
+        {fechamentoAtual&&<Card style={{padding:12,border:`1px solid ${fechamentoAtual.status==="aprovado"?C.grn:C.gold}55`,background:fechamentoAtual.status==="aprovado"?`${C.grn}12`:`${C.gold}12`}}>
+          <div style={{display:"flex",justifyContent:"space-between",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+            <div>
+              <div style={{fontSize:13,fontWeight:800,color:fechamentoAtual.status==="aprovado"?C.grn:C.gold}}>
+                {fechamentoAtual.status==="aprovado"?"Fechamento aprovado":"Fechamento fechado"}
+              </div>
+              <div style={{fontSize:11,color:C.muted}}>Fechado por {fechamentoAtual.fechadoPor} em {new Date(fechamentoAtual.fechadoEm).toLocaleString("pt-BR")}{fechamentoAtual.aprovadoPor?` · aprovado por ${fechamentoAtual.aprovadoPor}`:""}</div>
+            </div>
+            {canReabrirPonto&&<Btn size="xs" color="red" outline onClick={()=>{setPontoFechamentos(prev=>prev.filter(f=>f.id!==fechamentoAtual.id));addLog(currentUser.name,"Ponto Reabertura",`${fechamentoMes} · ${fechamentoUser||"todos"}`);showToast("Fechamento reaberto.","warning");}}>Reabrir</Btn>}
+          </div>
+        </Card>}
 
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
           <Card style={{padding:14}}><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",fontWeight:700}}>Funcionarios</div><div style={{fontSize:22,fontWeight:800,color:C.txt}}>{dados.length}</div></Card>
@@ -6511,12 +6622,14 @@ function PontoPage({pontos,setPontos,pontoConfig,setPontoConfig,pontoSolicits,se
             👤 {modalEdit.funcionarioNome} · {TIPOS[modalEdit.tipo]?.l} · {new Date(modalEdit.dt).toLocaleString("pt-BR")}
           </div>
           <EditarHora reg={modalEdit} onSave={(novaHora)=>{
+            if(mesTravado(modalEdit.funcionarioId,modalEdit.dt)){showToast("Mês fechado: reabra o fechamento antes de editar.","warning");return;}
             setPontos(p=>p.map(x=>x.id===modalEdit.id?{...x,dt:novaHora,editadoPor:currentUser.name,editadoEm:new Date().toISOString()}:x));
             addLog(currentUser.name,"Ponto Edição",`${modalEdit.funcionarioNome} — ${TIPOS[modalEdit.tipo]?.l} → ${new Date(novaHora).toLocaleTimeString("pt-BR")}`);
             showToast("Registro editado com log de auditoria.","success");
             setModalEdit(null);
           }} onDelete={()=>{
             if(!window.confirm("Excluir este registro? A ação será logada."))return;
+            if(mesTravado(modalEdit.funcionarioId,modalEdit.dt)){showToast("Mês fechado: reabra o fechamento antes de excluir.","warning");return;}
             setPontos(p=>p.filter(x=>x.id!==modalEdit.id));
             addLog(currentUser.name,"Ponto Exclusão",`${modalEdit.funcionarioNome} — ${TIPOS[modalEdit.tipo]?.l} excluído`);
             showToast("Registro excluído.","warning");
@@ -7143,6 +7256,7 @@ function AppInner(){
   const[pontos,setPontos]=useLS("re_pontos",[]);
   const[pontoConfig,setPontoConfig]=useLS("re_ponto_config",{lat:"",lng:"",raio:150,nome:"Empresa"});
   const[pontoSolicits,setPontoSolicits]=useLS("re_ponto_solicits",[]);
+  const[pontoFechamentos,setPontoFechamentos]=useLS("re_ponto_fechamentos",[]);
   const[escalas,setEscalas]=useLS("re_escalas",[]);
   const[folgas,setFolgas]=useLS("re_folgas",[]);
   const[pneus,setPneus]=useLS("re_pneus",[]);
@@ -7337,7 +7451,8 @@ function AppInner(){
       a.toLowerCase().includes("entrada")?"entrada":
       a.toLowerCase().includes("aprovada")?"aprovada":
       a.toLowerCase().includes("devolução")||a.toLowerCase().includes("solicitada")?"dev":"outro";
-    setLogs(p=>[{id:uid(),date:now(),user:u,action:a,detail:d,tipo},...p]);
+    const entry={id:uid(),date:now(),user:u,role:user?.role||"",action:a,detail:d,tipo,origin:"StockTel Web",appVersion:APP_VERSION};
+    setLogs(p=>[entry,...p]);
     // Notifica TODA alteração no sistema via Telegram
     if(tg?.ativo&&tg?.token){
       const icones={saida:"🚀",entrada:"📥",aprovada:"✅",dev:"↩️",outro:"📋"};
@@ -7461,7 +7576,7 @@ function AppInner(){
     usr:<UsrPage users={users} setUsers={setUsers} addLog={addLog} currentUser={user} isMobile={isMobile}/>,
     log:<LogPage logs={logs} isMobile={isMobile}/>,
     ajuda:<HelpPage currentUser={user} isMobile={isMobile}/>,
-    ponto:<PontoPage pontos={pontos} setPontos={setPontos} pontoConfig={pontoConfig} setPontoConfig={setPontoConfig} pontoSolicits={pontoSolicits} setPontoSolicits={setPontoSolicits} escalas={escalas} setEscalas={setEscalas} folgas={folgas} setFolgas={setFolgas} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} showToast={showToast}/>,
+    ponto:<PontoPage pontos={pontos} setPontos={setPontos} pontoConfig={pontoConfig} setPontoConfig={setPontoConfig} pontoSolicits={pontoSolicits} setPontoSolicits={setPontoSolicits} pontoFechamentos={pontoFechamentos} setPontoFechamentos={setPontoFechamentos} escalas={escalas} setEscalas={setEscalas} folgas={folgas} setFolgas={setFolgas} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} showToast={showToast}/>,
     frota:<FrotaPage veiculos={veiculos} setVeiculos={setVeiculos} abastecimentos={abastecimentos} setAbastecimentos={setAbastecimentos} checkouts={checkouts} setCheckouts={setCheckouts} pneus={pneus} setPneus={setPneus} docsVeic={docsVeic} setDocsVeic={setDocsVeic} manutOS={manutOS} setManutOS={setManutOS} manutSols={manutSols} setManutSols={setManutSols} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
     manut:<ManutencaoPage manutSols={manutSols} setManutSols={setManutSols} manutOS={manutOS} setManutOS={setManutOS} veiculos={veiculos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} abastecimentos={abastecimentos} pneus={pneus}/>,
     diag:<DiagnosticoPage currentUser={user} isMobile={isMobile}/>,

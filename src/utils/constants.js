@@ -36,3 +36,20 @@ export const DEFAULT_PERMS={
   financeiro:["dash","nf","rel","email","os","dev","log","ajuda","ponto"],
   mecanico:["dash","manut","frota","ajuda","ponto"],
 };
+
+export const ACTION_LABELS={
+  exportar:"Exportar relatórios",
+  aprovar_ponto:"Aprovar fechamento de ponto",
+  reabrir_ponto:"Reabrir fechamento de ponto",
+  editar_ponto:"Editar registros de ponto",
+  administrar_usuarios:"Administrar usuários",
+};
+
+export const DEFAULT_ACTION_PERMS={
+  superadmin:Object.keys(ACTION_LABELS),
+  admin:["exportar","aprovar_ponto","reabrir_ponto","editar_ponto","administrar_usuarios"],
+  financeiro:["exportar","aprovar_ponto"],
+  estoque:["exportar"],
+  tecnico:[],
+  mecanico:[],
+};
