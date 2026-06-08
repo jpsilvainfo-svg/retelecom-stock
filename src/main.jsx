@@ -12,6 +12,10 @@ if ("serviceWorker" in navigator) {
       })
       .catch(error => console.warn("[PWA] Service Worker falhou:", error));
   });
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    console.info("[PWA] Nova versao ativa. Atualize a pagina quando for conveniente.");
+  });
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(

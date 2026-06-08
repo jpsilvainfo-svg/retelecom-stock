@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StockTel Offline</title>
+    <style>
+      body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#080808;color:#f5f5f5;font-family:Arial,sans-serif;padding:24px}
+      main{max-width:440px;text-align:center}
+      img{width:120px;max-width:60%;margin-bottom:20px}
+      h1{font-size:24px;margin:0 0 10px}
+      p{color:#aaa;line-height:1.5}
+      button{margin-top:16px;padding:12px 18px;border:0;border-radius:8px;background:#d10000;color:white;font-weight:700}
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="/logo-stocktel.png" alt="StockTel" />
+      <h1>Sem conexão no momento</h1>
+      <p>O StockTel continua com dados locais quando possivel. Assim que a internet voltar, reabra ou atualize a pagina para sincronizar.</p>
+      <button onclick="location.reload()">Tentar novamente</button>
+    </main>
+  </body>
+</html>
