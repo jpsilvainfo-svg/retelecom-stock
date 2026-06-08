@@ -16,6 +16,12 @@ const mustExist = [
   "src/modules/grandes/FrotaPage.jsx",
   "src/modules/grandes/RelatoriosPage.jsx",
   "src/hooks/useLS.js",
+  ".env.example",
+  "PRODUCTION_RUNBOOK.md",
+  "public/offline.html",
+  ".github/workflows/preview-check.yml",
+  "api/monitor.js",
+  "api/backup.js",
   "api/notify-progress.js",
   "scripts/notify-telegram-change.ps1",
   ".githooks/post-commit",
@@ -41,6 +47,15 @@ assert.equal(sessaoValida({ loginAt: Date.now() }), true, "Sessao recente deve s
 assert.equal(sessaoValida({ loginAt: Date.now() - 9 * 60 * 60 * 1000 }), false, "Sessao expirada deve falhar");
 
 const app = readFileSync(resolve(root, "src/App.jsx"), "utf8");
+const monitor = readFileSync(resolve(root, "api/monitor.js"), "utf8");
+const backup = readFileSync(resolve(root, "api/backup.js"), "utf8");
+const serviceWorker = readFileSync(resolve(root, "public/sw.js"), "utf8");
+const vercel = readFileSync(resolve(root, "vercel.json"), "utf8");
+
+assert.doesNotMatch(vercel, /VITE_SUPABASE_KEY/, "Credenciais nao devem ficar hardcoded no vercel.json");
+assert.match(monitor, /re_monitor_history/, "Monitor deve salvar historico");
+assert.match(backup, /re_monitor_history/, "Backup deve incluir historico do monitor");
+assert.match(serviceWorker, /offline\.html/, "PWA deve ter fallback offline");
 assert.match(app, /pontoFechamentos/, "Fechamento mensal de ponto deve estar conectado ao app");
 assert.match(app, /exportarExcelPonto/, "Exportacao Excel do ponto deve existir");
 assert.match(app, /Auditoria do Sistema/, "Tela de auditoria deve estar disponivel");

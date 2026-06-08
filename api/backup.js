@@ -26,6 +26,7 @@ const DATA_KEYS = [
   "re_access_logs",
   "re_access_daily",
   "re_security_alerts",
+  "re_monitor_history",
 ];
 
 const DEFAULT_BACKUP_RECIPIENTS = ["236353850", "7858844640"];

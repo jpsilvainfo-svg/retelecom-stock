@@ -1,7 +1,8 @@
-const CACHE = "stocktel-pwa-v2";
+const CACHE = "stocktel-pwa-v3";
 const STATIC_ASSETS = [
   "/",
   "/index.html",
+  "/offline.html",
   "/manifest.json",
   "/favicon-stocktel.png",
   "/logo-stocktel.png",
@@ -39,7 +40,7 @@ self.addEventListener("fetch", event => {
           caches.open(CACHE).then(cache => cache.put("/index.html", copy));
           return response;
         })
-        .catch(() => caches.match("/index.html"))
+        .catch(() => caches.match("/index.html").then(match => match || caches.match("/offline.html")))
     );
     return;
   }
@@ -53,7 +54,7 @@ self.addEventListener("fetch", event => {
           caches.open(CACHE).then(cache => cache.put(event.request, copy));
         }
         return response;
-      });
+      }).catch(() => caches.match("/offline.html"));
     })
   );
 });
