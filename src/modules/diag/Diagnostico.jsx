@@ -60,10 +60,10 @@ export default function Diagnostico({ currentUser, isMobile }) {
 
   const okCount = checks.filter((c) => c.ok).length;
   const moduleErrors = modules.filter((m) => m.status === "erro").length;
-  const moduleStale = modules.filter((m) => m.status === "desatualizado").length;
+  const moduleStale = modules.filter((m) => ["desatualizado", "pendente_sync"].includes(m.status)).length;
 
-  const statusColor = { ok: C.grn, desatualizado: C.ylw, sem_dados: C.muted, erro: C.red };
-  const statusLabel = { ok: "Sincronizado", desatualizado: "Desatualizado", sem_dados: "Sem dados remoto", erro: "Erro" };
+  const statusColor = { ok: C.grn, desatualizado: C.ylw, pendente_sync: C.ylw, vazio: C.muted, erro: C.red };
+  const statusLabel = { ok: "Sincronizado", desatualizado: "Desatualizado", pendente_sync: "Pendente de envio", vazio: "Sem dados (OK)", erro: "Erro" };
 
   return <div className="fi" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 10, flexWrap: "wrap" }}>
@@ -102,7 +102,7 @@ export default function Diagnostico({ currentUser, isMobile }) {
             <span style={{ fontFamily: "'JetBrains Mono',monospace", color: C.gold }}>{mod.localCount}</span>,
             <span style={{ fontFamily: "'JetBrains Mono',monospace", color: C.blue }}>{mod.remoteCount}</span>,
             <span style={{ color: statusColor[mod.status] || C.muted, fontWeight: 700 }}>{statusLabel[mod.status] || mod.status}</span>,
-            <Btn size="xs" color="ghost" outline onClick={() => syncOne(mod)} disabled={Boolean(syncingKey)}>{syncingKey === mod.key ? "..." : "Sync"}</Btn>,
+            <Btn size="xs" color={mod.status === "pendente_sync" || mod.status === "desatualizado" ? "gold" : "ghost"} outline onClick={() => syncOne(mod)} disabled={Boolean(syncingKey)}>{syncingKey === mod.key ? "..." : mod.status === "vazio" ? "Inicializar" : "Sync"}</Btn>,
           ]} />)}</tbody>
         </table>
       </div>

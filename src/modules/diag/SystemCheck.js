@@ -97,7 +97,7 @@ export async function checkDataModules() {
         : 0;
       const remoteTs = remote?.updated_at || "0";
       let status = "ok";
-      if (!remote || remote.empty || remote.value === null) status = "sem_dados";
+      if (!remote || remote.empty || remote.value === null) status = localCount > 0 ? "pendente_sync" : "vazio";
       else if (localTs > remoteTs) status = "desatualizado";
       rows.push({ ...mod, localCount, localTs, remoteCount, remoteTs, status });
     } catch (error) {
@@ -109,9 +109,8 @@ export async function checkDataModules() {
 
 export async function syncModuleToCloud(mod) {
   const raw = localStorage.getItem(mod.key);
-  if (!raw) return { ok: false, skipped: true, detail: "Sem dados locais" };
-  const data = JSON.parse(raw);
+  const data = raw ? JSON.parse(raw) : [];
   const result = await sbSet(mod.key, data);
   if (result.ok) localStorage.setItem(`${mod.key}__ts`, new Date().toISOString());
-  return result;
+  return { ...result, detail: raw ? result.detail : "Modulo inicializado vazio no Supabase" };
 }

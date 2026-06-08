@@ -867,7 +867,7 @@ function DiagnosticoPage({currentUser,isMobile}){
         const remoteCount=remote&&!remote.empty?( Array.isArray(remote.value)?remote.value.length:(remote.value&&typeof remote.value==="object"?1:0) ):0;
         const remoteTs=remote?.updated_at||"0";
         let st="ok";
-        if(!remote||remote.empty||remote.value===null)st="sem_dados";
+        if(!remote||remote.empty||remote.value===null)st=localCount>0?"pendente_sync":"vazio";
         else if(localTs>remoteTs)st="desatualizado";
         rows.push({...mod,localCount,remoteCount,localTs,remoteTs,st});
       }catch(e){rows.push({...mod,localCount,remoteCount:0,localTs,remoteTs:"?",st:"erro",errMsg:e?.message});}
@@ -883,8 +883,7 @@ function DiagnosticoPage({currentUser,isMobile}){
     setSyncingKey(mod.key);setShowLog(true);
     try{
       const raw=localStorage.getItem(mod.key);
-      if(!raw){setSyncLog(p=>[{key:mod.key,label:mod.label,result:"sem_dados_local",detail:"Sem dados locais para enviar",ts:new Date().toLocaleTimeString("pt-BR")},...p]);setSyncingKey(null);return;}
-      const data=JSON.parse(raw);
+      const data=raw?JSON.parse(raw):[];
       const res=await sbSet(mod.key,data);
       if(res.ok){const ts=new Date().toISOString();localStorage.setItem(mod.key+"__ts",ts);}
       setSyncLog(p=>[{key:mod.key,label:mod.label,result:res.ok?"ok":"erro",detail:res.error||null,ts:new Date().toLocaleTimeString("pt-BR")},...p]);
@@ -898,8 +897,7 @@ function DiagnosticoPage({currentUser,isMobile}){
       setSyncingKey(mod.key);
       try{
         const raw=localStorage.getItem(mod.key);
-        if(!raw){setSyncLog(p=>[...p,{key:mod.key,label:mod.label,result:"skip",detail:"Sem dados locais",ts:new Date().toLocaleTimeString("pt-BR")}]);continue;}
-        const data=JSON.parse(raw);
+        const data=raw?JSON.parse(raw):[];
         const res=await sbSet(mod.key,data);
         if(res.ok){const ts=new Date().toISOString();localStorage.setItem(mod.key+"__ts",ts);}
         setSyncLog(p=>[...p,{key:mod.key,label:mod.label,result:res.ok?"ok":"erro",detail:res.error||null,ts:new Date().toLocaleTimeString("pt-BR")}]);
@@ -909,13 +907,13 @@ function DiagnosticoPage({currentUser,isMobile}){
     await checkAll();
   };
 
-  const stColor={ok:C.grn,desatualizado:C.ylw,sem_dados:C.muted,erro:C.red,checking:"#60a5fa"};
-  const stLabel={ok:"✅ Sincronizado",desatualizado:"⚠️ Desatualizado",sem_dados:"⬜ Sem dados remoto",erro:"❌ Erro",checking:"⏳..."};
+  const stColor={ok:C.grn,desatualizado:C.ylw,pendente_sync:C.ylw,vazio:C.muted,erro:C.red,checking:"#60a5fa"};
+  const stLabel={ok:"✅ Sincronizado",desatualizado:"⚠️ Desatualizado",pendente_sync:"⚠️ Pendente de envio",vazio:"⬜ Sem dados (OK)",erro:"❌ Erro",checking:"⏳..."};
   const logColor={ok:C.grn,erro:C.red,skip:C.muted,sem_dados_local:C.ylw};
 
   const okCount=results.filter(r=>r.st==="ok").length;
   const errCount=results.filter(r=>r.st==="erro").length;
-  const desat=results.filter(r=>r.st==="desatualizado").length;
+  const desat=results.filter(r=>["desatualizado","pendente_sync"].includes(r.st)).length;
 
   return<div style={{display:"flex",flexDirection:"column",gap:16}}>
     {/* Header */}
