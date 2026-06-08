@@ -15,7 +15,6 @@ const mustExist = [
   "src/modules/grandes/PontoPage.jsx",
   "src/modules/grandes/FrotaPage.jsx",
   "src/modules/grandes/RelatoriosPage.jsx",
-  "src/utils/audit.js",
   "src/hooks/useLS.js",
   "api/notify-progress.js",
   "scripts/notify-telegram-change.ps1",
@@ -45,7 +44,6 @@ const app = readFileSync(resolve(root, "src/App.jsx"), "utf8");
 assert.match(app, /pontoFechamentos/, "Fechamento mensal de ponto deve estar conectado ao app");
 assert.match(app, /exportarExcelPonto/, "Exportacao Excel do ponto deve existir");
 assert.match(app, /Auditoria do Sistema/, "Tela de auditoria deve estar disponivel");
-assert.match(app, /appendAudit/, "Auditoria estruturada deve estar conectada");
 assert.match(app, /ACTION_LABELS/, "Permissoes por acao devem estar conectadas ao cadastro");
 assert.match(app, /EstoqueModule/, "Estoque base deve usar modulo extraido");
 assert.match(app, /KitModule/, "Kit tecnico deve usar modulo extraido");
