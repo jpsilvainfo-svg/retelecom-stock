@@ -50,9 +50,9 @@ const app = readFileSync(resolve(root, "src/App.jsx"), "utf8");
 const monitor = readFileSync(resolve(root, "api/monitor.js"), "utf8");
 const backup = readFileSync(resolve(root, "api/backup.js"), "utf8");
 const serviceWorker = readFileSync(resolve(root, "public/sw.js"), "utf8");
-const vercel = readFileSync(resolve(root, "vercel.json"), "utf8");
+const envExample = readFileSync(resolve(root, ".env.example"), "utf8");
 
-assert.doesNotMatch(vercel, /VITE_SUPABASE_KEY/, "Credenciais nao devem ficar hardcoded no vercel.json");
+assert.doesNotMatch(envExample, /eyJhbGci|[0-9]{8,}:[A-Za-z0-9_-]{20,}/, ".env.example nao deve conter valores reais");
 assert.match(monitor, /re_monitor_history/, "Monitor deve salvar historico");
 assert.match(backup, /re_monitor_history/, "Backup deve incluir historico do monitor");
 assert.match(serviceWorker, /offline\.html/, "PWA deve ter fallback offline");
