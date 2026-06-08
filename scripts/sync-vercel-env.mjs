@@ -42,9 +42,10 @@ if (!token) {
 }
 
 const localEnv = readDotenv(".env.local");
-const missing = REQUIRED_KEYS.filter((key) => !localEnv[key] && !["MONITOR_WARN_MS", "MONITOR_HISTORY_LIMIT"].includes(key));
-if (missing.length) {
-  console.error(`.env.local sem variaveis obrigatorias: ${missing.join(", ")}`);
+const requiredForRuntime = ["PUBLIC_SITE_URL", "GITHUB_REPOSITORY", "VITE_SUPABASE_URL", "VITE_SUPABASE_KEY", "TELEGRAM_TOKEN"];
+const missingRuntime = requiredForRuntime.filter((key) => !localEnv[key]);
+if (missingRuntime.length) {
+  console.error(`.env.local sem variaveis criticas: ${missingRuntime.join(", ")}`);
   process.exit(2);
 }
 
