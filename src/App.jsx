@@ -11,6 +11,7 @@ import { Bdg, Btn, Card, Inp, Modal, Sel, THead, TRow } from "./components/ui.js
 import { C, catColor, consumptionColor, PIE } from "./utils/colors.js";
 import { ACTION_LABELS, ALL_MODULES, APP_RELEASE_DATE, APP_VERSION, APP_VERSION_LABEL, DEFAULT_ACTION_PERMS, DEFAULT_PERMS, ROOT_ONLY } from "./utils/constants.js";
 import { fmt, now, today, uid } from "./utils/formatters.js";
+import { createAuditEvent, safeAuditDetail } from "./utils/audit.js";
 import { hashSenha, sessaoValida, verificarSenha } from "./modules/auth/session.js";
 import DiagnosticoModule from "./modules/diag/Diagnostico.jsx";
 import CustomizeModule from "./modules/customize/Customize.jsx";
@@ -186,7 +187,7 @@ input:focus,select:focus,textarea:focus{box-shadow:0 0 0 1px rgba(209,0,0,.55),0
 `;
 
 /* ── LOGIN ── */
-function LoginPage({users,onLogin}){
+function LoginPage({users,onLogin,onAudit}){
   const isMobile=useIsMobile();
   const[login,setLogin]=useState("");
   const[pass,setPass]=useState("");
@@ -217,6 +218,7 @@ function LoginPage({users,onLogin}){
       if(ok){
         setErr("");
         setLoginGuard({attempts:0});
+        onAudit?.({ user: u, action: "Login", detail: `Acesso autorizado para @${u.login}`, module: "auth" });
         // Migra senha legada para hash seguro automaticamente
         if(!u.passHash){
           const{hash,salt}=await hashSenha(pass);
@@ -228,6 +230,7 @@ function LoginPage({users,onLogin}){
         const attempts=(guard.attempts||0)+1;
         const lockUntil=attempts>=5?Date.now()+60000:0;
         setLoginGuard({attempts,lockUntil});
+        onAudit?.({ user: { name: login || "Nao informado", login, role: "desconhecido" }, action: "Login negado", detail: `Tentativa ${attempts}${lockUntil ? " - bloqueio temporario aplicado" : ""}`, module: "auth", status: "erro" });
         setErr(lockUntil?"Muitas tentativas. Login bloqueado por 60 segundos.":"Login ou senha incorretos.");
         setLoading(false);
       }
@@ -2899,16 +2902,33 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
 function LogPage({logs,isMobile}){
   const[filtroTipo,setFiltroTipo]=useState("");
   const[filtroTexto,setFiltroTexto]=useState("");
-  const logsOrdenados=[...(logs||[])].sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));
+  const[filtroUsuario,setFiltroUsuario]=useState("");
+  const[dataIni,setDataIni]=useState("");
+  const[dataFim,setDataFim]=useState("");
+  const getTime=(l)=>{
+    const iso=Date.parse(l.isoAt||"");
+    if(!Number.isNaN(iso))return iso;
+    const parts=String(l.date||"").match(/(\d{2})\/(\d{2})\/(\d{4}).*?(\d{2}):(\d{2})/);
+    if(!parts)return 0;
+    return Date.parse(`${parts[3]}-${parts[2]}-${parts[1]}T${parts[4]}:${parts[5]}:00`);
+  };
+  const logsOrdenados=[...(logs||[])].sort((a,b)=>getTime(b)-getTime(a));
+  const usuarios=[...new Set(logsOrdenados.map(l=>l.login||l.user).filter(Boolean))].sort();
   const logsFiltrados=logsOrdenados.filter(l=>{
     const tipoOk=filtroTipo?l.tipo===filtroTipo:true;
-    const alvo=`${l.date||""} ${l.user||""} ${l.action||""} ${l.detail||""} ${l.origin||""}`.toLowerCase();
-    return tipoOk&&alvo.includes(filtroTexto.toLowerCase());
+    const usuarioOk=filtroUsuario?(l.login===filtroUsuario||l.user===filtroUsuario):true;
+    const eventTime=getTime(l);
+    const iniOk=dataIni?eventTime>=Date.parse(`${dataIni}T00:00:00`):true;
+    const fimOk=dataFim?eventTime<=Date.parse(`${dataFim}T23:59:59`):true;
+    const alvo=`${l.date||""} ${l.user||""} ${l.login||""} ${l.role||""} ${l.action||""} ${l.detail||""} ${l.module||""} ${l.origin||""} ${l.status||""}`.toLowerCase();
+    return tipoOk&&usuarioOk&&iniOk&&fimOk&&alvo.includes(filtroTexto.toLowerCase());
   });
-  const resumo=logsOrdenados.reduce((acc,l)=>({...acc,[l.tipo||"outro"]:(acc[l.tipo||"outro"]||0)+1}),{});
+  const resumo=logsFiltrados.reduce((acc,l)=>({...acc,[l.tipo||"outro"]:(acc[l.tipo||"outro"]||0)+1}),{});
+  const porUsuario=logsFiltrados.reduce((acc,l)=>({...acc,[l.login||l.user||"Sistema"]:(acc[l.login||l.user||"Sistema"]||0)+1}),{});
+  const topUsuarios=Object.entries(porUsuario).sort((a,b)=>b[1]-a[1]).slice(0,5);
   const exportarCSV=()=>{
     const esc=(v)=>`"${String(v??"").replace(/"/g,'""')}"`;
-    const rows=[["Data","Usuario","Perfil","Acao","Detalhe","Tipo","Origem"],...logsFiltrados.map(l=>[l.date,l.user,l.role,l.action,l.detail,l.tipo,l.origin])];
+    const rows=[["Data","ISO","Usuario","Login","Perfil","Modulo","Acao","Detalhe","Tipo","Status","Origem"],...logsFiltrados.map(l=>[l.date,l.isoAt,l.user,l.login,l.role,l.module,l.action,l.detail,l.tipo,l.status,l.origin])];
     const csv=rows.map(r=>r.map(esc).join(";")).join("\n");
     const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"});
     const url=URL.createObjectURL(blob);
@@ -2916,31 +2936,40 @@ function LogPage({logs,isMobile}){
     a.href=url;a.download=`stocktel-auditoria-${new Date().toISOString().slice(0,10)}.csv`;a.click();
     URL.revokeObjectURL(url);
   };
-  const tc={saida:C.gold,entrada:C.grn,dev:C.ylw,aprovada:C.grn};
-  const ic={saida:"→",entrada:"↓",dev:"↺",aprovada:"✓"};
+  const tc={auth:C.blue,nav:C.muted,saida:C.gold,entrada:C.grn,dev:C.ylw,aprovada:C.grn,admin:C.red,relatorio:C.blue,frota:C.gold,ponto:C.grn,outro:C.muted};
+  const ic={auth:"↪",nav:"→",saida:"→",entrada:"↓",dev:"↺",aprovada:"✓",admin:"!",relatorio:"R",frota:"F",ponto:"P",outro:"·"};
   return <div className="fi" style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:10,flexWrap:"wrap"}}>
       <div>
         <h1 style={{fontSize:isMobile?17:20,fontWeight:700,color:C.txt}}>Auditoria do Sistema</h1>
-        <p style={{fontSize:12,color:C.muted,marginTop:2}}>Trilha de ações operacionais, administrativas e financeiras.</p>
+        <p style={{fontSize:12,color:C.muted,marginTop:2}}>Trilha de auditoria operacional: quem fez, o que fez, quando e em qual modulo.</p>
       </div>
       <Btn color="gold" size={isMobile?"sm":"md"} onClick={exportarCSV}>Exportar CSV</Btn>
     </div>
     <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(5,1fr)",gap:10}}>
-      <Card style={{padding:12}}><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",fontWeight:700}}>Eventos</div><div style={{fontSize:22,fontWeight:800,color:C.txt}}>{logsOrdenados.length}</div></Card>
-      {["entrada","saida","dev","aprovada"].map(t=><Card key={t} style={{padding:12}}>
+      <Card style={{padding:12}}><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",fontWeight:700}}>Eventos filtrados</div><div style={{fontSize:22,fontWeight:800,color:C.txt}}>{logsFiltrados.length}</div></Card>
+      {["auth","nav","admin","relatorio"].map(t=><Card key={t} style={{padding:12}}>
         <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",fontWeight:700}}>{t}</div>
         <div style={{fontSize:22,fontWeight:800,color:tc[t]||C.gold}}>{resumo[t]||0}</div>
       </Card>)}
     </div>
     <Card style={{padding:14}}>
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"180px 1fr",gap:10}}>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"160px 180px 1fr 145px 145px",gap:10}}>
         <Sel label="Tipo" value={filtroTipo} onChange={setFiltroTipo} options={[
-          {value:"",label:"Todos"},{value:"entrada",label:"Entrada"},{value:"saida",label:"Saida"},{value:"dev",label:"Devolucao/Solicitacao"},{value:"aprovada",label:"Aprovada"},{value:"outro",label:"Outros"}
+          {value:"",label:"Todos"},{value:"auth",label:"Login/Sessao"},{value:"nav",label:"Navegacao"},{value:"admin",label:"Administrativo"},{value:"entrada",label:"Entrada"},{value:"saida",label:"Saida"},{value:"dev",label:"Devolucao/Solicitacao"},{value:"aprovada",label:"Aprovada"},{value:"relatorio",label:"Relatorios"},{value:"frota",label:"Frota"},{value:"ponto",label:"Ponto"},{value:"outro",label:"Outros"}
         ]}/>
+        <Sel label="Usuario" value={filtroUsuario} onChange={setFiltroUsuario} options={[{value:"",label:"Todos"},...usuarios.map(u=>({value:u,label:u}))]}/>
         <Inp label="Buscar" value={filtroTexto} onChange={setFiltroTexto} placeholder="Usuario, acao, detalhe ou origem"/>
+        <Inp label="De" value={dataIni} onChange={setDataIni} type="date"/>
+        <Inp label="Ate" value={dataFim} onChange={setDataFim} type="date"/>
       </div>
     </Card>
+    {topUsuarios.length>0&&<Card style={{padding:14}}>
+      <div style={{fontSize:11,fontWeight:800,color:C.muted,textTransform:"uppercase",marginBottom:10}}>Usuarios mais ativos no filtro</div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        {topUsuarios.map(([name,total])=><Bdg key={name} color="gold">{name}: {total}</Bdg>)}
+      </div>
+    </Card>}
     {isMobile?(
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         {logsFiltrados.map(l=>(
@@ -2950,6 +2979,7 @@ function LogPage({logs,isMobile}){
               <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:C.muted,flexShrink:0}}>{l.date}</span>
             </div>
             <div style={{fontSize:12,fontWeight:600,color:C.txt,marginBottom:2}}>{l.user}</div>
+            <div style={{fontSize:10,color:C.muted,marginBottom:2}}>@{l.login||"-"} · {l.role||"-"} · {l.module||"-"}</div>
             <div style={{fontSize:11,color:C.muted}}>{l.detail}</div>
             <div style={{fontSize:10,color:C.muted,marginTop:6}}>Origem: {l.origin||"StockTel Web"}</div>
           </Card>
@@ -2959,17 +2989,18 @@ function LogPage({logs,isMobile}){
       <Card style={{padding:0,overflow:"hidden"}}>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
-            <thead><THead cols={["DATA/HORA","USUÁRIO","AÇÃO","DETALHE","ORIGEM"]}/></thead>
+            <thead><THead cols={["DATA/HORA","USUÁRIO","MÓDULO","AÇÃO","DETALHE","STATUS/ORIGEM"]}/></thead>
             <tbody>{logsFiltrados.map(l=>(
               <TRow key={l.id} cells={[
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.muted,whiteSpace:"nowrap"}}>{l.date}</span>,
-                <span style={{fontSize:12,fontWeight:600,color:C.txt}}>{l.user}<span style={{display:"block",fontSize:10,color:C.muted,fontWeight:400}}>{l.role||""}</span></span>,
+                <span style={{fontSize:12,fontWeight:600,color:C.txt}}>{l.user}<span style={{display:"block",fontSize:10,color:C.muted,fontWeight:400}}>@{l.login||"-"} · {l.role||""}</span></span>,
+                <span style={{fontSize:11,color:C.muted}}>{l.module||"-"}</span>,
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                   <div style={{width:22,height:22,borderRadius:"50%",background:`${tc[l.tipo]||C.gold}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:tc[l.tipo]||C.gold,fontWeight:700}}>{ic[l.tipo]||"·"}</div>
                   <span style={{fontSize:12,fontWeight:600,color:tc[l.tipo]||C.gold}}>{l.action}</span>
                 </div>,
                 <span style={{fontSize:12,color:C.muted}}>{l.detail}</span>,
-                <span style={{fontSize:11,color:C.muted}}>{l.origin||"StockTel Web"}</span>
+                <span style={{fontSize:11,color:C.muted}}>{l.status||"ok"}<span style={{display:"block",fontSize:10}}>{l.origin||"StockTel Web"}</span></span>
               ]}/>
             ))}</tbody>
           </table>
@@ -7455,22 +7486,50 @@ function AppInner(){
   },[stock,tgCfg]);
 
   // ── FUNÇÕES E LÓGICA (após hooks) ──
-  const goPage=(p)=>{setPage(p);try{localStorage.setItem("re_page",p);}catch{}};
-
   const tg=customization?.telegram;
-  const addLog=(u,a,d)=>{
-    const tipo=a.toLowerCase().includes("saída")||a.toLowerCase().includes("saida")?"saida":
-      a.toLowerCase().includes("entrada")?"entrada":
-      a.toLowerCase().includes("aprovada")?"aprovada":
-      a.toLowerCase().includes("devolução")||a.toLowerCase().includes("solicitada")?"dev":"outro";
-    const entry={id:uid(),date:now(),user:u,role:user?.role||"",action:a,detail:d,tipo,origin:"StockTel Web",appVersion:APP_VERSION};
-    setLogs(p=>[entry,...p]);
-    // Notifica TODA alteração no sistema via Telegram
-    if(tg?.ativo&&tg?.token){
-      const icones={saida:"🚀",entrada:"📥",aprovada:"✅",dev:"↩️",outro:"📋"};
-      const msg=`${icones[tipo]||"📋"} <b>StockTel — Alteração</b>\n\n<b>${a}</b>\n${d}\n\n👤 Usuário: ${u}\n⏰ ${new Date().toLocaleString("pt-BR")}\n🔗 retelecom-stock.vercel.app`;
+  const appendAudit=(payload,{notify=true}={})=>{
+    const entry=createAuditEvent({
+      user:payload.user||user,
+      action:payload.action,
+      detail:safeAuditDetail(payload.detail),
+      module:payload.module||"",
+      origin:payload.origin||"StockTel Web",
+      status:payload.status||"ok",
+      meta:payload.meta||{},
+    });
+    setLogs(p=>[entry,...p].slice(0,5000));
+    if(notify&&tg?.ativo&&tg?.token){
+      const icones={auth:"🔐",saida:"🚀",entrada:"📥",aprovada:"✅",dev:"↩️",admin:"🛡️",relatorio:"📊",frota:"🚗",ponto:"🕐",outro:"📋"};
+      const msg=`${icones[entry.tipo]||"📋"} <b>StockTel — Auditoria</b>\n\n<b>${entry.action}</b>\n${entry.detail}\n\n👤 Usuário: ${entry.user}${entry.login?` (@${entry.login})`:""}\n📌 Módulo: ${entry.module||"-"}\n⏰ ${new Date().toLocaleString("pt-BR")}\n🔗 retelecom-stock.vercel.app`;
       notificar(msg,tg);
     }
+    return entry;
+  };
+
+  const goPage=(p)=>{
+    const previous=page;
+    setPage(p);
+    try{localStorage.setItem("re_page",p);}catch{}
+    if(user&&p!==previous){
+      appendAudit({user,action:"Navegacao",detail:`${previous} -> ${p}`,module:p},{notify:false});
+    }
+  };
+
+  const addLog=(u,a,d)=>{
+    appendAudit({
+      user,
+      action:a,
+      detail:d,
+      module:page,
+      meta:{legacyUser:u},
+    });
+  };
+
+  const handleLogout=()=>{
+    appendAudit({user,action:"Logout",detail:`Sessao encerrada para @${user?.login||""}`,module:"auth"});
+    setPage("dash");
+    setUser(null);
+    try{localStorage.removeItem("re_session");localStorage.removeItem("re_page");}catch{}
   };
 
   const salvarPerfil=async()=>{
@@ -7520,7 +7579,7 @@ function AppInner(){
 
   // ── RETURNS CONDICIONAIS (após todos os hooks) ──
   if(!user)return <>
-    <LoginPage users={users} onLogin={(u,hashUpdate)=>{
+    <LoginPage users={users} onAudit={(payload)=>appendAudit(payload)} onLogin={(u,hashUpdate)=>{
     // Se veio migração de senha (legada → hash), salva o hash no banco
     let finalUser={...u,loginAt:Date.now()};
     if(hashUpdate){
@@ -7597,8 +7656,8 @@ function AppInner(){
 
   return <div style={{height:"100dvh",background:C.bg,color:C.txt,display:"flex",overflow:"hidden"}}>
     <style>{CSS}</style>
-    {!isMobile&&<Sidebar user={effectiveUser} page={page} setPage={goPage} customization={customization} onLogout={()=>{setPage("dash");setUser(null);try{localStorage.removeItem("re_session");localStorage.removeItem("re_page");}catch{}}}/>}
-    {isMobile&&drawerOpen&&<MobileDrawer user={user} page={page} setPage={goPage} onLogout={()=>{setPage("dash");setUser(null);try{localStorage.removeItem("re_session");localStorage.removeItem("re_page");}catch{}}} onClose={()=>setDrawerOpen(false)}/>}
+    {!isMobile&&<Sidebar user={effectiveUser} page={page} setPage={goPage} customization={customization} onLogout={handleLogout}/>}
+    {isMobile&&drawerOpen&&<MobileDrawer user={user} page={page} setPage={goPage} onLogout={handleLogout} onClose={()=>setDrawerOpen(false)}/>}
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <TopBar user={user} pendRet={pendRet} pendSol={pendSol} setPage={goPage} isMobile={isMobile} onMenuOpen={()=>setDrawerOpen(true)}/>
       <ConnectionBanner isMobile={isMobile} status={connectionStatus}/>
