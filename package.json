@@ -10,7 +10,8 @@
     "test": "node scripts/smoke-tests.mjs",
     "preview": "vite preview",
     "notify:change": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/notify-telegram-change.ps1 -Event manual",
-    "vercel:env:sync": "node scripts/sync-vercel-env.mjs"
+    "vercel:env:sync": "node scripts/sync-vercel-env.mjs",
+    "seed:waldenir": "node scripts/seed-waldenir.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.1",

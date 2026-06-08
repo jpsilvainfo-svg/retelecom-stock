@@ -16,6 +16,36 @@ function safeValue(remote, initial) {
 }
 
 // ── Fila de pendentes ─────────────────────────────────────────────────────
+function identityKey(item) {
+  if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+  return item.id || item.login || item.code || item.num || item.os || null;
+}
+
+function mergeEntityArray(localValue, remoteValue) {
+  if (!Array.isArray(localValue) || !Array.isArray(remoteValue)) return null;
+  const allObjects = [...localValue, ...remoteValue].every(item => item && typeof item === "object" && !Array.isArray(item));
+  if (!allObjects) return null;
+  const byKey = new Map();
+  for (const item of remoteValue) {
+    const key = identityKey(item);
+    if (key) byKey.set(String(key), item);
+  }
+  for (const item of localValue) {
+    const key = identityKey(item);
+    if (key) byKey.set(String(key), { ...(byKey.get(String(key)) || {}), ...item });
+  }
+  const localKeys = new Set(localValue.map(identityKey).filter(Boolean).map(String));
+  const localMerged = localValue.map(item => {
+    const key = identityKey(item);
+    return key ? byKey.get(String(key)) : item;
+  });
+  const remoteOnly = remoteValue.filter(item => {
+    const key = identityKey(item);
+    return key && !localKeys.has(String(key));
+  });
+  return [...localMerged, ...remoteOnly];
+}
+
 export function queueAdd(key, value) {
   try {
     const q = JSON.parse(localStorage.getItem(QUEUE_KEY) || "{}");
@@ -81,19 +111,23 @@ export const useLS = (key, initial) => {
       if (remote && !remote.empty && remote.value !== null) {
         const remoteTs = remote.updated_at || "0";
         const safe = safeValue(remote.value, initialRef.current);
+        const localValue = localRaw ? JSON.parse(localRaw) : null;
+        const merged = mergeEntityArray(localValue, safe);
         if (safe === null) return; // tipo incompatível, ignora
 
         if (remoteTs > localTs) {
           // Remoto mais recente → aplica localmente
-          setVal(safe);
+          const next = merged || safe;
+          setVal(next);
           try {
-            localStorage.setItem(key, JSON.stringify(safe));
+            localStorage.setItem(key, JSON.stringify(next));
             localStorage.setItem(tsKey(key), remoteTs);
           } catch {}
+          if (merged) pushToCloud(key, merged);
         } else {
           // Local igual ou mais recente → garante que remoto está atualizado
           if (localRaw) {
-            try { pushToCloud(key, JSON.parse(localRaw)); } catch {}
+            try { pushToCloud(key, merged || localValue); } catch {}
           }
         }
       } else if (localRaw) {

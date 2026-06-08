@@ -2,8 +2,12 @@
 import { createClient } from "@supabase/supabase-js";
 
 // Lê das env vars do Vite/Vercel; fallback para valores hardcoded
-const SUPA_URL = import.meta.env.VITE_SUPABASE_URL || "https://enwlwudxtxpebxqfzkku.supabase.co";
-const SUPA_KEY = import.meta.env.VITE_SUPABASE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVud2x3dWR4dHhwZWJ4cWZ6a2t1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0MDQ0MTcsImV4cCI6MjA5NDk4MDQxN30.TE1JbN-2JepCotaQMOxTe4CFIt-Ht_o9sUAlpxBzWZ8";
+const SUPA_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPA_KEY = import.meta.env.VITE_SUPABASE_KEY;
+
+if (!SUPA_URL || !SUPA_KEY) {
+  console.warn("[supabase] Variaveis VITE_SUPABASE_URL/VITE_SUPABASE_KEY ausentes.");
+}
 
 const sb = createClient(SUPA_URL, SUPA_KEY, {
   auth: { persistSession: false },

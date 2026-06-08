@@ -23,6 +23,8 @@ const mustExist = [
   "api/monitor.js",
   "api/backup.js",
   "scripts/sync-vercel-env.mjs",
+  "scripts/seed-waldenir.mjs",
+  "supabase/migrations/20260608012000_file_registry.sql",
   "api/notify-progress.js",
   "scripts/notify-telegram-change.ps1",
   ".githooks/post-commit",
@@ -51,13 +53,22 @@ const app = readFileSync(resolve(root, "src/App.jsx"), "utf8");
 const monitor = readFileSync(resolve(root, "api/monitor.js"), "utf8");
 const backup = readFileSync(resolve(root, "api/backup.js"), "utf8");
 const vercelEnvSync = readFileSync(resolve(root, "scripts/sync-vercel-env.mjs"), "utf8");
+const waldenirSeed = readFileSync(resolve(root, "scripts/seed-waldenir.mjs"), "utf8");
 const serviceWorker = readFileSync(resolve(root, "public/sw.js"), "utf8");
 const envExample = readFileSync(resolve(root, ".env.example"), "utf8");
+const supabaseClient = readFileSync(resolve(root, "src/supabase.js"), "utf8");
+const filesMigration = readFileSync(resolve(root, "supabase/migrations/20260608012000_file_registry.sql"), "utf8");
 
 assert.doesNotMatch(envExample, /eyJhbGci|[0-9]{8,}:[A-Za-z0-9_-]{20,}/, ".env.example nao deve conter valores reais");
+assert.doesNotMatch(waldenirSeed, /waldenir@2026|admin123|tec123|fin123|mec123/, "Seed Waldenir nao deve conter senha real");
+assert.doesNotMatch(supabaseClient, /eyJhbGci|enwlwudxtxpebxqfzkku/, "Cliente Supabase nao deve ter fallback hardcoded");
 assert.match(monitor, /re_monitor_history/, "Monitor deve salvar historico");
 assert.match(backup, /re_monitor_history/, "Backup deve incluir historico do monitor");
 assert.match(vercelEnvSync, /upsert=true/, "Sync Vercel deve atualizar variaveis sem duplicar");
+assert.match(waldenirSeed, /passHash/, "Seed Waldenir deve gravar senha com hash");
+assert.match(filesMigration, /create table if not exists public\.re_files/, "Migracao de arquivos deve existir");
+assert.match(filesMigration, /stocktel-files/, "Migracao deve criar bucket privado de arquivos");
+assert.match(readFileSync(resolve(root, "src/hooks/useLS.js"), "utf8"), /mergeEntityArray/, "Sync local/remoto deve mesclar entidades");
 assert.match(serviceWorker, /offline\.html/, "PWA deve ter fallback offline");
 assert.match(app, /pontoFechamentos/, "Fechamento mensal de ponto deve estar conectado ao app");
 assert.match(app, /exportarExcelPonto/, "Exportacao Excel do ponto deve existir");

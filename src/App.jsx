@@ -2628,6 +2628,8 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
 
   const save=()=>{
     if(!form.name.trim()||!form.login.trim()||!form.pass.trim())return;
+    const loginExists=users.some(u=>u.login?.trim().toLowerCase()===form.login.trim().toLowerCase()&&u.id!==modal);
+    if(loginExists){alert("Já existe um usuário com este login.");return;}
     // CNH obrigatória para quem usa frota
     if(form.usa_frota){
       if(!form.cnh_numero?.trim()){alert("CNH obrigatória para usuários que utilizam frota.");return;}
