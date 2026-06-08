@@ -21,6 +21,17 @@
 - `DEPLOY_NOTIFY_SECRET`
 - `RELEASE_NOTIFY_SECRET`
 
+## Sincronizacao segura das variaveis
+
+Quando houver um `VERCEL_TOKEN` no terminal local, sincronize as variaveis do `.env.local` para Production e Preview:
+
+```powershell
+$env:VERCEL_TOKEN="cole-o-token-somente-no-terminal"
+npm run vercel:env:sync
+```
+
+O script nao imprime os valores. Depois de sincronizar, faca um novo deploy e valide `/api/monitor`. So remova o fallback do `vercel.json` depois que Supabase e Telegram responderem online.
+
 ## Processo recomendado
 
 1. Fazer alteracoes em branch.
