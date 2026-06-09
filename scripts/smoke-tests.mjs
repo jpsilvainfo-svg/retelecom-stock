@@ -82,7 +82,8 @@ assert.match(app, /EstoqueModule/, "Estoque base deve usar modulo extraido");
 assert.match(app, /KitModule/, "Kit tecnico deve usar modulo extraido");
 assert.match(app, /DistModule/, "Saida/liberacao deve usar modulo extraido");
 assert.match(app, /NFModule/, "Entrada NF deve usar modulo extraido");
-assert.match(app, /PontoModule/, "Ponto eletronico deve usar modulo extraido");
+assert.match(app, /ponto:<PontoPage/, "Ponto eletronico deve usar tela completa legada");
+assert.match(app, /getCurrentPosition/, "Ponto eletronico deve manter geolocalizacao");
 assert.match(app, /FrotaModule/, "Frota deve usar modulo extraido");
 assert.match(app, /RelatoriosModule/, "Relatorios deve usar modulo extraido");
 

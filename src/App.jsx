@@ -21,7 +21,6 @@ import EstoqueModule from "./modules/estoque/EstoquePage.jsx";
 import KitModule from "./modules/estoque/KitPage.jsx";
 import DistModule from "./modules/estoque/DistPage.jsx";
 import NFModule from "./modules/estoque/NFPage.jsx";
-import PontoModule from "./modules/grandes/PontoPage.jsx";
 import FrotaModule from "./modules/grandes/FrotaPage.jsx";
 import RelatoriosModule from "./modules/grandes/RelatoriosPage.jsx";
 
@@ -7588,7 +7587,7 @@ function AppInner(){
     usr:<UsrPage users={users} setUsers={setUsers} addLog={addLog} currentUser={user} isMobile={isMobile}/>,
     log:<LogPage logs={logs} isMobile={isMobile}/>,
     ajuda:<HelpPage currentUser={user} isMobile={isMobile}/>,
-    ponto:<PontoModule pontos={pontos} setPontos={setPontos} pontoConfig={pontoConfig} setPontoConfig={setPontoConfig} pontoSolicits={pontoSolicits} setPontoSolicits={setPontoSolicits} pontoFechamentos={pontoFechamentos} setPontoFechamentos={setPontoFechamentos} escalas={escalas} setEscalas={setEscalas} folgas={folgas} setFolgas={setFolgas} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} showToast={showToast}/>,
+    ponto:<PontoPage pontos={pontos} setPontos={setPontos} pontoConfig={pontoConfig} setPontoConfig={setPontoConfig} pontoSolicits={pontoSolicits} setPontoSolicits={setPontoSolicits} pontoFechamentos={pontoFechamentos} setPontoFechamentos={setPontoFechamentos} escalas={escalas} setEscalas={setEscalas} folgas={folgas} setFolgas={setFolgas} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} showToast={showToast}/>,
     frota:<FrotaModule veiculos={veiculos} setVeiculos={setVeiculos} abastecimentos={abastecimentos} setAbastecimentos={setAbastecimentos} checkouts={checkouts} setCheckouts={setCheckouts} pneus={pneus} setPneus={setPneus} docsVeic={docsVeic} setDocsVeic={setDocsVeic} manutOS={manutOS} setManutOS={setManutOS} manutSols={manutSols} setManutSols={setManutSols} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
     manut:<ManutencaoPage manutSols={manutSols} setManutSols={setManutSols} manutOS={manutOS} setManutOS={setManutOS} veiculos={veiculos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} abastecimentos={abastecimentos} pneus={pneus}/>,
     diag:<DiagnosticoModule currentUser={user} isMobile={isMobile}/>,
