@@ -12,7 +12,6 @@ import { C, catColor, consumptionColor, PIE } from "./utils/colors.js";
 import { ACTION_LABELS, ALL_MODULES, APP_RELEASE_DATE, APP_VERSION, APP_VERSION_LABEL, DEFAULT_ACTION_PERMS, DEFAULT_PERMS, ROOT_ONLY } from "./utils/constants.js";
 import { fmt, now, today, uid } from "./utils/formatters.js";
 import { hashSenha, sessaoValida, verificarSenha } from "./modules/auth/session.js";
-import DiagnosticoModule from "./modules/diag/Diagnostico.jsx";
 import CustomizeModule from "./modules/customize/Customize.jsx";
 import OSModule from "./modules/operacional/OSPage.jsx";
 import DevModule from "./modules/operacional/DevPage.jsx";
@@ -21,7 +20,6 @@ import EstoqueModule from "./modules/estoque/EstoquePage.jsx";
 import KitModule from "./modules/estoque/KitPage.jsx";
 import DistModule from "./modules/estoque/DistPage.jsx";
 import NFModule from "./modules/estoque/NFPage.jsx";
-import FrotaModule from "./modules/grandes/FrotaPage.jsx";
 import RelatoriosModule from "./modules/grandes/RelatoriosPage.jsx";
 
 // ── SEGURANÇA: Hashing de senhas (PBKDF2 + SHA-256, nativo do browser) ──
@@ -7588,9 +7586,9 @@ function AppInner(){
     log:<LogPage logs={logs} isMobile={isMobile}/>,
     ajuda:<HelpPage currentUser={user} isMobile={isMobile}/>,
     ponto:<PontoPage pontos={pontos} setPontos={setPontos} pontoConfig={pontoConfig} setPontoConfig={setPontoConfig} pontoSolicits={pontoSolicits} setPontoSolicits={setPontoSolicits} pontoFechamentos={pontoFechamentos} setPontoFechamentos={setPontoFechamentos} escalas={escalas} setEscalas={setEscalas} folgas={folgas} setFolgas={setFolgas} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} showToast={showToast}/>,
-    frota:<FrotaModule veiculos={veiculos} setVeiculos={setVeiculos} abastecimentos={abastecimentos} setAbastecimentos={setAbastecimentos} checkouts={checkouts} setCheckouts={setCheckouts} pneus={pneus} setPneus={setPneus} docsVeic={docsVeic} setDocsVeic={setDocsVeic} manutOS={manutOS} setManutOS={setManutOS} manutSols={manutSols} setManutSols={setManutSols} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
+    frota:<FrotaPage veiculos={veiculos} setVeiculos={setVeiculos} abastecimentos={abastecimentos} setAbastecimentos={setAbastecimentos} checkouts={checkouts} setCheckouts={setCheckouts} pneus={pneus} setPneus={setPneus} docsVeic={docsVeic} setDocsVeic={setDocsVeic} manutOS={manutOS} setManutOS={setManutOS} manutSols={manutSols} setManutSols={setManutSols} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
     manut:<ManutencaoPage manutSols={manutSols} setManutSols={setManutSols} manutOS={manutOS} setManutOS={setManutOS} veiculos={veiculos} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} abastecimentos={abastecimentos} pneus={pneus}/>,
-    diag:<DiagnosticoModule currentUser={user} isMobile={isMobile}/>,
+    diag:<DiagnosticoPage currentUser={user} isMobile={isMobile}/>,
     customize:<CustomizeModule currentUser={user} isMobile={isMobile} customization={customization} setCustomization={setCustomization}/>,
   };
 

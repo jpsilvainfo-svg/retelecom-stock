@@ -84,7 +84,11 @@ assert.match(app, /DistModule/, "Saida/liberacao deve usar modulo extraido");
 assert.match(app, /NFModule/, "Entrada NF deve usar modulo extraido");
 assert.match(app, /ponto:<PontoPage/, "Ponto eletronico deve usar tela completa legada");
 assert.match(app, /getCurrentPosition/, "Ponto eletronico deve manter geolocalizacao");
-assert.match(app, /FrotaModule/, "Frota deve usar modulo extraido");
+assert.match(app, /frota:<FrotaPage/, "Frota deve usar tela completa legada");
+assert.match(app, /Checklist/, "Frota deve manter checklist completo");
+assert.match(app, /getCustoPorKm/, "Frota deve manter custos e historico");
+assert.match(app, /diag:<DiagnosticoPage/, "Diagnostico deve usar tela completa legada");
+assert.match(app, /Forçar Sincronização/, "Diagnostico deve manter controles completos de sincronizacao");
 assert.match(app, /RelatoriosModule/, "Relatorios deve usar modulo extraido");
 
 console.log("StockTel smoke tests OK");
