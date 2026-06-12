@@ -62,9 +62,23 @@ export function queueSize() {
 }
 
 // ── Envia para Supabase (sbSet já faz retry internamente) ─────────────────
+// Para arrays de entidades, faz "ler-mesclar-gravar": antes de gravar, lê o
+// estado atual da nuvem e une com o que vai ser enviado (respeitando
+// exclusões). Assim um cliente com dados um pouco atrasados NÃO apaga itens
+// que outro dispositivo acabou de criar — foi o que causou a perda do Waldenir.
 export async function pushToCloud(key, value) {
   try {
-    const res = await sbSet(key, value);
+    let toWrite = value;
+    if (Array.isArray(value)) {
+      try {
+        const remote = await sbGet(key);
+        if (remote && !remote.empty && Array.isArray(remote.value)) {
+          const merged = mergeEntityArray(value, remote.value);
+          if (merged) toWrite = applyTombstones(merged, readTomb(key));
+        }
+      } catch {} // se a leitura falhar, grava o valor local mesmo
+    }
+    const res = await sbSet(key, toWrite);
     if (res.ok) {
       queueRemove(key);
       window.dispatchEvent(new CustomEvent("sync-ok", { detail: { key } }));

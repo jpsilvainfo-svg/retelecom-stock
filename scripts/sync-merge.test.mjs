@@ -60,5 +60,16 @@ const ids = arr => arr.map(identityKey).sort();
   ok(applyTombstones({ a: 1 }, { x: "t" }).a === 1, "applyTombstones não mexe em objeto puro");
 }
 
+// 7. "Ler-mesclar-gravar": cliente atrasado NÃO apaga adição concorrente
+//    (reproduz o caso do Waldenir). value = lista local sem o novo usuário;
+//    remote = nuvem que já recebeu o novo usuário de outro dispositivo.
+{
+  const valueLocalDesatualizado = [{ id: "u1" }, { id: "u2" }];          // sem Waldenir
+  const remoteComWaldenir = [{ id: "u1" }, { id: "u2" }, { id: "u10", login: "waldenir" }];
+  const merged = mergeEntityArray(valueLocalDesatualizado, remoteComWaldenir);
+  const toWrite = applyTombstones(merged, {});                            // nenhum tombstone
+  ok(toWrite.some(u => u.id === "u10"), "push de cliente atrasado preserva usuário criado por outro (Waldenir)");
+}
+
 if (fail) { console.error(`\n${fail} teste(s) falharam.`); process.exit(1); }
 console.log("\nsync-merge tests OK");
