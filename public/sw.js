@@ -1,64 +1,20 @@
-// O nome do cache recebe um ID unico a cada build (substituido pelo plugin em
-// vite.config.js). Assim cada deploy invalida automaticamente o cache antigo —
-// o handler "activate" apaga todos os caches com nome diferente. Em dev fica o
-// valor literal abaixo (estavel), o que e suficiente para desenvolvimento.
-const CACHE = "stocktel-pwa-__BUILD_ID__";
-const STATIC_ASSETS = [
-  "/",
-  "/index.html",
-  "/offline.html",
-  "/manifest.json",
-  "/favicon-stocktel.png",
-  "/logo-stocktel.png",
-  "/pwa-192.png",
-  "/pwa-512.png"
-];
-
-self.addEventListener("install", event => {
-  event.waitUntil(
-    caches.open(CACHE)
-      .then(cache => cache.addAll(STATIC_ASSETS))
-      .then(() => self.skipWaiting())
-  );
-});
+// Service worker DESATIVADO (kill switch).
+// O app passou a ser cloud-only, sem cache offline no navegador. Este script
+// existe apenas para que clientes que ainda tenham um service worker antigo
+// instalado limpem todos os caches e se desregistrem sozinhos no próximo
+// acesso. Depois disso, nenhum service worker fica ativo.
+self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", event => {
-  event.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))
-      .then(() => self.clients.claim())
-  );
+  event.waitUntil((async () => {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+      await self.registration.unregister();
+      const clients = await self.clients.matchAll({ type: "window" });
+      clients.forEach(c => c.navigate(c.url));
+    } catch {}
+  })());
 });
 
-self.addEventListener("fetch", event => {
-  if (event.request.method !== "GET") return;
-
-  const url = new URL(event.request.url);
-  if (url.pathname.startsWith("/api/") || url.hostname.includes("supabase")) return;
-
-  if (event.request.mode === "navigate") {
-    event.respondWith(
-      fetch(event.request)
-        .then(response => {
-          const copy = response.clone();
-          caches.open(CACHE).then(cache => cache.put("/index.html", copy));
-          return response;
-        })
-        .catch(() => caches.match("/index.html").then(match => match || caches.match("/offline.html")))
-    );
-    return;
-  }
-
-  event.respondWith(
-    caches.match(event.request).then(cached => {
-      if (cached) return cached;
-      return fetch(event.request).then(response => {
-        if (response && response.status === 200) {
-          const copy = response.clone();
-          caches.open(CACHE).then(cache => cache.put(event.request, copy));
-        }
-        return response;
-      }).catch(() => caches.match("/offline.html"));
-    })
-  );
-});
+// Sem handler de fetch: as requisições vão direto para a rede, sem cache.

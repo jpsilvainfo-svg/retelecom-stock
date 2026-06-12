@@ -2,20 +2,16 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 
-// Registra o Service Worker para habilitar PWA, cache offline e instalacao.
+// App cloud-only: SEM cache offline no navegador. Desregistra qualquer service
+// worker que tenha sobrado de versões anteriores e limpa os caches, para
+// garantir que os clientes sempre falem direto com o servidor.
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js")
-      .then(registration => {
-        console.log("[PWA] Service Worker registrado:", registration.scope);
-        registration.update?.();
-      })
-      .catch(error => console.warn("[PWA] Service Worker falhou:", error));
-  });
-
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    console.info("[PWA] Nova versao ativa. Atualize a pagina quando for conveniente.");
-  });
+  navigator.serviceWorker.getRegistrations()
+    .then(regs => regs.forEach(reg => reg.unregister()))
+    .catch(() => {});
+}
+if (window.caches?.keys) {
+  caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(() => {});
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(

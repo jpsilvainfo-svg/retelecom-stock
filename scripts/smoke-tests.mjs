@@ -73,7 +73,9 @@ assert.match(diagnostico, /Sem dados \(OK\)/, "Diagnostico deve tratar modulo va
 assert.match(filesMigration, /create table if not exists public\.re_files/, "Migracao de arquivos deve existir");
 assert.match(filesMigration, /stocktel-files/, "Migracao deve criar bucket privado de arquivos");
 assert.match(readFileSync(resolve(root, "src/hooks/useLS.js"), "utf8"), /mergeEntityArray/, "Sync local/remoto deve mesclar entidades");
-assert.match(serviceWorker, /offline\.html/, "PWA deve ter fallback offline");
+assert.match(serviceWorker, /unregister/, "SW deve ser kill-switch (cloud-only, sem cache offline)");
+assert.doesNotMatch(serviceWorker, /caches\.match/, "SW nao deve mais servir conteudo do cache");
+assert.match(readFileSync(resolve(root, "src/main.jsx"), "utf8"), /unregister/, "main.jsx deve desregistrar service workers antigos");
 assert.match(app, /pontoFechamentos/, "Fechamento mensal de ponto deve estar conectado ao app");
 assert.match(app, /exportarExcelPonto/, "Exportacao Excel do ponto deve existir");
 assert.match(app, /Auditoria do Sistema/, "Tela de auditoria deve estar disponivel");

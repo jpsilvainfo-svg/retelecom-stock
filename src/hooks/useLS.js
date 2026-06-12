@@ -1,5 +1,9 @@
-// src/hooks/useLS.js — sincronização local ↔ Supabase com retry, timestamp
-// imediato e propagação de exclusões (tombstones).
+// src/hooks/useLS.js — modo CLOUD-ONLY: o Supabase é a única fonte de verdade.
+// Nenhum dado de negócio é guardado no navegador. Lê da nuvem ao montar e ao
+// voltar o foco; grava direto na nuvem a cada alteração. A única coisa que
+// pode ficar localmente é metadado de sincronização: o mapa de exclusões
+// (tombstones) e uma fila de reenvio para gravações que falharam por queda de
+// conexão (para o usuário não perder o que digitou).
 import { useState, useEffect, useCallback, useRef } from "react";
 import { sbGet, sbSet } from "../supabase";
 import {
@@ -10,7 +14,6 @@ import {
   mergeTombstones,
 } from "./syncMerge";
 
-const tsKey = k => `${k}__ts`;
 const tombKey = k => `${k}__tomb`;
 const QUEUE_KEY = "__sync_queue";
 
@@ -33,7 +36,7 @@ function writeTomb(key, tomb) {
   try { localStorage.setItem(tombKey(key), JSON.stringify(tomb)); } catch {}
 }
 
-// ── Fila de pendentes ─────────────────────────────────────────────────────
+// ── Fila de reenvio (só guarda gravações que falharam) ────────────────────
 export function queueAdd(key, value) {
   try {
     const q = JSON.parse(localStorage.getItem(QUEUE_KEY) || "{}");
@@ -61,11 +64,11 @@ export function queueSize() {
   return Object.keys(queueGet()).length;
 }
 
-// ── Envia para Supabase (sbSet já faz retry internamente) ─────────────────
-// Para arrays de entidades, faz "ler-mesclar-gravar": antes de gravar, lê o
-// estado atual da nuvem e une com o que vai ser enviado (respeitando
-// exclusões). Assim um cliente com dados um pouco atrasados NÃO apaga itens
-// que outro dispositivo acabou de criar — foi o que causou a perda do Waldenir.
+// ── Grava direto na nuvem ──────────────────────────────────────────────────
+// Para arrays de entidades, faz "ler-mesclar-gravar": lê o estado atual da
+// nuvem e une com o valor enviado (respeitando exclusões), para um cliente não
+// apagar itens que outro acabou de criar. Se a gravação falhar (sem internet),
+// guarda na fila de reenvio.
 export async function pushToCloud(key, value) {
   try {
     let toWrite = value;
@@ -91,80 +94,61 @@ export async function pushToCloud(key, value) {
   }
 }
 
-// ── Hook principal ────────────────────────────────────────────────────────
+// Reenvia gravações pendentes (chamado ao reconectar / voltar o foco).
+export async function flushQueue() {
+  const q = queueGet();
+  for (const key of Object.keys(q)) {
+    await pushToCloud(key, q[key].value);
+  }
+}
+
+// ── Hook principal (cloud-only) ────────────────────────────────────────────
 export const useLS = (key, initial) => {
   const initialRef = useRef(initial);
-  const [val, setVal] = useState(() => {
-    try {
-      const s = localStorage.getItem(key);
-      if (!s) return initialRef.current;
-      const parsed = JSON.parse(s);
-      const safe = safeValue(parsed, initialRef.current);
-      if (safe === null) return initialRef.current;
-      // Respeita exclusões já registradas localmente
-      return Array.isArray(safe) ? applyTombstones(safe, readTomb(key)) : safe;
-    } catch { return initialRef.current; }
-  });
+  const [val, setVal] = useState(initialRef.current);
+  const valRef = useRef(val);
+  valRef.current = val;
 
-  // Ao montar: sincroniza valor + tombstones com o Supabase
-  useEffect(() => {
+  // Busca o estado atual da nuvem e aplica exclusões. Une com o que estiver em
+  // memória para não descartar algo recém-digitado neste dispositivo.
+  const pull = useCallback(() => {
     Promise.all([sbGet(key), sbGet(tombKey(key))]).then(([remote, remoteTombRow]) => {
-      const localRaw = localStorage.getItem(key);
-      const localTs  = localStorage.getItem(tsKey(key)) || "0";
-
-      // Combina tombstones local + remoto (timestamp mais recente vence)
-      const localTomb  = readTomb(key);
       const remoteTomb = (remoteTombRow && !remoteTombRow.empty && remoteTombRow.value && typeof remoteTombRow.value === "object")
         ? remoteTombRow.value : {};
-      const tomb = mergeTombstones(localTomb, remoteTomb);
+      const tomb = mergeTombstones(readTomb(key), remoteTomb);
       writeTomb(key, tomb);
-      if (JSON.stringify(tomb) !== JSON.stringify(remoteTomb) && Object.keys(tomb).length) {
-        pushToCloud(tombKey(key), tomb);
-      }
-
-      const finalize = (arrOrVal) => {
-        const next = Array.isArray(arrOrVal) ? applyTombstones(arrOrVal, tomb) : arrOrVal;
-        setVal(next);
-        try {
-          localStorage.setItem(key, JSON.stringify(next));
-        } catch {}
-        return next;
-      };
 
       if (remote && !remote.empty && remote.value !== null) {
-        const remoteTs = remote.updated_at || "0";
         const safe = safeValue(remote.value, initialRef.current);
-        if (safe === null) return; // tipo incompatível, ignora
-        const localValue = localRaw ? JSON.parse(localRaw) : null;
-        const merged = mergeEntityArray(localValue, safe);
-
-        if (remoteTs > localTs) {
-          // Remoto mais recente → aplica localmente (respeitando exclusões)
-          const next = finalize(merged || safe);
-          try { localStorage.setItem(tsKey(key), remoteTs); } catch {}
-          if (merged) pushToCloud(key, next);
-        } else if (localRaw) {
-          // Local igual ou mais recente → garante que remoto está atualizado
-          const next = finalize(merged || localValue);
-          try { pushToCloud(key, next); } catch {}
-        }
-      } else if (localRaw) {
-        // Supabase vazio mas temos local → envia (já sem itens excluídos)
-        try {
-          const localValue = JSON.parse(localRaw);
-          const next = finalize(localValue);
-          pushToCloud(key, next);
-        } catch {}
+        if (safe === null) return;
+        const localVal = valRef.current;
+        const merged = mergeEntityArray(localVal, safe);
+        const base = merged || safe;
+        const next = Array.isArray(base) ? applyTombstones(base, tomb) : base;
+        setVal(next);
       }
     }).catch(() => {});
   }, [key]);
+
+  useEffect(() => {
+    pull();
+    const onFocus = () => { flushQueue(); pull(); };
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("online", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("online", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [pull]);
 
   const set = useCallback((v) => {
     setVal(prev => {
       const next = typeof v === "function" ? v(prev) : v;
       const ts = new Date().toISOString();
 
-      // Detecta exclusões/recriações para manter os tombstones em dia
+      // Registra exclusões/recriações para que as exclusões propaguem
       if (Array.isArray(prev) && Array.isArray(next)) {
         const delta = diffIdentity(prev, next);
         if (delta.removed.length || delta.added.length) {
@@ -176,12 +160,7 @@ export const useLS = (key, initial) => {
         }
       }
 
-      // CRÍTICO: grava timestamp LOCAL imediatamente com os dados.
-      // Garante que dado local SEMPRE ganha sobre remoto antigo.
-      try {
-        localStorage.setItem(key, JSON.stringify(next));
-        localStorage.setItem(tsKey(key), ts);
-      } catch {}
+      // Grava direto na nuvem (sem guardar o dado no navegador)
       pushToCloud(key, next);
       return next;
     });
