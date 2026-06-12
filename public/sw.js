@@ -1,7 +1,8 @@
-// IMPORTANTE: incremente esta versao a cada deploy que precise invalidar o
-// cache do PWA. O handler "activate" abaixo apaga todos os caches com nome
-// diferente, forcando os clientes a baixarem os assets novos.
-const CACHE = "stocktel-pwa-v4";
+// O nome do cache recebe um ID unico a cada build (substituido pelo plugin em
+// vite.config.js). Assim cada deploy invalida automaticamente o cache antigo —
+// o handler "activate" apaga todos os caches com nome diferente. Em dev fica o
+// valor literal abaixo (estavel), o que e suficiente para desenvolvimento.
+const CACHE = "stocktel-pwa-__BUILD_ID__";
 const STATIC_ASSETS = [
   "/",
   "/index.html",
