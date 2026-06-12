@@ -1,4 +1,7 @@
-const CACHE = "stocktel-pwa-v3";
+// IMPORTANTE: incremente esta versao a cada deploy que precise invalidar o
+// cache do PWA. O handler "activate" abaixo apaga todos os caches com nome
+// diferente, forcando os clientes a baixarem os assets novos.
+const CACHE = "stocktel-pwa-v4";
 const STATIC_ASSETS = [
   "/",
   "/index.html",

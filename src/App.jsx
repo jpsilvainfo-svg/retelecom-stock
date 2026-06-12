@@ -7251,7 +7251,6 @@ function AppInner(){
     try{return localStorage.getItem("re_page")||"dash";}catch{return "dash";}
   });
   const[users,setUsers]=useLS("re_users",USERS0);
-  const[usersResetVersion,setUsersResetVersion]=useLS("re_users_reset_version","");
   const[stock,setStock]=useLS("re_stock",STOCK0);
   const[tstock,setTstock]=useLS("re_tstock",TSTOCK0);
   const[os,setOs]=useLS("re_os",OS0);
@@ -7373,26 +7372,13 @@ function AppInner(){
     });
   },[setUsers]);
 
-  // Reset solicitado dos acessos originais. Mantem o usuario root exatamente como esta.
-  useEffect(()=>{
-    const RESET_VERSION="originais-2026-05-28";
-    if(usersResetVersion===RESET_VERSION)return;
-    const t=setTimeout(()=>{
-      const defaultExtras=[
-        {id:"u8",name:"Financeiro",email:"financeiro@stocktel.com.br",phone:"(21)99999-0003",cpf:"FIN-001",login:"financeiro",pass:"fin123",role:"financeiro",photo:"",perms:DEFAULT_PERMS["financeiro"],mustChangePassword:true},
-        {id:"u9",name:"Mec\u00e2nico",email:"mecanico@stocktel.com.br",phone:"(21)99999-0004",cpf:"MEC-001",login:"mecanico",pass:"mec123",role:"mecanico",photo:"",perms:DEFAULT_PERMS["mecanico"],mustChangePassword:true},
-      ];
-      const originals=[...USERS0,...defaultExtras];
-      setUsers(prev=>{
-        const rootAtual=prev.find(u=>u.id==="root"||u.login==="root");
-        const originalLogins=new Set(originals.map(u=>u.login));
-        const extras=prev.filter(u=>!originalLogins.has(u.login)&&u.id!=="root"&&u.login!=="root");
-        return [...originals,...extras,...(rootAtual?[rootAtual]:[])];
-      });
-      setUsersResetVersion(RESET_VERSION);
-    },2500);
-    return()=>clearTimeout(t);
-  },[usersResetVersion,setUsers,setUsersResetVersion]);
+  // NOTA: o antigo efeito "Reset dos acessos originais" (RESET_VERSION
+  // "originais-2026-05-28") foi REMOVIDO. Era um reset unico que rodava apos
+  // 2,5s em paralelo com o carregamento do Supabase; quando a nuvem demorava a
+  // responder ele reconstruia a lista so com os usuarios originais e apagava os
+  // usuarios novos \u2014 inclusive sobrescrevendo o Supabase. A migracao de
+  // usuarios padrao acima (que so ADICIONA defaults faltantes, nunca remove) ja
+  // garante os acessos basicos sem risco para os usuarios criados.
 
   // Migração de permissões — adiciona módulos novos a usuários existentes
   useEffect(()=>{
