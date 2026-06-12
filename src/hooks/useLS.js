@@ -106,11 +106,13 @@ export async function flushQueue() {
 export const useLS = (key, initial) => {
   const initialRef = useRef(initial);
   const [val, setVal] = useState(initialRef.current);
-  const valRef = useRef(val);
-  valRef.current = val;
+  // Só liberamos gravações na nuvem DEPOIS de carregar os dados reais. Antes
+  // disso o estado é apenas o valor-padrão (USERS0, etc.); empurrar isso para a
+  // nuvem sobrescreveria os dados reais (foi o que reintroduzia senhas/duplicava).
+  const hydratedRef = useRef(false);
 
-  // Busca o estado atual da nuvem e aplica exclusões. Une com o que estiver em
-  // memória para não descartar algo recém-digitado neste dispositivo.
+  // Busca o estado atual da nuvem e aplica exclusões. A nuvem é a fonte de
+  // verdade: ao hidratar, o valor remoto substitui o padrão local.
   const pull = useCallback(() => {
     Promise.all([sbGet(key), sbGet(tombKey(key))]).then(([remote, remoteTombRow]) => {
       const remoteTomb = (remoteTombRow && !remoteTombRow.empty && remoteTombRow.value && typeof remoteTombRow.value === "object")
@@ -120,13 +122,13 @@ export const useLS = (key, initial) => {
 
       if (remote && !remote.empty && remote.value !== null) {
         const safe = safeValue(remote.value, initialRef.current);
-        if (safe === null) return;
-        const localVal = valRef.current;
-        const merged = mergeEntityArray(localVal, safe);
-        const base = merged || safe;
-        const next = Array.isArray(base) ? applyTombstones(base, tomb) : base;
-        setVal(next);
+        if (safe !== null) {
+          const next = Array.isArray(safe) ? applyTombstones(safe, tomb) : safe;
+          setVal(next);
+        }
       }
+      // Carregou (com ou sem dados): a partir daqui as gravações são legítimas.
+      hydratedRef.current = true;
     }).catch(() => {});
   }, [key]);
 
@@ -147,6 +149,10 @@ export const useLS = (key, initial) => {
     setVal(prev => {
       const next = typeof v === "function" ? v(prev) : v;
       const ts = new Date().toISOString();
+
+      // Antes de carregar os dados reais, só atualiza em memória — NUNCA grava
+      // na nuvem (evita que valores-padrão/migrações sobrescrevam o real).
+      if (!hydratedRef.current) return next;
 
       // Registra exclusões/recriações para que as exclusões propaguem
       if (Array.isArray(prev) && Array.isArray(next)) {
