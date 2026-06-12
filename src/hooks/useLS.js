@@ -1,8 +1,17 @@
-// src/hooks/useLS.js — sincronização local ↔ Supabase com retry e timestamp imediato
+// src/hooks/useLS.js — sincronização local ↔ Supabase com retry, timestamp
+// imediato e propagação de exclusões (tombstones).
 import { useState, useEffect, useCallback, useRef } from "react";
 import { sbGet, sbSet } from "../supabase";
+import {
+  mergeEntityArray,
+  diffIdentity,
+  applyTombstones,
+  applyDelta,
+  mergeTombstones,
+} from "./syncMerge";
 
 const tsKey = k => `${k}__ts`;
+const tombKey = k => `${k}__tomb`;
 const QUEUE_KEY = "__sync_queue";
 
 // ── Valida tipo do valor remoto ───────────────────────────────────────────
@@ -15,37 +24,16 @@ function safeValue(remote, initial) {
   return remote;
 }
 
+// ── Tombstones (registro de exclusões) ────────────────────────────────────
+function readTomb(key) {
+  try { return JSON.parse(localStorage.getItem(tombKey(key)) || "{}"); }
+  catch { return {}; }
+}
+function writeTomb(key, tomb) {
+  try { localStorage.setItem(tombKey(key), JSON.stringify(tomb)); } catch {}
+}
+
 // ── Fila de pendentes ─────────────────────────────────────────────────────
-function identityKey(item) {
-  if (!item || typeof item !== "object" || Array.isArray(item)) return null;
-  return item.id || item.login || item.code || item.num || item.os || null;
-}
-
-function mergeEntityArray(localValue, remoteValue) {
-  if (!Array.isArray(localValue) || !Array.isArray(remoteValue)) return null;
-  const allObjects = [...localValue, ...remoteValue].every(item => item && typeof item === "object" && !Array.isArray(item));
-  if (!allObjects) return null;
-  const byKey = new Map();
-  for (const item of remoteValue) {
-    const key = identityKey(item);
-    if (key) byKey.set(String(key), item);
-  }
-  for (const item of localValue) {
-    const key = identityKey(item);
-    if (key) byKey.set(String(key), { ...(byKey.get(String(key)) || {}), ...item });
-  }
-  const localKeys = new Set(localValue.map(identityKey).filter(Boolean).map(String));
-  const localMerged = localValue.map(item => {
-    const key = identityKey(item);
-    return key ? byKey.get(String(key)) : item;
-  });
-  const remoteOnly = remoteValue.filter(item => {
-    const key = identityKey(item);
-    return key && !localKeys.has(String(key));
-  });
-  return [...localMerged, ...remoteOnly];
-}
-
 export function queueAdd(key, value) {
   try {
     const q = JSON.parse(localStorage.getItem(QUEUE_KEY) || "{}");
@@ -98,41 +86,61 @@ export const useLS = (key, initial) => {
       if (!s) return initialRef.current;
       const parsed = JSON.parse(s);
       const safe = safeValue(parsed, initialRef.current);
-      return safe !== null ? safe : initialRef.current;
+      if (safe === null) return initialRef.current;
+      // Respeita exclusões já registradas localmente
+      return Array.isArray(safe) ? applyTombstones(safe, readTomb(key)) : safe;
     } catch { return initialRef.current; }
   });
 
-  // Ao montar: sincroniza com Supabase
+  // Ao montar: sincroniza valor + tombstones com o Supabase
   useEffect(() => {
-    sbGet(key).then(remote => {
+    Promise.all([sbGet(key), sbGet(tombKey(key))]).then(([remote, remoteTombRow]) => {
       const localRaw = localStorage.getItem(key);
       const localTs  = localStorage.getItem(tsKey(key)) || "0";
+
+      // Combina tombstones local + remoto (timestamp mais recente vence)
+      const localTomb  = readTomb(key);
+      const remoteTomb = (remoteTombRow && !remoteTombRow.empty && remoteTombRow.value && typeof remoteTombRow.value === "object")
+        ? remoteTombRow.value : {};
+      const tomb = mergeTombstones(localTomb, remoteTomb);
+      writeTomb(key, tomb);
+      if (JSON.stringify(tomb) !== JSON.stringify(remoteTomb) && Object.keys(tomb).length) {
+        pushToCloud(tombKey(key), tomb);
+      }
+
+      const finalize = (arrOrVal) => {
+        const next = Array.isArray(arrOrVal) ? applyTombstones(arrOrVal, tomb) : arrOrVal;
+        setVal(next);
+        try {
+          localStorage.setItem(key, JSON.stringify(next));
+        } catch {}
+        return next;
+      };
 
       if (remote && !remote.empty && remote.value !== null) {
         const remoteTs = remote.updated_at || "0";
         const safe = safeValue(remote.value, initialRef.current);
+        if (safe === null) return; // tipo incompatível, ignora
         const localValue = localRaw ? JSON.parse(localRaw) : null;
         const merged = mergeEntityArray(localValue, safe);
-        if (safe === null) return; // tipo incompatível, ignora
 
         if (remoteTs > localTs) {
-          // Remoto mais recente → aplica localmente
-          const next = merged || safe;
-          setVal(next);
-          try {
-            localStorage.setItem(key, JSON.stringify(next));
-            localStorage.setItem(tsKey(key), remoteTs);
-          } catch {}
-          if (merged) pushToCloud(key, merged);
-        } else {
+          // Remoto mais recente → aplica localmente (respeitando exclusões)
+          const next = finalize(merged || safe);
+          try { localStorage.setItem(tsKey(key), remoteTs); } catch {}
+          if (merged) pushToCloud(key, next);
+        } else if (localRaw) {
           // Local igual ou mais recente → garante que remoto está atualizado
-          if (localRaw) {
-            try { pushToCloud(key, merged || localValue); } catch {}
-          }
+          const next = finalize(merged || localValue);
+          try { pushToCloud(key, next); } catch {}
         }
       } else if (localRaw) {
-        // Supabase vazio mas temos local → envia
-        try { pushToCloud(key, JSON.parse(localRaw)); } catch {}
+        // Supabase vazio mas temos local → envia (já sem itens excluídos)
+        try {
+          const localValue = JSON.parse(localRaw);
+          const next = finalize(localValue);
+          pushToCloud(key, next);
+        } catch {}
       }
     }).catch(() => {});
   }, [key]);
@@ -140,9 +148,22 @@ export const useLS = (key, initial) => {
   const set = useCallback((v) => {
     setVal(prev => {
       const next = typeof v === "function" ? v(prev) : v;
-      // CRÍTICO: grava timestamp LOCAL imediatamente com os dados
-      // Isso garante que dado local SEMPRE ganha sobre remoto antigo
       const ts = new Date().toISOString();
+
+      // Detecta exclusões/recriações para manter os tombstones em dia
+      if (Array.isArray(prev) && Array.isArray(next)) {
+        const delta = diffIdentity(prev, next);
+        if (delta.removed.length || delta.added.length) {
+          const { tomb, changed } = applyDelta(readTomb(key), delta, ts);
+          if (changed) {
+            writeTomb(key, tomb);
+            pushToCloud(tombKey(key), tomb);
+          }
+        }
+      }
+
+      // CRÍTICO: grava timestamp LOCAL imediatamente com os dados.
+      // Garante que dado local SEMPRE ganha sobre remoto antigo.
       try {
         localStorage.setItem(key, JSON.stringify(next));
         localStorage.setItem(tsKey(key), ts);
