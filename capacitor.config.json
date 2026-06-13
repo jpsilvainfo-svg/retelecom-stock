@@ -1,0 +1,13 @@
+{
+  "appId": "br.com.retelecom.stocktel",
+  "appName": "StockTel",
+  "webDir": "dist",
+  "server": {
+    "url": "https://retelecom-stock.vercel.app",
+    "androidScheme": "https",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}
