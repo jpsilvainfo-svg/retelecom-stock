@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Btn, Card } from "../../components/ui.jsx";
 import { C } from "../../utils/colors.js";
 import { sbUploadFile, sbListFiles, sbFileUrl, sbDeleteFile } from "../../supabase.js";
+import { compressImage } from "../../utils/image.js";
 
 const CATEGORIAS = [
   { v: "geral", l: "Geral" },
@@ -64,14 +65,16 @@ export default function DocumentosPage({ currentUser, addLog, isMobile }) {
     if (!list.length) return;
     setUploading(true); setMsg("");
     let okCount = 0;
-    for (const f of list) {
-      if (f.size > MAX_BYTES) { setMsg(`"${f.name}" passa de 10 MB e foi ignorado.`); continue; }
+    for (const original of list) {
+      // Comprime imagens no dispositivo antes de enviar (economiza armazenamento)
+      const f = await compressImage(original);
+      if (f.size > MAX_BYTES) { setMsg(`"${original.name}" passa de 10 MB e foi ignorado.`); continue; }
       const r = await sbUploadFile(f, {
         module: cat,
         createdBy: currentUser?.name || currentUser?.login || "?",
         ownerId: currentUser?.id || null,
       });
-      if (!r.ok) setMsg(`Falha ao enviar "${f.name}": ${r.error}`);
+      if (!r.ok) setMsg(`Falha ao enviar "${original.name}": ${r.error}`);
       else { okCount++; addLog?.(currentUser?.name || "?", "Arquivo enviado", `${f.name} (${cat})`); }
     }
     setUploading(false);
@@ -121,7 +124,7 @@ export default function DocumentosPage({ currentUser, addLog, isMobile }) {
           <Btn color="gold" outline size="sm" onClick={reload} disabled={loading}>↻ Atualizar</Btn>
         </div>
         <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>
-          Tipos aceitos: PDF, imagens (PNG/JPG), CSV e Excel · até 10 MB por arquivo · no celular você pode tirar foto na hora.
+          Tipos aceitos: PDF, imagens (PNG/JPG), CSV e Excel · até 10 MB por arquivo · no celular você pode tirar foto na hora · fotos são otimizadas automaticamente para economizar espaço.
         </div>
       </Card>
 
