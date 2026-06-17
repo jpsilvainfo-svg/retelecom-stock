@@ -13,6 +13,7 @@ export const ALL_MODULES=[
   {k:"dist",l:"Saída / Liberação",icon:"🚀",group:"estoque"},
   {k:"dev",l:"Devoluções",icon:"↩️",group:"operacional"},
   {k:"sol",l:"Solicitações",icon:"📋",group:"operacional"},
+  {k:"docs",l:"Documentos",icon:"📎",group:"operacional"},
   {k:"rel",l:"Relatórios",icon:"📊",group:"relatorios"},
   {k:"email",l:"Relatório Administrativo",icon:"📧",group:"relatorios"},
   {k:"cat",l:"Categorias",icon:"🏷️",group:"admin"},
@@ -31,10 +32,10 @@ export const ROOT_ONLY=["customize","diag"];
 export const DEFAULT_PERMS={
   superadmin:ALL_MODULES.map(m=>m.k).filter(k=>!ROOT_ONLY.includes(k)),
   admin:ALL_MODULES.map(m=>m.k).filter(k=>!ROOT_ONLY.includes(k)),
-  estoque:["dash","os","estoque","kit","dist","dev","sol","rel","ajuda","ponto"],
-  tecnico:["dash","os","frota","kit","dev","sol","rel","ajuda","ponto"],
-  financeiro:["dash","nf","rel","email","os","dev","log","ajuda","ponto"],
-  mecanico:["dash","manut","frota","ajuda","ponto"],
+  estoque:["dash","os","estoque","kit","dist","dev","sol","docs","rel","ajuda","ponto"],
+  tecnico:["dash","os","frota","kit","dev","sol","docs","rel","ajuda","ponto"],
+  financeiro:["dash","nf","rel","email","os","dev","docs","log","ajuda","ponto"],
+  mecanico:["dash","manut","frota","docs","ajuda","ponto"],
 };
 
 export const ACTION_LABELS={

@@ -6,3 +6,6 @@ dist
 .DS_Store
 site-check/
 online_snapshots/
+.claude/settings.local.json
+stocktel_backup.json
+Ctemp_users.json

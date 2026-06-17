@@ -21,6 +21,7 @@ import KitModule from "./modules/estoque/KitPage.jsx";
 import DistModule from "./modules/estoque/DistPage.jsx";
 import NFModule from "./modules/estoque/NFPage.jsx";
 import RelatoriosModule from "./modules/grandes/RelatoriosPage.jsx";
+import DocumentosModule from "./modules/docs/DocumentosPage.jsx";
 
 // ── SEGURANÇA: Hashing de senhas (PBKDF2 + SHA-256, nativo do browser) ──
 // ── NOTIFICAÇÕES PUSH DO BROWSER ─────────────────────────────────────────
@@ -7563,6 +7564,7 @@ function AppInner(){
     os:<OSModule {...p}/>,
     dev:<DevModule {...p}/>,
     sol:<SolicitacaoModule solicitacoes={solicitacoes} setSolicitacoes={setSolicitacoes} stock={stock} setStock={setStock} tstock={tstock} setTstock={setTstock} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
+    docs:<DocumentosModule currentUser={user} addLog={addLog} isMobile={isMobile}/>,
     nf:<NFModule nf={nf} setNf={setNf} stock={stock} setStock={setStock} addLog={addLog} currentUser={user} isMobile={isMobile}/>,
     rel:<RelatoriosModule stock={stock} os={os} returns={returns} users={users} nf={nf} isMobile={isMobile} currentUser={user} abastecimentos={abastecimentos} manutOS={manutOS} veiculos={veiculos}/>,
     email:<AdminRelPage nf={nf} stock={stock} os={os} returns={returns} tstock={tstock} users={users} solicitacoes={solicitacoes} isMobile={isMobile} addLog={addLog} veiculos={veiculos} abastecimentos={abastecimentos} manutOS={manutOS}/>,
