@@ -28,7 +28,7 @@ async function hashSenha(senha, saltB64 = null) {
 
 const env = readDotenv(".env.local");
 const supaUrl = env.VITE_SUPABASE_URL;
-const supaKey = env.VITE_SUPABASE_KEY;
+const supaKey = (env.SUPABASE_SERVICE_ROLE || env.VITE_SUPABASE_KEY);
 if (!supaUrl || !supaKey) {
   console.error(".env.local sem Supabase.");
   process.exit(2);

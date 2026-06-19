@@ -1,6 +1,6 @@
 // api/telegram.js — comandos interativos do bot Telegram StockTel
 const SUPA_URL = process.env.VITE_SUPABASE_URL || "https://enwlwudxtxpebxqfzkku.supabase.co";
-const SUPA_KEY = process.env.VITE_SUPABASE_KEY;
+const SUPA_KEY = process.env.SUPABASE_SERVICE_ROLE || process.env.VITE_SUPABASE_KEY;
 const SITE_URL = process.env.PUBLIC_SITE_URL || "https://retelecom-stock.vercel.app";
 const GITHUB_REPO = process.env.GITHUB_REPOSITORY || "jpsilvainfo-svg/retelecom-stock";
 

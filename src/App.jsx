@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
 import * as XLSX from "xlsx";
-import { sbGet, sbSet, sbPing } from "./supabase.js"; // sbPing usado no Diagnóstico
+import { sbGet, sbSet, sbPing, authSignIn, authSignOut, authHasSession, authUpdatePassword, fetchUserProfile } from "./supabase.js"; // sbPing usado no Diagnóstico
 import { useLS, pushToCloud, queueGet, queueRemove, queueSize } from "./hooks/useLS.js";
 import { useIsMobile } from "./hooks/useIsMobile.js";
 import { ErrorBoundary, Spinner, Toast } from "./components/feedback.jsx";
@@ -210,18 +210,19 @@ function LoginPage({users,onLogin}){
     }
     setLoading(true);
     try{
-      const u=users.find(u=>u.login===login);
-      const ok=u&&await verificarSenha(pass,u);
-      if(ok){
+      // Autentica no Supabase Auth (login -> login@stocktel.app)
+      const res=await authSignIn(login,pass);
+      if(res.ok){
+        // Já autenticado: busca o perfil (papel/permissões) na re_users
+        const profile=await fetchUserProfile(login)||users.find(u=>u.login===login)||null;
+        if(!profile){
+          setErr("Login válido, mas perfil não encontrado. Contate o administrador.");
+          setLoading(false);
+          return;
+        }
         setErr("");
         setLoginGuard({attempts:0});
-        // Migra senha legada para hash seguro automaticamente
-        if(!u.passHash){
-          const{hash,salt}=await hashSenha(pass);
-          onLogin(u,{passHash:hash,passSalt:salt,pass:undefined});
-        }else{
-          onLogin(u,null);
-        }
+        onLogin(profile,null);
       }else{
         const attempts=(guard.attempts||0)+1;
         const lockUntil=attempts>=5?Date.now()+60000:0;
@@ -7414,6 +7415,28 @@ function AppInner(){
     });
   },[setUsers]);
 
+  // ── BOOTSTRAP DE SESSÃO (Supabase Auth) ──
+  // Se há sessão local antiga mas nenhuma sessão Supabase válida, força novo
+  // login (cutover seguro). Se há sessão, re-sincroniza os dados com o JWT.
+  useEffect(()=>{
+    let alive=true;
+    authHasSession().then(has=>{
+      if(!alive)return;
+      if(has){
+        try{window.dispatchEvent(new Event("focus"));}catch{}
+      }else{
+        try{
+          if(localStorage.getItem("re_session")){
+            localStorage.removeItem("re_session");
+            localStorage.removeItem("re_page");
+          }
+        }catch{}
+        setUser(null);
+      }
+    });
+    return()=>{alive=false;};
+  },[]);
+
   // ── ALERTAS AUTOMÁTICOS DE ESTOQUE CRÍTICO VIA TELEGRAM ──
   const tgCfg=customization?.telegram;
   useEffect(()=>{
@@ -7459,17 +7482,16 @@ function AppInner(){
 
   const salvarPerfil=async()=>{
     if(perfilForm.novaPass){
-      // Verifica senha atual (suporta hash e texto puro)
-      const senhaOk=await verificarSenha(perfilForm.pass,user);
-      if(!senhaOk){setPerfilMsg("err:Senha atual incorreta.");return;}
       if(perfilForm.novaPass.length<4){setPerfilMsg("err:Nova senha deve ter ao menos 4 caracteres.");return;}
       if(perfilForm.novaPass!==perfilForm.confirmaPass){setPerfilMsg("err:As senhas não conferem.");return;}
+      // Atualiza a senha no Supabase Auth (fonte de verdade do login)
+      const r=await authUpdatePassword(perfilForm.novaPass);
+      if(!r.ok){setPerfilMsg("err:Falha ao atualizar a senha: "+r.error);return;}
     }
-    let updated={...user,photo:perfilForm.photo||user.photo,mustChangePassword:false};
+    let updated={...user,photo:perfilForm.photo||user.photo};
     if(perfilForm.novaPass){
-      // Hash da nova senha
       const{hash,salt}=await hashSenha(perfilForm.novaPass);
-      updated={...updated,passHash:hash,passSalt:salt,pass:undefined};
+      updated={...updated,passHash:hash,passSalt:salt,pass:undefined,mustChangePassword:false};
       delete updated.pass;
     }
     setUsers(p=>p.map(u=>u.id===user.id?updated:u));
@@ -7493,6 +7515,9 @@ function AppInner(){
   const confirmarSenha=async()=>{
     if(npwd.length<4){setPwdErr("Senha deve ter ao menos 4 caracteres.");return;}
     if(npwd!==cpwd){setPwdErr("As senhas não conferem.");return;}
+    // Atualiza a senha no Supabase Auth (fonte de verdade do login)
+    const r=await authUpdatePassword(npwd);
+    if(!r.ok){setPwdErr("Falha ao atualizar a senha: "+r.error);return;}
     const{hash,salt}=await hashSenha(npwd);
     const upd={...user,passHash:hash,passSalt:salt,pass:undefined,mustChangePassword:false};
     delete upd.pass;
@@ -7517,6 +7542,8 @@ function AppInner(){
     setUser(finalUser);
     solicitarPermissaoNotificacao(); // pede permissão de notificação no login
     setPage("dash");
+    // Já autenticado: re-sincroniza todos os dados (useLS) com o JWT da sessão
+    setTimeout(()=>{try{window.dispatchEvent(new Event("focus"));}catch{}},60);
     }}/>
     <InstallAppButton isMobile={isMobile}/>
   </>;
@@ -7582,8 +7609,8 @@ function AppInner(){
 
   return <div style={{height:"100dvh",background:C.bg,color:C.txt,display:"flex",overflow:"hidden"}}>
     <style>{CSS}</style>
-    {!isMobile&&<Sidebar user={effectiveUser} page={page} setPage={goPage} customization={customization} onLogout={()=>{setPage("dash");setUser(null);try{localStorage.removeItem("re_session");localStorage.removeItem("re_page");}catch{}}}/>}
-    {isMobile&&drawerOpen&&<MobileDrawer user={user} page={page} setPage={goPage} onLogout={()=>{setPage("dash");setUser(null);try{localStorage.removeItem("re_session");localStorage.removeItem("re_page");}catch{}}} onClose={()=>setDrawerOpen(false)}/>}
+    {!isMobile&&<Sidebar user={effectiveUser} page={page} setPage={goPage} customization={customization} onLogout={()=>{authSignOut();setPage("dash");setUser(null);try{localStorage.removeItem("re_session");localStorage.removeItem("re_page");}catch{}}}/>}
+    {isMobile&&drawerOpen&&<MobileDrawer user={user} page={page} setPage={goPage} onLogout={()=>{authSignOut();setPage("dash");setUser(null);try{localStorage.removeItem("re_session");localStorage.removeItem("re_page");}catch{}}} onClose={()=>setDrawerOpen(false)}/>}
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <TopBar user={user} pendRet={pendRet} pendSol={pendSol} setPage={goPage} isMobile={isMobile} onMenuOpen={()=>setDrawerOpen(true)}/>
       <ConnectionBanner isMobile={isMobile} status={connectionStatus}/>

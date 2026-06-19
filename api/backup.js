@@ -72,7 +72,7 @@ function isAuthorized(req) {
 
 async function sbGet(key) {
   const supaUrl = process.env.VITE_SUPABASE_URL;
-  const supaKey = process.env.VITE_SUPABASE_KEY;
+  const supaKey = process.env.SUPABASE_SERVICE_ROLE || process.env.VITE_SUPABASE_KEY;
   if (!supaUrl || !supaKey) throw new Error("Supabase nao configurado no ambiente");
 
   const response = await fetch(`${supaUrl}/rest/v1/re_data?select=value&key=eq.${encodeURIComponent(key)}`, {

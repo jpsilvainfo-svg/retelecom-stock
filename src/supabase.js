@@ -10,9 +10,43 @@ if (!SUPA_URL || !SUPA_KEY) {
 }
 
 const sb = createClient(SUPA_URL, SUPA_KEY, {
-  auth: { persistSession: false },
+  // Sessão do Supabase Auth persiste no navegador: depois do login, o cliente
+  // anexa automaticamente o JWT em todas as chamadas (dados e Storage), o que
+  // permite fechar o RLS para "authenticated".
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
   global: { headers: { "x-app": "stocktel" } },
 });
+
+// ── Autenticação (Supabase Auth) ──────────────────────────────────────────
+// O app usa "login" (usuário); por baixo, mapeamos para login@stocktel.app.
+export const AUTH_EMAIL_DOMAIN = "stocktel.app";
+const loginToEmail = (login) => `${String(login || "").trim().toLowerCase()}@${AUTH_EMAIL_DOMAIN}`;
+
+export async function authSignIn(login, password) {
+  const { data, error } = await sb.auth.signInWithPassword({ email: loginToEmail(login), password });
+  return { ok: !error, error: error?.message || null, session: data?.session || null };
+}
+
+export async function authSignOut() {
+  try { await sb.auth.signOut(); } catch {}
+}
+
+export async function authHasSession() {
+  try { const { data } = await sb.auth.getSession(); return !!data?.session; }
+  catch { return false; }
+}
+
+export async function authUpdatePassword(newPassword) {
+  const { error } = await sb.auth.updateUser({ password: newPassword });
+  return { ok: !error, error: error?.message || null };
+}
+
+// Busca o perfil (papel/permissões) na re_users já autenticado.
+export async function fetchUserProfile(login) {
+  const row = await sbGet("re_users");
+  const list = Array.isArray(row?.value) ? row.value : [];
+  return list.find(u => String(u.login).toLowerCase() === String(login).trim().toLowerCase()) || null;
+}
 
 // ── Proteção: detecta valor aninhado incorretamente (bug antigo) ──────────
 function isWrapped(v) {

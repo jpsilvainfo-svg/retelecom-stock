@@ -46,7 +46,7 @@ async function hashSenha(senha) {
 }
 
 const env = readDotenv(".env.local");
-const url = env.VITE_SUPABASE_URL, key = env.VITE_SUPABASE_KEY;
+const url = env.VITE_SUPABASE_URL, key = (env.SUPABASE_SERVICE_ROLE || env.VITE_SUPABASE_KEY);
 if (!url || !key) { console.error(".env.local sem Supabase."); process.exit(2); }
 
 const res = await fetch(`${url}/rest/v1/re_data?select=value&key=eq.re_users`, {

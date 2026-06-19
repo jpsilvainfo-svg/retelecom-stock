@@ -3,7 +3,7 @@ import { broadcastTelegram, escHtml, opsRecipients } from "./_telegram.js";
 const SITE_URL = process.env.PUBLIC_SITE_URL || "https://retelecom-stock.vercel.app";
 const GITHUB_REPO = process.env.GITHUB_REPOSITORY || "jpsilvainfo-svg/retelecom-stock";
 const SUPA_URL = process.env.VITE_SUPABASE_URL;
-const SUPA_KEY = process.env.VITE_SUPABASE_KEY;
+const SUPA_KEY = process.env.SUPABASE_SERVICE_ROLE || process.env.VITE_SUPABASE_KEY;
 const ACCESS_KEY = "re_access_logs";
 const ALERT_KEY = "re_security_alerts";
 const MONITOR_HISTORY_KEY = "re_monitor_history";
