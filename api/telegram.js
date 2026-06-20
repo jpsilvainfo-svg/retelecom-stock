@@ -24,10 +24,6 @@ const COMMANDS = [
   ["/backup", "Gera backup e envia aos responsaveis"],
   ["/assumir", "Assume um chamado de suporte"],
   ["/fechar", "Fecha um chamado de suporte"],
-  ["/supabase_teste", "Testa banco Supabase"],
-  ["/github_teste", "Testa GitHub Actions"],
-  ["/vercel_teste", "Testa deploy Vercel"],
-  ["/teste_integracoes", "Testa Supabase, GitHub e Vercel"],
   ["/versao", "Versao publicada"],
   ["/ajuda", "Lista de comandos"],
 ];
@@ -311,10 +307,6 @@ async function handleCommand(text, msg = null) {
   if (cmd === "/backup") return triggerBackupText();
   if (cmd === "/assumir") return supportActionText("assign", text, msg);
   if (cmd === "/fechar") return supportActionText("close", text, msg);
-  if (cmd === "/supabase_teste" || normalized === "supabase teste" || normalized === "subase teste") return integrationTestText("supabase");
-  if (cmd === "/github_teste" || normalized === "github teste" || normalized === "gente teste" || normalized === "genthub teste") return integrationTestText("github");
-  if (cmd === "/vercel_teste" || normalized === "vercel teste" || normalized === "vencer teste" || normalized === "vence teste") return integrationTestText("vercel");
-  if (cmd === "/teste_integracoes" || normalized === "teste integracoes" || normalized === "teste integrações") return integrationTestText("all");
 
   const d = await loadData();
   if (cmd === "/status") return statusText(d);

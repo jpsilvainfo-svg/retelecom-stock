@@ -11,10 +11,6 @@ const COMMANDS = [
   { command: "backup", description: "Gera backup e envia aos responsaveis" },
   { command: "assumir", description: "Assume um chamado de suporte" },
   { command: "fechar", description: "Fecha um chamado de suporte" },
-  { command: "supabase_teste", description: "Testa banco Supabase" },
-  { command: "github_teste", description: "Testa GitHub Actions" },
-  { command: "vercel_teste", description: "Testa deploy Vercel" },
-  { command: "teste_integracoes", description: "Testa Supabase, GitHub e Vercel" },
   { command: "versao", description: "Versao publicada" },
   { command: "ajuda", description: "Lista de comandos" },
 ];
