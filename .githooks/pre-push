@@ -1,2 +1,3 @@
 #!/bin/sh
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/notify-telegram-change.ps1 -Event pre-push
+# Notificacao de push no Telegram DESATIVADA (ruido de desenvolvedor).
+exit 0

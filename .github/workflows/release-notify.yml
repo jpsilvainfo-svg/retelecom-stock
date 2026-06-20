@@ -1,8 +1,8 @@
 name: Release notify Telegram
 
 on:
-  push:
-    branches: [main]
+  # Gatilho automatico em push REMOVIDO (era ruido: mandava commit + arquivos
+  # no Telegram a cada push). Agora so roda manualmente (workflow_dispatch).
   workflow_dispatch:
 
 jobs:

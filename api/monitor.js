@@ -149,7 +149,11 @@ export default async function handler(req, res) {
     `\n<b>Historico:</b> ${history.ok ? "salvo" : `falhou (${escHtml(history.error || "?")})`}` +
     `\n\nSite: ${escHtml(SITE_URL)}`;
 
-  const shouldNotify = req.method === "POST" || req.query?.notify === "1";
+  // Só avisa no Telegram quando há problema (fora do ar ou lento). Antes mandava
+  // "tudo OK" a cada 30 min (~48 msgs/dia de ruído). O histórico segue sendo salvo.
+  const problema = !ok || warn;
+  const forcar = req.query?.notify === "1"; // permite teste manual
+  const shouldNotify = (req.method === "POST" || forcar) && (problema || forcar);
   const notify = shouldNotify ? await broadcastTelegram(text, opsRecipients()) : null;
 
   return res.status(ok ? 200 : 503).json({ ok, warn, warnMs: WARN_MS, checks, access, history, notify });
