@@ -2606,6 +2606,7 @@ function RelPage({stock,os,returns,users,nf,isMobile,currentUser,abastecimentos=
 /* ── USUÁRIOS ── */
 function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
   const[modal,setModal]=useState(null);
+  const savingRef=useRef(false); // evita salvar duas vezes (clique duplo)
   const[form,setForm]=useState({name:"",email:"",phone:"",cpf:"",login:"",pass:"",role:"tecnico",photo:"",perms:DEFAULT_PERMS["tecnico"],actionPerms:DEFAULT_ACTION_PERMS["tecnico"],mustChangePassword:true});
   const roles=[{value:"admin",label:"Administrador"},{value:"estoque",label:"Estoque"},{value:"tecnico",label:"Técnico"},{value:"financeiro",label:"Financeiro"},{value:"mecanico",label:"Mecânico"}];
   const isRoot=currentUser?.role==="superadmin";
@@ -2634,12 +2635,14 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
       if(!form.cnh_validade){alert("Data de validade da CNH é obrigatória.");return;}
       if(!form.cnh_categoria?.trim()){alert("Categoria da CNH é obrigatória.");return;}
     }
+    if(savingRef.current)return; // bloqueia clique duplo
+    savingRef.current=true;
     const permsToSave=form.perms.length>0?form.perms:DEFAULT_PERMS[form.role]||["dash"];
     const actionPermsToSave=form.actionPerms||DEFAULT_ACTION_PERMS[form.role]||[];
     if(modal==="new"){
       // Cria a conta de LOGIN no Supabase Auth (servidor valida que sou admin)
       const r=await adminAuthAction("create",form.login.trim(),form.pass);
-      if(!r.ok){alert("Falha ao criar o acesso de login: "+r.error);return;}
+      if(!r.ok){alert("Falha ao criar o acesso de login: "+r.error);savingRef.current=false;return;}
       // Grava o perfil SEM a senha em texto puro (o login vive no Supabase Auth)
       const{pass,...perfil}=form;void pass;
       setUsers(p=>[...p,{id:uid(),...perfil,perms:permsToSave,actionPerms:actionPermsToSave,mustChangePassword:form.mustChangePassword!==false}]);
@@ -2648,7 +2651,7 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
       // root pode redefinir a senha de outro → atualiza no Supabase Auth
       if(isRoot&&(form.pass||"").trim()){
         const r=await adminAuthAction("setPassword",form.login.trim(),form.pass);
-        if(!r.ok){alert("Falha ao atualizar a senha: "+r.error);return;}
+        if(!r.ok){alert("Falha ao atualizar a senha: "+r.error);savingRef.current=false;return;}
       }
       setUsers(p=>p.map(u=>{
         if(u.id!==modal)return u;
@@ -2662,6 +2665,7 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
       }));
       addLog(currentUser.name,"Usuário Editado",form.name);
     }
+    savingRef.current=false;
     setModal(null);
   };
 
