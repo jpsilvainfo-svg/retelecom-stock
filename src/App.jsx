@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
 import * as XLSX from "xlsx";
-import { sbGet, sbSet, sbPing, authSignIn, authSignOut, authHasSession, authUpdatePassword, fetchUserProfile } from "./supabase.js"; // sbPing usado no Diagnóstico
+import { sbGet, sbSet, sbPing, authSignIn, authSignOut, authHasSession, authUpdatePassword, fetchUserProfile, adminAuthAction } from "./supabase.js"; // sbPing usado no Diagnóstico
 import { useLS, pushToCloud, queueGet, queueRemove, queueSize } from "./hooks/useLS.js";
 import { useIsMobile } from "./hooks/useIsMobile.js";
 import { ErrorBoundary, Spinner, Toast } from "./components/feedback.jsx";
@@ -2623,8 +2623,9 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
 
   const usaFrota=(role)=>["tecnico","mecanico","admin","superadmin"].includes(role);
 
-  const save=()=>{
-    if(!form.name.trim()||!form.login.trim()||!form.pass.trim())return;
+  const save=async()=>{
+    if(!form.name.trim()||!form.login.trim())return;
+    if(modal==="new"&&!(form.pass||"").trim()){alert("Defina uma senha para o novo usuário.");return;}
     const loginExists=users.some(u=>u.login?.trim().toLowerCase()===form.login.trim().toLowerCase()&&u.id!==modal);
     if(loginExists){alert("Já existe um usuário com este login.");return;}
     // CNH obrigatória para quem usa frota
@@ -2636,14 +2637,24 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
     const permsToSave=form.perms.length>0?form.perms:DEFAULT_PERMS[form.role]||["dash"];
     const actionPermsToSave=form.actionPerms||DEFAULT_ACTION_PERMS[form.role]||[];
     if(modal==="new"){
-      setUsers(p=>[...p,{id:uid(),...form,perms:permsToSave,actionPerms:actionPermsToSave}]);
+      // Cria a conta de LOGIN no Supabase Auth (servidor valida que sou admin)
+      const r=await adminAuthAction("create",form.login.trim(),form.pass);
+      if(!r.ok){alert("Falha ao criar o acesso de login: "+r.error);return;}
+      // Grava o perfil SEM a senha em texto puro (o login vive no Supabase Auth)
+      const{pass,...perfil}=form;void pass;
+      setUsers(p=>[...p,{id:uid(),...perfil,perms:permsToSave,actionPerms:actionPermsToSave,mustChangePassword:form.mustChangePassword!==false}]);
       addLog(currentUser.name,"Usuário Criado",form.name+" ("+form.role+")");
     } else {
-      // Admin não pode alterar login/senha de outros usuários — só o próprio ou superadmin
+      // root pode redefinir a senha de outro → atualiza no Supabase Auth
+      if(isRoot&&(form.pass||"").trim()){
+        const r=await adminAuthAction("setPassword",form.login.trim(),form.pass);
+        if(!r.ok){alert("Falha ao atualizar a senha: "+r.error);return;}
+      }
       setUsers(p=>p.map(u=>{
         if(u.id!==modal)return u;
         if(isRoot){
-          return{...u,...form,perms:permsToSave,actionPerms:actionPermsToSave};
+          const{pass,...rest}=form;void pass;
+          return{...u,...rest,perms:permsToSave,actionPerms:actionPermsToSave};
         }
         // Admin pode editar nome, email, telefone, foto, perfil e permissões
         // mas NÃO pode alterar login ou senha de outros
@@ -2707,7 +2718,7 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
               <span style={{background:rc[u.role],color:"#000",fontSize:9,fontWeight:800,padding:"2px 6px",borderRadius:3}}>{rl[u.role]}</span>
               <div style={{display:"flex",gap:6}}>
                 <Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf||"",login:u.login,pass:u.pass,role:u.role,photo:u.photo||"",perms:u.perms||DEFAULT_PERMS[u.role]||["dash"],actionPerms:u.actionPerms||DEFAULT_ACTION_PERMS[u.role]||[],mustChangePassword:u.mustChangePassword||false,usa_frota:u.usa_frota||false,cnh_numero:u.cnh_numero||"",cnh_categoria:u.cnh_categoria||"",cnh_validade:u.cnh_validade||"",telegram_chat_id:u.telegram_chat_id||""});setModal(u.id);}}>Editar</Btn>
-                {u.id!==currentUser.id&&isRoot&&<Btn size="xs" color="red" outline onClick={()=>{if(window.confirm("Remover "+u.name+"?")){setUsers(p=>p.filter(x=>x.id!==u.id));addLog(currentUser.name,"Usuário Removido",u.name);}}}>✕</Btn>}
+                {u.id!==currentUser.id&&isRoot&&<Btn size="xs" color="red" outline onClick={()=>{if(window.confirm("Remover "+u.name+"?")){adminAuthAction("delete",u.login);setUsers(p=>p.filter(x=>x.id!==u.id));addLog(currentUser.name,"Usuário Removido",u.name);}}}>✕</Btn>}
               </div>
             </div>
           </Card>
@@ -2730,7 +2741,7 @@ function UsrPage({users,setUsers,addLog,currentUser,isMobile}){
                 <span style={{background:rc[u.role]||C.gold,color:u.role==="superadmin"?"#fff":"#000",fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:4}}>{rl[u.role]||u.role}</span>,
                 <div style={{display:"flex",gap:6}}>
                   {isRoot&&<Btn size="xs" color="gold" outline onClick={()=>{setForm({name:u.name,email:u.email,phone:u.phone,cpf:u.cpf||"",login:u.login,pass:u.pass,role:u.role,photo:u.photo||"",perms:u.perms||DEFAULT_PERMS[u.role]||["dash"],actionPerms:u.actionPerms||DEFAULT_ACTION_PERMS[u.role]||[],mustChangePassword:u.mustChangePassword||false});setModal(u.id);}}>Editar</Btn>}
-                  {isRoot&&u.role!=="superadmin"&&<Btn size="xs" color="red" outline onClick={()=>{if(window.confirm("Remover "+u.name+"?")){setUsers(p=>p.filter(x=>x.id!==u.id));addLog(currentUser.name,"Usuário Removido",u.name);}}}>✕</Btn>}
+                  {isRoot&&u.role!=="superadmin"&&<Btn size="xs" color="red" outline onClick={()=>{if(window.confirm("Remover "+u.name+"?")){adminAuthAction("delete",u.login);setUsers(p=>p.filter(x=>x.id!==u.id));addLog(currentUser.name,"Usuário Removido",u.name);}}}>✕</Btn>}
                   {!isRoot&&<span style={{fontSize:11,color:C.muted}}>—</span>}
                 </div>
               ]}/>;

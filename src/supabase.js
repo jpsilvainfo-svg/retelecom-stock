@@ -41,6 +41,25 @@ export async function authUpdatePassword(newPassword) {
   return { ok: !error, error: error?.message || null };
 }
 
+// Gestão de contas de login (cria/atualiza/remove no Supabase Auth via servidor).
+// Envia o token da sessão atual; o servidor valida que o solicitante é admin.
+export async function adminAuthAction(action, login, password) {
+  try {
+    const { data } = await sb.auth.getSession();
+    const token = data?.session?.access_token;
+    if (!token) return { ok: false, error: "Sem sessão ativa" };
+    const res = await fetch("/api/admin-user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action, login, password }),
+    });
+    const j = await res.json().catch(() => ({}));
+    return { ok: res.ok && j.ok, error: j.error || (res.ok ? null : `HTTP ${res.status}`) };
+  } catch (e) {
+    return { ok: false, error: e?.message || "Falha de rede" };
+  }
+}
+
 // Busca o perfil (papel/permissões) na re_users já autenticado.
 export async function fetchUserProfile(login) {
   const row = await sbGet("re_users");
