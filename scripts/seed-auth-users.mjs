@@ -19,7 +19,7 @@ for (const l of readFileSync(".env.local", "utf8").split(/\r?\n/)) {
   const m = l.match(/^\s*([^#][^=]+?)\s*=\s*(.*)\s*$/); if (m) env[m[1].trim()] = m[2].trim();
 }
 const URL = env.VITE_SUPABASE_URL;
-const SERVICE = process.env.SUPABASE_SERVICE_ROLE || env.SUPABASE_SERVICE_ROLE;
+const SERVICE = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE || env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL || !SERVICE) {
   console.error("Falta VITE_SUPABASE_URL e/ou SUPABASE_SERVICE_ROLE no ambiente/.env.local.");
   process.exit(2);

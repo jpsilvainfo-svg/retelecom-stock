@@ -1,7 +1,7 @@
 import { broadcastTelegram, escHtml, opsRecipients } from "./_telegram.js";
 
 const SUPA_URL = process.env.VITE_SUPABASE_URL;
-const SUPA_KEY = process.env.SUPABASE_SERVICE_ROLE || process.env.VITE_SUPABASE_KEY;
+const SUPA_KEY = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_KEY;
 const SUPPORT_KEY = "re_support_tickets";
 
 function nowBR() {
