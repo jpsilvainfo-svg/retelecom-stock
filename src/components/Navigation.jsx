@@ -83,7 +83,10 @@ function Sidebar({user,page,setPage,onLogout}){
 /* ── DRAWER MOBILE (menu lateral deslizante) ── */
 /* ── DRAWER MOBILE (menu lateral deslizante) ── */
 function MobileDrawer({user,page,setPage,onLogout,onClose}){
-  const perms=user.perms||DEFAULT_PERMS[user.role]||["dash"];
+  const basePerms=user.perms||DEFAULT_PERMS[user.role]||["dash"];
+  // Garante que módulos novos do perfil apareçam mesmo em users antigos
+  const roleDefaults=DEFAULT_PERMS[user.role]||[];
+  const perms=[...new Set([...basePerms,...roleDefaults])];
   const nav=ALL_MODULES.filter(m=>perms.includes(m.k)).map(m=>({k:m.k,icon:m.icon,label:m.l}));
   const go=(k)=>{setPage(k);onClose();};
   return <>

@@ -22,6 +22,7 @@ import DistModule from "./modules/estoque/DistPage.jsx";
 import NFModule from "./modules/estoque/NFPage.jsx";
 import RelatoriosModule from "./modules/grandes/RelatoriosPage.jsx";
 import DocumentosModule from "./modules/docs/DocumentosPage.jsx";
+import PatrimonioModule from "./modules/patrimonio/PatrimonioPage.jsx";
 
 // ── SEGURANÇA: Hashing de senhas (PBKDF2 + SHA-256, nativo do browser) ──
 // ── NOTIFICAÇÕES PUSH DO BROWSER ─────────────────────────────────────────
@@ -7289,6 +7290,11 @@ function AppInner(){
   const[manutSols,setManutSols]=useLS("re_manut_sols",[]);
   const[manutOS,setManutOS]=useLS("re_manut_os",[]);
   const[supportTickets,setSupportTickets]=useLS("re_support_tickets",[]);
+  const[patrimonios,setPatrimonios]=useLS("re_patrimonios",[]);
+  // Deep-link do QR Code patrimonial: ?patrimonio=<id> abre o item direto
+  const patrimonioDeepLink=useMemo(()=>{try{return new URLSearchParams(window.location.search).get("patrimonio")||null;}catch{return null;}},[]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(()=>{if(patrimonioDeepLink&&user)setPage("patrimonio");},[patrimonioDeepLink,user]);
   const[cats,setCats]=useLS("re_cats",[
     {id:"c1",name:"Equipamentos",icon:"📡"},{id:"c2",name:"Cabos e Fios",icon:"🔌"},
     {id:"c3",name:"Conectores",icon:"🔗"},{id:"c4",name:"Caixas e Acessórios",icon:"🗃️"},
@@ -7607,6 +7613,7 @@ function AppInner(){
     dev:<DevModule {...p}/>,
     sol:<SolicitacaoModule solicitacoes={solicitacoes} setSolicitacoes={setSolicitacoes} stock={stock} setStock={setStock} tstock={tstock} setTstock={setTstock} users={users} currentUser={user} addLog={addLog} isMobile={isMobile}/>,
     docs:<DocumentosModule currentUser={user} addLog={addLog} isMobile={isMobile}/>,
+    patrimonio:<PatrimonioModule patrimonios={patrimonios} setPatrimonios={setPatrimonios} users={users} currentUser={user} addLog={addLog} isMobile={isMobile} customization={customization} initialDetailId={patrimonioDeepLink}/>,
     nf:<NFModule nf={nf} setNf={setNf} stock={stock} setStock={setStock} addLog={addLog} currentUser={user} isMobile={isMobile}/>,
     rel:<RelatoriosModule stock={stock} os={os} returns={returns} users={users} nf={nf} isMobile={isMobile} currentUser={user} abastecimentos={abastecimentos} manutOS={manutOS} veiculos={veiculos}/>,
     email:<AdminRelPage nf={nf} stock={stock} os={os} returns={returns} tstock={tstock} users={users} solicitacoes={solicitacoes} isMobile={isMobile} addLog={addLog} veiculos={veiculos} abastecimentos={abastecimentos} manutOS={manutOS}/>,
